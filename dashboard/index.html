@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CMS Provider Data — Dashboard</title>
+<style>
+  :root {
+    --bg: #0f172a; --surface: #1e293b; --border: #334155;
+    --text: #e2e8f0; --muted: #94a3b8; --accent: #38bdf8;
+    --green: #4ade80; --red: #f87171; --yellow: #fbbf24;
+    --purple: #a78bfa; --orange: #fb923c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  
+  .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+  .header h1 { font-size: 18px; font-weight: 600; }
+  .header h1 span { color: var(--accent); }
+  .header-right { display: flex; align-items: center; gap: 16px; }
+  .status { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+  .status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+  .status .dot.err { background: var(--red); }
+  .refresh-btn { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 6px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
+  .refresh-btn:hover { border-color: var(--accent); color: var(--text); }
+
+  .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 4px; margin-bottom: 24px; background: var(--surface); border-radius: 8px; padding: 4px; border: 1px solid var(--border); width: fit-content; }
+  .tab { padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; color: var(--muted); transition: all 0.15s; }
+  .tab:hover { color: var(--text); }
+  .tab.active { background: var(--accent); color: #0f172a; }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* Stats row */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; }
+  .stat-card .label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 4px; }
+  .stat-card .value { font-size: 28px; font-weight: 700; color: var(--accent); }
+  .stat-card .sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .stat-card.green .value { color: var(--green); }
+  .stat-card.purple .value { color: var(--purple); }
+  .stat-card.orange .value { color: var(--orange); }
+
+  /* Data sources */
+  .sources { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; margin-bottom: 24px; }
+  .source-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; }
+  .source-card h3 { font-size: 14px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .source-card .badge { font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 500; }
+  .badge-loaded { background: rgba(74, 222, 128, 0.15); color: var(--green); }
+  .badge-empty { background: rgba(248, 113, 113, 0.15); color: var(--red); }
+  .source-table { font-size: 13px; width: 100%; }
+  .source-table td { padding: 4px 0; }
+  .source-table td:first-child { color: var(--muted); }
+  .source-table td:last-child { text-align: right; font-family: monospace; font-size: 12px; }
+
+  /* Tables list */
+  .tables-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .table-chip { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; cursor: pointer; transition: border-color 0.15s; display: flex; justify-content: space-between; align-items: center; }
+  .table-chip:hover { border-color: var(--accent); }
+  .table-chip .name { font-size: 14px; font-weight: 500; }
+  .table-chip .rows { font-size: 13px; color: var(--muted); }
+  .table-chip.raw .name { color: var(--muted); }
+  .table-chip.new .name { color: var(--green); }
+
+  /* Query section */
+  .query-section { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 24px; }
+  .query-section h2 { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+  .query-bar { display: flex; gap: 10px; }
+  textarea { flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; padding: 12px; resize: vertical; min-height: 60px; outline: none; }
+  textarea:focus { border-color: var(--accent); }
+  button { background: var(--accent); color: #0f172a; border: none; border-radius: 6px; padding: 10px 20px; font-weight: 600; font-size: 13px; cursor: pointer; white-space: nowrap; }
+  button:hover { opacity: 0.9; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .query-meta { font-size: 12px; color: var(--muted); margin-top: 8px; }
+
+  /* Quick queries */
+  .quick-queries { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .qq { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-size: 12px; color: var(--muted); cursor: pointer; transition: all 0.15s; }
+  .qq:hover { border-color: var(--accent); color: var(--text); }
+  .qq.cat-medicare { border-left: 3px solid var(--accent); }
+  .qq.cat-payments { border-left: 3px solid var(--orange); }
+  .qq.cat-quality { border-left: 3px solid var(--green); }
+  .qq.cat-hospital { border-left: 3px solid var(--purple); }
+
+  /* Results table */
+  .results { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .results-header { padding: 14px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+  .results-header h2 { font-size: 14px; font-weight: 600; }
+  .results-scroll { overflow-x: auto; max-height: 600px; overflow-y: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { background: var(--bg); padding: 10px 14px; text-align: left; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); position: sticky; top: 0; white-space: nowrap; z-index: 1; }
+  td { padding: 10px 14px; border-top: 1px solid var(--border); white-space: nowrap; max-width: 300px; overflow: hidden; text-overflow: ellipsis; }
+  tr:hover td { background: rgba(56, 189, 248, 0.05); }
+
+  .empty { padding: 60px; text-align: center; color: var(--muted); }
+  .error { color: var(--red); padding: 16px 20px; font-size: 13px; }
+
+  /* Schema panel */
+  .schema-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 24px; display: none; }
+  .schema-panel.active { display: block; }
+  .schema-panel h2 { font-size: 14px; font-weight: 600; margin-bottom: 12px; display: flex; justify-content: space-between; }
+  .schema-panel .close-btn { cursor: pointer; color: var(--muted); font-size: 18px; }
+  .schema-panel .col-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .schema-panel .col-name { font-family: monospace; }
+  .schema-panel .col-type { color: var(--accent); font-family: monospace; font-size: 12px; }
+
+  /* Export button */
+  .export-btn { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 6px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
+  .export-btn:hover { border-color: var(--accent); color: var(--text); }
+
+  /* Match cards */
+  .match-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 16px; }
+  .match-card.high { border-left: 4px solid var(--green); }
+  .match-card.medium { border-left: 4px solid var(--yellow); }
+  .match-card.low { border-left: 4px solid var(--red); }
+  .match-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+  .match-name { font-size: 18px; font-weight: 700; }
+  .match-npi { font-size: 12px; color: var(--muted); font-family: monospace; }
+  .match-specialty { font-size: 13px; color: var(--accent); margin-top: 2px; }
+  .match-location { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .confidence-badge { padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+  .confidence-badge.high { background: rgba(74,222,128,0.15); color: var(--green); }
+  .confidence-badge.medium { background: rgba(251,191,36,0.15); color: var(--yellow); }
+  .confidence-badge.low { background: rgba(248,113,113,0.15); color: var(--red); }
+  .intel-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .intel-item { background: var(--bg); border-radius: 8px; padding: 12px; }
+  .intel-item .il { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 2px; }
+  .intel-item .iv { font-size: 20px; font-weight: 700; }
+  .intel-item .iv.money { color: var(--green); }
+  .intel-item .iv.score { color: var(--accent); }
+  .intel-item .iv.warn { color: var(--orange); }
+  .services-list { margin-top: 12px; }
+  .services-list h4 { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+  .svc-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; border-bottom: 1px solid var(--border); }
+  .svc-row:last-child { border: none; }
+  .svc-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: 12px; }
+  .svc-val { color: var(--muted); white-space: nowrap; }
+
+  /* Search result cards */
+  .search-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .search-card.matched { border-left: 4px solid var(--green); }
+  .search-card.org { border-left: 4px solid var(--purple); }
+  .search-card.unmatched { border-left: 4px solid var(--border); }
+  .place-side h3 { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+  .place-side .place-addr { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  .place-side .place-rating { font-size: 13px; }
+  .place-side .place-rating .stars { color: var(--yellow); }
+  .cms-side { background: var(--bg); border-radius: 8px; padding: 16px; }
+  .cms-side.empty { display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 13px; }
+  .cms-side h4 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-bottom: 10px; }
+  .cms-mini-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .cms-mini-item .ml { font-size: 10px; color: var(--muted); text-transform: uppercase; }
+  .cms-mini-item .mv { font-size: 16px; font-weight: 700; }
+  .cms-mini-item .mv.money { color: var(--green); }
+  .cms-npi { font-size: 11px; color: var(--muted); font-family: monospace; margin-top: 8px; }
+  .confidence-tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 4px; margin-left: 8px; }
+  .confidence-tag.high { background: rgba(74,222,128,0.15); color: var(--green); }
+  .confidence-tag.medium { background: rgba(251,191,36,0.15); color: var(--yellow); }
+  .confidence-tag.llm { background: rgba(251,191,36,0.15); color: var(--yellow); border:1px solid var(--yellow); }
+  .llm-reasoning { font-size: 12px; color: var(--muted); margin-top: 8px; padding: 8px; background: rgba(251,191,36,0.05); border-left: 2px solid var(--yellow); border-radius: 4px; }
+  .provider-roster { margin-top: 12px; }
+  .roster-header { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--purple); margin-bottom: 8px; cursor: pointer; user-select: none; }
+  .roster-header:hover { color: var(--accent); }
+  .roster-list { display: none; max-height: 300px; overflow-y: auto; }
+  .roster-list.expanded { display: block; }
+  .roster-item { background: rgba(167,139,250,0.05); border: 1px solid var(--border); border-radius: 6px; padding: 10px; margin-bottom: 6px; font-size: 12px; }
+  .roster-item .name { font-weight: 600; color: var(--purple); }
+  .roster-item .type { color: var(--muted); }
+  .roster-item .stats { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  @media (max-width: 800px) { .search-card { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>⚕️ CMS Provider Intelligence</h1>
+  <div class="header-right">
+    <div class="status" id="status"><div class="dot"></div> Connecting...</div>
+    <button class="refresh-btn" onclick="init()">↻ Refresh</button>
+  </div>
+</div>
+
+<div class="container">
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('overview')">Overview</div>
+    <div class="tab" onclick="switchTab('sources')">Data Sources</div>
+    <div class="tab" onclick="switchTab('explore')">Explore</div>
+    <div class="tab" onclick="switchTab('query')">SQL Query</div>
+    <div class="tab" onclick="switchTab('match')" style="border-left:2px solid var(--green); margin-left:8px;">🔗 Match Engine</div>
+    <div class="tab" onclick="switchTab('search')">🔍 Places Search</div>
+    <div class="tab" onclick="switchTab('unified')" style="border-left:2px solid var(--purple); margin-left:8px;">🏥 Unified Search</div>
+  </div>
+
+  <!-- OVERVIEW TAB -->
+  <div class="tab-content active" id="tab-overview">
+    <div class="stats" id="stats"></div>
+    <div class="sources" id="source-cards"></div>
+  </div>
+
+  <!-- DATA SOURCES TAB -->
+  <div class="tab-content" id="tab-sources">
+    <div class="tables-grid" id="tables"></div>
+    <div class="schema-panel" id="schema-panel">
+      <h2><span id="schema-title">Schema</span><span class="close-btn" onclick="this.closest('.schema-panel').classList.remove('active')">✕</span></h2>
+      <div id="schema-cols"></div>
+    </div>
+  </div>
+
+  <!-- EXPLORE TAB -->
+  <div class="tab-content" id="tab-explore">
+    <div class="query-section">
+      <h2>🔍 Quick Insights</h2>
+      <p style="font-size:13px; color:var(--muted); margin-bottom:16px">Click any card to run the query. Results appear below.</p>
+      <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(280px,1fr)); gap:12px; margin-bottom:20px;">
+        <div class="table-chip" onclick="runExplore('top_states')">
+          <span class="name">📊 Top States by Provider Count</span>
+        </div>
+        <div class="table-chip" onclick="runExplore('top_specialties')">
+          <span class="name">🩺 Top Specialties</span>
+        </div>
+        <div class="table-chip" onclick="runExplore('ca_top_providers')">
+          <span class="name">🏆 Top CA Providers (by Payment)</span>
+        </div>
+        <div class="table-chip" onclick="runExplore('ca_cardiologists')">
+          <span class="name">❤️ CA Cardiologists</span>
+        </div>
+        <div class="table-chip" onclick="runExplore('hospital_ratings')">
+          <span class="name">🏥 Hospital Star Ratings</span>
+        </div>
+        <div class="table-chip" onclick="runExplore('top_industry_payments')">
+          <span class="name">💰 Top Industry Payment Recipients</span>
+        </div>
+        <div class="table-chip" onclick="runExplore('facility_affiliations')">
+          <span class="name">🔗 Most Hospital Affiliations</span>
+        </div>
+        <div class="table-chip" onclick="runExplore('mips_top_scores')">
+          <span class="name">⭐ Top MIPS Performers</span>
+        </div>
+      </div>
+    </div>
+    <div class="results" id="explore-results" style="display:none">
+      <div class="results-header">
+        <h2 id="explore-results-title">Results</h2>
+        <button class="export-btn" onclick="exportCSV('explore')">📥 Export CSV</button>
+      </div>
+      <div class="results-scroll" id="explore-results-scroll"></div>
+    </div>
+  </div>
+
+  <!-- PROVIDER SEARCH TAB (integrated workflow) -->
+  <div class="tab-content" id="tab-search">
+    <div class="query-section">
+      <h2>🔍 Provider Search — Google Places + CMS Intelligence</h2>
+      <p style="font-size:13px; color:var(--muted); margin-bottom:16px">
+        Search like your users would. Results from Google Places are automatically matched against CMS data.
+      </p>
+      <div style="display:grid; grid-template-columns: 1fr 1fr auto; gap:10px; margin-bottom:12px;">
+        <input id="search-specialty" type="text" placeholder="Specialty (e.g. endocrinologist, cardiologist)" 
+          style="background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:12px; font-size:13px; outline:none;">
+        <input id="search-location" type="text" placeholder="Location (e.g. Santa Monica, CA)" 
+          style="background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:12px; font-size:13px; outline:none;">
+        <button onclick="runPlacesSearch()">Search ▶</button>
+      </div>
+      <div class="quick-queries">
+        <div class="qq" onclick="fillSearch('endocrinologist', 'Santa Monica, CA')">Endocrinologist — Santa Monica</div>
+        <div class="qq" onclick="fillSearch('cardiologist', 'Beverly Hills, CA')">Cardiologist — Beverly Hills</div>
+        <div class="qq" onclick="fillSearch('orthopedic surgeon', 'Pasadena, CA')">Orthopedic Surgeon — Pasadena</div>
+        <div class="qq" onclick="fillSearch('gastroenterologist', 'Los Angeles, CA')">Gastro — Los Angeles</div>
+        <div class="qq" onclick="fillSearch('neurologist', 'Culver City, CA')">Neurologist — Culver City</div>
+      </div>
+    </div>
+    <div id="search-meta" style="font-size:13px; color:var(--muted); margin:12px 0; display:none;"></div>
+    <div id="search-results"></div>
+  </div>
+
+  <!-- UNIFIED SEARCH TAB -->
+  <div class="tab-content" id="tab-unified">
+    <div class="query-section">
+      <h2>🏥 Unified Provider Search — CMS Backbone + Google Places Enrichment</h2>
+      <p style="font-size:13px; color:var(--muted); margin-bottom:8px">
+        <strong>Approach 3:</strong> Queries CMS for ALL providers (specialty + geography), then merges with Google Places to identify practice groups and add consumer data.
+      </p>
+      <p style="font-size:12px; color:var(--muted); margin-bottom:16px">
+        CMS provides the complete provider list. Google Places provides org names, ratings, and reviews. Address matching groups providers into practices.
+      </p>
+      <div style="display:grid; grid-template-columns: 1fr 1fr auto; gap:10px; margin-bottom:12px;">
+        <input id="unified-specialty" type="text" placeholder="Specialty (e.g. primary care, endocrinologist, cardiologist)"
+          style="background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:12px; font-size:13px; outline:none;">
+        <input id="unified-location" type="text" placeholder="Location (e.g. Santa Monica, CA)"
+          style="background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:12px; font-size:13px; outline:none;">
+        <button onclick="runUnifiedSearch()" id="unified-btn">Search ▶</button>
+      </div>
+      <div class="quick-queries">
+        <div class="qq" onclick="fillUnified('primary care', 'Santa Monica, CA')">Primary Care — Santa Monica</div>
+        <div class="qq" onclick="fillUnified('endocrinologist', 'Santa Monica, CA')">Endocrinologist — Santa Monica</div>
+        <div class="qq" onclick="fillUnified('cardiologist', 'Beverly Hills, CA')">Cardiologist — Beverly Hills</div>
+        <div class="qq" onclick="fillUnified('orthopedic surgeon', 'Pasadena, CA')">Orthopedic — Pasadena</div>
+        <div class="qq" onclick="fillUnified('dermatologist', 'Los Angeles, CA')">Dermatologist — Los Angeles</div>
+        <div class="qq" onclick="fillUnified('gastroenterologist', 'Culver City, CA')">Gastro — Culver City</div>
+        <div class="qq" onclick="fillUnified('neurologist', 'Burbank, CA')">Neurologist — Burbank</div>
+        <div class="qq" onclick="fillUnified('psychiatrist', 'West Hollywood, CA')">Psychiatrist — WeHo</div>
+      </div>
+    </div>
+
+    <!-- Stats bar -->
+    <div id="unified-stats" style="display:none; margin:16px 0;">
+      <div class="stats" id="unified-stats-grid"></div>
+    </div>
+
+    <!-- Results -->
+    <div id="unified-results"></div>
+  </div>
+
+  <!-- MATCH ENGINE TAB -->
+  <div class="tab-content" id="tab-match">
+    <div class="query-section">
+      <h2>🔗 Provider Match Engine</h2>
+      <p style="font-size:13px; color:var(--muted); margin-bottom:16px">
+        Search like Google Places — enter a provider name and location. The engine matches against CMS data and returns intelligence.
+      </p>
+      <div style="display:grid; grid-template-columns: 1fr 1fr auto; gap:10px; margin-bottom:12px;">
+        <input id="match-name" type="text" placeholder="Provider name (e.g. John Smith MD)" 
+          style="background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:12px; font-size:13px; outline:none;">
+        <input id="match-addr" type="text" placeholder="Address or City, State (e.g. Los Angeles, CA)" 
+          style="background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:12px; font-size:13px; outline:none;">
+        <button onclick="runMatch()">Match ▶</button>
+      </div>
+      <div style="display:flex; gap:10px; align-items:center; margin-bottom:12px;">
+        <input id="match-specialty" type="text" placeholder="Specialty hint (optional)" 
+          style="background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:10px; font-size:13px; outline:none; width:300px;">
+        <span style="font-size:12px; color:var(--muted)">Try: "Robert Chen" + "Beverly Hills, CA" + "Cardiology"</span>
+      </div>
+      <div class="quick-queries">
+        <div class="qq" onclick="fillMatch('David Kim, MD', '8700 Beverly Blvd, Los Angeles, CA 90048', 'Cardiology')">Dr. David Kim - Cedars Area</div>
+        <div class="qq" onclick="fillMatch('Sarah Johnson', 'Santa Monica, CA', 'Internal Medicine')">Sarah Johnson - Santa Monica</div>
+        <div class="qq" onclick="fillMatch('James Wilson, DO', 'Pasadena, CA', '')">James Wilson - Pasadena</div>
+        <div class="qq" onclick="fillMatch('Maria Garcia', 'Los Angeles, CA 90012', 'Pediatrics')">Maria Garcia - DTLA</div>
+      </div>
+    </div>
+
+    <div id="match-results" style="display:none">
+      <div style="font-size:12px; color:var(--muted); margin-bottom:12px;" id="match-meta"></div>
+      <div id="match-cards"></div>
+    </div>
+  </div>
+
+  <!-- SQL QUERY TAB -->
+  <div class="tab-content" id="tab-query">
+    <div class="query-section">
+      <h2>🔍 SQL Query</h2>
+      <div class="query-bar">
+        <textarea id="sql" placeholder="SELECT * FROM core_providers WHERE state = 'CA' LIMIT 10" rows="3"></textarea>
+        <button id="run-btn" onclick="runQuery()">Run ▶</button>
+      </div>
+      <div class="query-meta" id="query-meta"></div>
+      <div class="quick-queries">
+        <div class="qq cat-medicare" onclick="setQuery(`SELECT state, COUNT(*) as providers, ROUND(AVG(u.tot_medicare_payment),2) as avg_payment\nFROM core_providers c JOIN utilization_metrics u ON c.npi = u.npi\nGROUP BY state ORDER BY providers DESC LIMIT 20`)">Providers by State</div>
+        <div class="qq cat-medicare" onclick="setQuery(`SELECT provider_type, COUNT(*) as count\nFROM core_providers\nGROUP BY provider_type ORDER BY count DESC LIMIT 25`)">Top Specialties</div>
+        <div class="qq cat-medicare" onclick="setQuery(`SELECT c.npi, c.first_name, c.last_org_name, c.provider_type, c.city, c.state,\n  u.tot_services, u.tot_unique_beneficiaries, ROUND(u.tot_medicare_payment,2) as payment\nFROM core_providers c JOIN utilization_metrics u ON c.npi = u.npi\nWHERE c.state = 'CA' ORDER BY u.tot_medicare_payment DESC LIMIT 25`)">Top CA by Payment</div>
+        <div class="qq cat-payments" onclick="setQuery(`SELECT\n  \"Covered_Recipient_First_Name\" as first_name,\n  \"Covered_Recipient_Last_Name\" as last_name,\n  \"Covered_Recipient_Primary_Type_1\" as specialty,\n  \"Recipient_State\" as state,\n  COUNT(*) as num_payments,\n  ROUND(SUM(\"Total_Amount_of_Payment_USDollars\"),2) as total_usd\nFROM raw_open_payments_general\nWHERE \"Covered_Recipient_NPI\" IS NOT NULL\nGROUP BY ALL ORDER BY total_usd DESC LIMIT 25`)">Top Industry $ Recipients</div>
+        <div class="qq cat-payments" onclick="setQuery(`SELECT\n  \"Applicable_Manufacturer_or_Applicable_GPO_Making_Payment_Name\" as company,\n  COUNT(*) as payments,\n  ROUND(SUM(\"Total_Amount_of_Payment_USDollars\"),2) as total_usd\nFROM raw_open_payments_general\nGROUP BY company ORDER BY total_usd DESC LIMIT 25`)">Top Paying Companies</div>
+        <div class="qq cat-hospital" onclick="setQuery(`SELECT \"Hospital Name\", \"City\", \"State\", \"Hospital Type\", \"Hospital overall rating\", \"Hospital Ownership\"\nFROM raw_hospital_general_info\nWHERE \"State\" = 'CA'\nORDER BY \"Hospital overall rating\" DESC LIMIT 25`)">CA Hospitals by Rating</div>
+        <div class="qq cat-quality" onclick="setQuery(`SELECT npi, clinician_first_name, clinician_last_name, org_name, final_mips_score, quality_category_score, pi_category_score\nFROM raw_mips_performance\nORDER BY CAST(final_mips_score AS DOUBLE) DESC LIMIT 25`)">Top MIPS Scores</div>
+        <div class="qq cat-hospital" onclick="setQuery(`SELECT npi, COUNT(DISTINCT facility_ccn) as num_hospitals\nFROM raw_dac_facility_affiliations\nGROUP BY npi ORDER BY num_hospitals DESC LIMIT 25`)">Most Hospital Affiliations</div>
+      </div>
+    </div>
+    <div class="results" id="results" style="display:none">
+      <div class="results-header">
+        <h2 id="results-title">Results</h2>
+        <button class="export-btn" onclick="exportCSV('query')">📥 Export CSV</button>
+      </div>
+      <div class="results-scroll" id="results-scroll"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = 'http://5.78.148.70:8080';
+const KEY = '1bb250cdd582258595a5d2bebd9493f2c74a7999';
+const headers = { 'Content-Type': 'application/json', 'X-API-Key': KEY };
+
+let lastQueryData = null;
+let lastExploreData = null;
+
+function fmt(n) {
+  if (n == null) return '—';
+  if (typeof n === 'number') return n.toLocaleString();
+  return String(n);
+}
+
+function fmtMoney(n) {
+  if (n == null) return '—';
+  return '$' + Number(n).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+async function apiFetch(path, opts = {}) {
+  const res = await fetch(API + path, { ...opts, headers });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || 'API error');
+  }
+  return res.json();
+}
+
+// Tab switching
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t, i) => {
+    t.classList.toggle('active', t.textContent.toLowerCase().includes(name.slice(0,4)));
+  });
+  document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+// Source grouping
+const SOURCE_GROUPS = {
+  'Medicare Claims': {
+    icon: '🏥', color: 'var(--accent)',
+    tables: ['raw_physician_by_provider', 'raw_physician_by_provider_and_service', 'raw_part_d_by_provider', 'raw_part_d_by_provider_and_drug', 'raw_pecos_enrollment', 'raw_reassignment', 'raw_qpp_experience', 'raw_dme_by_referring_provider', 'raw_order_and_referring', 'raw_hospital_enrollments']
+  },
+  'NPPES Registry': {
+    icon: '📋', color: 'var(--green)',
+    tables: ['raw_nppes']
+  },
+  'Open Payments (Sunshine Act)': {
+    icon: '💰', color: 'var(--orange)',
+    tables: ['raw_open_payments_general', 'raw_open_payments_research', 'raw_open_payments_ownership']
+  },
+  'Doctors & Clinicians (Care Compare)': {
+    icon: '👨‍⚕️', color: 'var(--purple)',
+    tables: ['raw_dac_national', 'raw_dac_facility_affiliations', 'raw_dac_utilization']
+  },
+  'Hospital Info': {
+    icon: '🏨', color: '#f472b6',
+    tables: ['raw_hospital_general_info']
+  },
+  'MIPS Quality': {
+    icon: '⭐', color: 'var(--yellow)',
+    tables: ['raw_mips_performance', 'raw_mips_measures']
+  },
+  'Analytical (Transformed)': {
+    icon: '📊', color: 'var(--accent)',
+    tables: ['core_providers', 'utilization_metrics', 'practice_locations', 'hospital_affiliations', 'provider_quality_scores', 'provider_service_detail', 'order_referring_eligibility', 'targeting_scores', 'industry_relationships', 'provider_drug_detail']
+  }
+};
+
+async function init() {
+  try {
+    const [health, { tables }] = await Promise.all([
+      apiFetch('/health'),
+      apiFetch('/tables')
+    ]);
+    
+    const tMap = {};
+    tables.forEach(t => tMap[t.name] = t.approx_rows || 0);
+    
+    document.getElementById('status').innerHTML = '<div class="dot"></div> Connected — ' + fmt(health.core_providers) + ' core providers';
+
+    // Stats
+    const totalRows = tables.reduce((s, t) => s + (t.approx_rows || 0), 0);
+    const rawTables = tables.filter(t => t.name.startsWith('raw_'));
+    const analyticTables = tables.filter(t => !t.name.startsWith('raw_') && t.name !== 'taxonomy_lookup');
+    const populatedAnalytic = analyticTables.filter(t => t.approx_rows > 0);
+    
+    const opRows = (tMap['raw_open_payments_general'] || 0) + (tMap['raw_open_payments_research'] || 0) + (tMap['raw_open_payments_ownership'] || 0);
+    const dacRows = (tMap['raw_dac_national'] || 0);
+
+    document.getElementById('stats').innerHTML = `
+      <div class="stat-card"><div class="label">Core Providers</div><div class="value">${fmt(health.core_providers)}</div><div class="sub">Medicare enrolled</div></div>
+      <div class="stat-card green"><div class="label">NPPES NPIs</div><div class="value">${fmt(tMap['raw_nppes'] || 0)}</div><div class="sub">National registry</div></div>
+      <div class="stat-card orange"><div class="label">Open Payments</div><div class="value">${fmt(opRows)}</div><div class="sub">Industry transactions</div></div>
+      <div class="stat-card purple"><div class="label">DAC Clinicians</div><div class="value">${fmt(dacRows)}</div><div class="sub">Care Compare records</div></div>
+      <div class="stat-card"><div class="label">Total Rows</div><div class="value">${fmt(totalRows)}</div><div class="sub">${tables.length} tables</div></div>
+      <div class="stat-card"><div class="label">Analytical Tables</div><div class="value">${populatedAnalytic.length}/${analyticTables.length}</div><div class="sub">populated</div></div>
+    `;
+
+    // Source cards
+    let cardsHtml = '';
+    for (const [group, info] of Object.entries(SOURCE_GROUPS)) {
+      const groupTables = info.tables.filter(t => t in tMap);
+      const groupRows = groupTables.reduce((s, t) => s + (tMap[t] || 0), 0);
+      const loaded = groupTables.filter(t => tMap[t] > 0).length;
+      const badge = loaded === groupTables.length && groupRows > 0 ? 'loaded' : 'empty';
+      
+      let tableRows = '';
+      for (const t of info.tables) {
+        const rows = tMap[t];
+        if (rows !== undefined) {
+          tableRows += `<tr><td>${t.replace('raw_','')}</td><td>${fmt(rows)}</td></tr>`;
+        } else {
+          tableRows += `<tr><td>${t.replace('raw_','')}</td><td style="color:var(--red)">not loaded</td></tr>`;
+        }
+      }
+      
+      cardsHtml += `
+        <div class="source-card">
+          <h3>${info.icon} ${group} <span class="badge badge-${badge}">${loaded}/${info.tables.length} loaded</span></h3>
+          <table class="source-table">${tableRows}</table>
+        </div>`;
+    }
+    document.getElementById('source-cards').innerHTML = cardsHtml;
+
+    // Tables tab
+    const sorted = [...analyticTables.sort((a,b) => b.approx_rows - a.approx_rows), ...rawTables.sort((a,b) => b.approx_rows - a.approx_rows)];
+    const newTables = ['raw_open_payments_general','raw_open_payments_research','raw_open_payments_ownership','raw_dac_national','raw_dac_facility_affiliations','raw_dac_utilization','raw_hospital_general_info','raw_mips_performance','raw_mips_measures'];
+    document.getElementById('tables').innerHTML = sorted.map(t => {
+      const isNew = newTables.includes(t.name);
+      const isRaw = t.name.startsWith('raw_');
+      return `<div class="table-chip ${isRaw ? 'raw' : ''} ${isNew ? 'new' : ''}" onclick="showSchema('${t.name}')">
+        <span class="name">${isNew ? '🆕 ' : ''}${t.name}</span>
+        <span class="rows">${fmt(t.approx_rows)} rows</span>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    document.getElementById('status').innerHTML = '<div class="dot err"></div> ' + e.message;
+  }
+}
+
+async function showSchema(table) {
+  const panel = document.getElementById('schema-panel');
+  panel.classList.add('active');
+  document.getElementById('schema-title').textContent = table;
+  document.getElementById('schema-cols').innerHTML = 'Loading...';
+  try {
+    const { columns } = await apiFetch(`/tables/${table}/schema`);
+    document.getElementById('schema-cols').innerHTML = columns.map(c =>
+      `<div class="col-row"><span class="col-name">${c.name}</span><span class="col-type">${c.type}</span></div>`
+    ).join('');
+  } catch(e) {
+    document.getElementById('schema-cols').innerHTML = `<span class="error">${e.message}</span>`;
+  }
+}
+
+// Explore queries
+const EXPLORE_QUERIES = {
+  top_states: {
+    title: 'Top States by Provider Count',
+    sql: `SELECT state, COUNT(*) as providers, ROUND(AVG(u.tot_medicare_payment),2) as avg_payment, ROUND(SUM(u.tot_medicare_payment),2) as total_payment FROM core_providers c JOIN utilization_metrics u ON c.npi = u.npi GROUP BY state ORDER BY providers DESC LIMIT 25`
+  },
+  top_specialties: {
+    title: 'Top Specialties',
+    sql: `SELECT provider_type, COUNT(*) as count FROM core_providers GROUP BY provider_type ORDER BY count DESC LIMIT 25`
+  },
+  ca_top_providers: {
+    title: 'Top CA Providers by Medicare Payment',
+    sql: `SELECT c.npi, c.first_name, c.last_org_name, c.provider_type, c.city, u.tot_services, u.tot_unique_beneficiaries, ROUND(u.tot_medicare_payment,2) as payment FROM core_providers c JOIN utilization_metrics u ON c.npi = u.npi WHERE c.state = 'CA' ORDER BY u.tot_medicare_payment DESC LIMIT 25`
+  },
+  ca_cardiologists: {
+    title: 'CA Cardiologists by Volume',
+    sql: `SELECT c.npi, c.first_name, c.last_org_name, c.provider_type, c.city, u.tot_services, u.tot_unique_beneficiaries, ROUND(u.tot_medicare_payment,2) as payment FROM core_providers c JOIN utilization_metrics u ON c.npi = u.npi WHERE c.provider_type ILIKE '%cardiol%' AND c.state = 'CA' ORDER BY u.tot_unique_beneficiaries DESC LIMIT 25`
+  },
+  hospital_ratings: {
+    title: 'CA Hospitals by Star Rating',
+    sql: `SELECT "Hospital Name", "City", "State", "Hospital Type", "Hospital overall rating" as stars, "Hospital Ownership" FROM raw_hospital_general_info WHERE "State" = 'CA' ORDER BY "Hospital overall rating" DESC LIMIT 25`
+  },
+  top_industry_payments: {
+    title: 'Top Industry Payment Recipients (Sunshine Act)',
+    sql: `SELECT "Covered_Recipient_First_Name" as first_name, "Covered_Recipient_Last_Name" as last_name, "Covered_Recipient_Primary_Type_1" as specialty, "Recipient_State" as state, COUNT(*) as num_payments, ROUND(SUM("Total_Amount_of_Payment_USDollars"),2) as total_usd FROM raw_open_payments_general WHERE "Covered_Recipient_NPI" IS NOT NULL GROUP BY ALL ORDER BY total_usd DESC LIMIT 25`
+  },
+  facility_affiliations: {
+    title: 'Providers with Most Hospital Affiliations',
+    sql: `SELECT f.npi, f.provider_last_name, f.provider_first_name, COUNT(DISTINCT f.facility_ccn) as num_hospitals FROM raw_dac_facility_affiliations f GROUP BY f.npi, f.provider_last_name, f.provider_first_name ORDER BY num_hospitals DESC LIMIT 25`
+  },
+  mips_top_scores: {
+    title: 'Top MIPS Performance Scores',
+    sql: `SELECT npi, clinician_first_name, clinician_last_name, org_name, final_mips_score, quality_category_score, pi_category_score FROM raw_mips_performance WHERE final_mips_score IS NOT NULL ORDER BY CAST(final_mips_score AS DOUBLE) DESC LIMIT 25`
+  }
+};
+
+async function runExplore(key) {
+  const q = EXPLORE_QUERIES[key];
+  if (!q) return;
+  try {
+    const data = await apiFetch('/query', { method: 'POST', body: JSON.stringify({ sql: q.sql }) });
+    lastExploreData = data;
+    const el = document.getElementById('explore-results');
+    el.style.display = 'block';
+    document.getElementById('explore-results-title').textContent = q.title + ` (${data.row_count} rows, ${data.elapsed_ms}ms)`;
+    renderTable('explore-results-scroll', data);
+    el.scrollIntoView({ behavior: 'smooth' });
+  } catch(e) {
+    document.getElementById('explore-results').style.display = 'block';
+    document.getElementById('explore-results-scroll').innerHTML = `<div class="error">❌ ${e.message}</div>`;
+  }
+}
+
+function renderTable(containerId, data) {
+  if (data.rows.length === 0) {
+    document.getElementById(containerId).innerHTML = '<div class="empty">No rows returned</div>';
+    return;
+  }
+  const ths = data.columns.map(c => `<th>${c}</th>`).join('');
+  const trs = data.rows.map(r => '<tr>' + r.map(v => `<td title="${v}">${fmt(v)}</td>`).join('') + '</tr>').join('');
+  document.getElementById(containerId).innerHTML = `<table><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>`;
+}
+
+function setQuery(sql) {
+  document.getElementById('sql').value = sql;
+  runQuery();
+}
+
+async function runQuery() {
+  const sql = document.getElementById('sql').value.trim();
+  if (!sql) return;
+  const btn = document.getElementById('run-btn');
+  btn.disabled = true; btn.textContent = 'Running...';
+  try {
+    const data = await apiFetch('/query', { method: 'POST', body: JSON.stringify({ sql }) });
+    lastQueryData = data;
+    document.getElementById('query-meta').textContent = `${data.row_count} rows · ${data.elapsed_ms}ms${data.truncated ? ' · truncated to 1,000' : ''}`;
+    const el = document.getElementById('results');
+    el.style.display = 'block';
+    document.getElementById('results-title').textContent = `Results (${data.row_count} rows)`;
+    renderTable('results-scroll', data);
+    el.scrollIntoView({ behavior: 'smooth' });
+  } catch(e) {
+    document.getElementById('results').style.display = 'block';
+    document.getElementById('results-scroll').innerHTML = `<div class="error">❌ ${e.message}</div>`;
+  }
+  btn.disabled = false; btn.textContent = 'Run ▶';
+}
+
+function exportCSV(source) {
+  const data = source === 'explore' ? lastExploreData : lastQueryData;
+  if (!data || !data.rows.length) return;
+  const csv = [data.columns.join(','), ...data.rows.map(r => r.map(v => `"${String(v ?? '').replace(/"/g,'""')}"`).join(','))].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'cms_query_results.csv';
+  a.click();
+}
+
+document.getElementById('sql').addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); runQuery(); }
+});
+
+// Search keydown
+['search-specialty','search-location'].forEach(id => {
+  document.getElementById(id).addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); runPlacesSearch(); }
+  });
+});
+
+function fillSearch(spec, loc) {
+  document.getElementById('search-specialty').value = spec;
+  document.getElementById('search-location').value = loc;
+  runPlacesSearch();
+}
+
+async function runPlacesSearch() {
+  const spec = document.getElementById('search-specialty').value.trim();
+  const loc = document.getElementById('search-location').value.trim();
+  if (!spec || !loc) return;
+
+  const meta = document.getElementById('search-meta');
+  const container = document.getElementById('search-results');
+  meta.style.display = 'block';
+  meta.textContent = 'Searching Google Places + matching to CMS...';
+  container.innerHTML = '';
+
+  try {
+    const params = new URLSearchParams({ specialty: spec, location: loc });
+    const res = await fetch(API + '/search/places?' + params, { headers });
+    if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+    const data = await res.json();
+
+    meta.innerHTML = `<strong>${data.total_places}</strong> Google Places results · <strong style="color:var(--green)">${data.matched_count}</strong> matched to CMS · <span style="color:var(--muted)">"${data.query}" in ${data.location}</span>`;
+
+    container.innerHTML = data.results.map((r, i) => {
+      const p = r.place;
+      const m = r.cms_match;
+      const cardClass = m ? 'matched' : (r.match_type === 'organization' ? 'org' : 'unmatched');
+      
+      // Stars
+      const stars = p.rating ? '★'.repeat(Math.round(p.rating)) + '☆'.repeat(5 - Math.round(p.rating)) : '';
+      
+      // Place side
+      let placeHtml = `
+        <div class="place-side">
+          <h3>${p.name}</h3>
+          <div class="place-addr">📍 ${p.address}</div>
+          <div class="place-rating">
+            ${p.rating ? `<span class="stars">${stars}</span> ${p.rating}` : ''}
+            ${p.reviews_count ? `(${p.reviews_count} reviews)` : ''}
+          </div>
+          <div style="margin-top:8px;">
+            <span class="badge ${r.match_type === 'individual' && m ? 'badge-loaded' : r.match_type === 'organization' ? 'badge-loaded' : 'badge-empty'}" style="font-size:11px">
+              ${r.match_type === 'individual' && m ? '✅ CMS Match' : r.match_type === 'organization' ? '🏢 Organization' : '❌ No CMS Match'}
+            </span>
+          </div>
+        </div>`;
+      
+      // CMS side
+      let cmsHtml;
+      if (m) {
+        const isLLM = m.match_method === 'llm_match';
+        const confClass = isLLM ? 'llm' : (m.confidence >= 0.8 ? 'high' : 'medium');
+        const matchLabel = isLLM ? '🤖 AI-Matched' : `${Math.round(m.confidence*100)}% match`;
+        
+        cmsHtml = `
+          <div class="cms-side">
+            <h4>CMS Intelligence <span class="confidence-tag ${confClass}">${matchLabel}</span></h4>
+            <div style="font-size:13px; margin-bottom:8px;"><strong>${m.first_name} ${m.last_name}</strong> · ${m.provider_type || 'Unknown'}</div>
+            <div class="cms-mini-grid">
+              ${m.total_medicare_payment != null ? `<div class="cms-mini-item"><div class="ml">Medicare $</div><div class="mv money">${fmtCompact(m.total_medicare_payment)}</div></div>` : ''}
+              ${m.total_beneficiaries != null ? `<div class="cms-mini-item"><div class="ml">Patients</div><div class="mv">${fmt(m.total_beneficiaries)}</div></div>` : ''}
+              ${m.total_services != null ? `<div class="cms-mini-item"><div class="ml">Services</div><div class="mv">${fmt(m.total_services)}</div></div>` : ''}
+              ${m.mips_score != null ? `<div class="cms-mini-item"><div class="ml">MIPS</div><div class="mv" style="color:var(--accent)">${m.mips_score}</div></div>` : ''}
+              ${m.open_payments_total != null ? `<div class="cms-mini-item"><div class="ml">Industry $</div><div class="mv" style="color:var(--orange)">${fmtCompact(m.open_payments_total)}</div></div>` : ''}
+              ${m.num_hospital_affiliations ? `<div class="cms-mini-item"><div class="ml">Hospitals</div><div class="mv">${m.num_hospital_affiliations}</div></div>` : ''}
+            </div>
+            ${isLLM && m.llm_reasoning ? `<div class="llm-reasoning">💡 ${m.llm_reasoning}</div>` : ''}
+            <div class="cms-npi">NPI: ${m.npi} · ${m.match_method.replace(/_/g,' ')}</div>
+          </div>`;
+      } else if (r.match_type === 'organization') {
+        // Organization with roster
+        let rosterHtml = '';
+        if (r.provider_roster && r.provider_roster.length > 0) {
+          rosterHtml = `
+            <div class="provider-roster">
+              <div class="roster-header" onclick="this.nextElementSibling.classList.toggle('expanded')">
+                🏥 ${r.provider_roster.length} providers practice here ▼
+              </div>
+              <div class="roster-list">
+                ${r.provider_roster.slice(0, 10).map(prov => `
+                  <div class="roster-item">
+                    <div class="name">${prov.first_name} ${prov.last_name}</div>
+                    <div class="type">${prov.provider_type || 'Unknown specialty'}</div>
+                    <div class="stats">
+                      ${prov.total_medicare_payment ? `Medicare: ${fmtCompact(prov.total_medicare_payment)}` : ''}
+                      ${prov.total_beneficiaries ? ` · ${fmt(prov.total_beneficiaries)} patients` : ''}
+                      ${prov.mips_score ? ` · MIPS: ${prov.mips_score}` : ''}
+                    </div>
+                    <div style="font-size:10px; color:var(--muted); margin-top:2px;">NPI: ${prov.npi}</div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>`;
+        }
+        cmsHtml = `<div class="cms-side">
+          <h4>🏢 Organization <span class="confidence-tag" style="background:rgba(167,139,250,0.15); color:var(--purple)">Group Practice</span></h4>
+          ${rosterHtml || '<div style="color:var(--muted); font-size:13px">No provider roster found</div>'}
+        </div>`;
+      } else {
+        cmsHtml = `<div class="cms-side empty">No CMS data found for this provider</div>`;
+      }
+      
+      return `<div class="search-card ${cardClass}">${placeHtml}${cmsHtml}</div>`;
+    }).join('');
+
+  } catch(e) {
+    container.innerHTML = `<div class="error">❌ ${e.message}</div>`;
+  }
+}
+
+function fmtCompact(n) {
+  if (n == null) return '—';
+  if (n >= 1000000) return '$' + (n/1000000).toFixed(1) + 'M';
+  if (n >= 1000) return '$' + (n/1000).toFixed(0) + 'K';
+  return '$' + n.toFixed(0);
+}
+
+// Match engine keydown
+['match-name','match-addr','match-specialty'].forEach(id => {
+  document.getElementById(id).addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); runMatch(); }
+  });
+});
+
+function fillMatch(name, addr, spec) {
+  document.getElementById('match-name').value = name;
+  document.getElementById('match-addr').value = addr;
+  document.getElementById('match-specialty').value = spec;
+  runMatch();
+}
+
+async function runMatch() {
+  const name = document.getElementById('match-name').value.trim();
+  const addr = document.getElementById('match-addr').value.trim();
+  const spec = document.getElementById('match-specialty').value.trim();
+  if (!name) return;
+
+  document.getElementById('match-results').style.display = 'block';
+  document.getElementById('match-meta').textContent = 'Matching...';
+  document.getElementById('match-cards').innerHTML = '';
+
+  try {
+    const params = new URLSearchParams({ name });
+    if (addr) params.set('address', addr);
+    if (spec) params.set('specialty', spec);
+    
+    const res = await fetch(API + '/match/search?' + params, { headers });
+    if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+    const data = await res.json();
+
+    document.getElementById('match-meta').textContent = 
+      `${data.match_count} match${data.match_count !== 1 ? 'es' : ''} found for "${data.input_name}"`;
+
+    if (data.matches.length === 0) {
+      document.getElementById('match-cards').innerHTML = 
+        '<div class="empty">No CMS matches found. Try adjusting the name or location.</div>';
+      return;
+    }
+
+    document.getElementById('match-cards').innerHTML = data.matches.map(m => {
+      const confClass = m.confidence >= 0.8 ? 'high' : m.confidence >= 0.6 ? 'medium' : 'low';
+      const confLabel = m.confidence >= 0.8 ? 'High' : m.confidence >= 0.6 ? 'Medium' : 'Low';
+      
+      let intelHtml = '<div class="intel-grid">';
+      if (m.total_medicare_payment != null) {
+        intelHtml += `<div class="intel-item"><div class="il">Medicare Payment</div><div class="iv money">${fmtMoney(m.total_medicare_payment)}</div></div>`;
+      }
+      if (m.total_beneficiaries != null) {
+        intelHtml += `<div class="intel-item"><div class="il">Beneficiaries</div><div class="iv">${fmt(m.total_beneficiaries)}</div></div>`;
+      }
+      if (m.total_services != null) {
+        intelHtml += `<div class="intel-item"><div class="il">Services</div><div class="iv">${fmt(m.total_services)}</div></div>`;
+      }
+      if (m.mips_score != null) {
+        intelHtml += `<div class="intel-item"><div class="il">MIPS Score</div><div class="iv score">${m.mips_score}/100</div></div>`;
+      }
+      if (m.num_hospital_affiliations != null && m.num_hospital_affiliations > 0) {
+        intelHtml += `<div class="intel-item"><div class="il">Hospital Affiliations</div><div class="iv">${m.num_hospital_affiliations}</div></div>`;
+      }
+      if (m.open_payments_total != null) {
+        intelHtml += `<div class="intel-item"><div class="il">Industry Payments 💰</div><div class="iv warn">${fmtMoney(m.open_payments_total)}</div><div style="font-size:11px;color:var(--muted)">${m.open_payments_count} transactions</div></div>`;
+      }
+      intelHtml += '</div>';
+
+      let svcsHtml = '';
+      if (m.top_services && m.top_services.length > 0) {
+        svcsHtml = '<div class="services-list"><h4>Top Services</h4>';
+        m.top_services.forEach(s => {
+          svcsHtml += `<div class="svc-row"><span class="svc-name">${s.service || 'N/A'}</span><span class="svc-val">${fmt(s.count)} svc · ${fmtMoney(s.payment)}</span></div>`;
+        });
+        svcsHtml += '</div>';
+      }
+
+      return `
+        <div class="match-card ${confClass}">
+          <div class="match-header">
+            <div>
+              <div class="match-name">${m.first_name} ${m.last_name}</div>
+              <div class="match-specialty">${m.provider_type || 'Unknown Specialty'}</div>
+              <div class="match-location">📍 ${m.city || ''}, ${m.state || ''} ${m.zip5 || ''}</div>
+              <div class="match-npi">NPI: ${m.npi}</div>
+            </div>
+            <div style="text-align:right">
+              <span class="confidence-badge ${confClass}">${confLabel} (${Math.round(m.confidence*100)}%)</span>
+              <div style="font-size:11px; color:var(--muted); margin-top:4px">${m.match_method.replace(/_/g,' ')}</div>
+            </div>
+          </div>
+          ${intelHtml}
+          ${svcsHtml}
+        </div>`;
+    }).join('');
+  } catch(e) {
+    document.getElementById('match-cards').innerHTML = `<div class="error">❌ ${e.message}</div>`;
+  }
+}
+
+// --- Unified Search ---
+
+['unified-specialty','unified-location'].forEach(id => {
+  document.getElementById(id).addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); runUnifiedSearch(); }
+  });
+});
+
+function fillUnified(spec, loc) {
+  document.getElementById('unified-specialty').value = spec;
+  document.getElementById('unified-location').value = loc;
+  runUnifiedSearch();
+}
+
+async function runUnifiedSearch() {
+  const spec = document.getElementById('unified-specialty').value.trim();
+  const loc = document.getElementById('unified-location').value.trim();
+  if (!spec || !loc) return;
+
+  const btn = document.getElementById('unified-btn');
+  btn.disabled = true; btn.textContent = 'Searching...';
+  
+  const statsEl = document.getElementById('unified-stats');
+  const resultsEl = document.getElementById('unified-results');
+  statsEl.style.display = 'none';
+  resultsEl.innerHTML = '<div style="text-align:center;color:var(--muted);padding:40px;">Querying CMS + Google Places...</div>';
+
+  try {
+    const params = new URLSearchParams({ specialty: spec, location: loc });
+    const res = await fetch(API + '/unified/search?' + params, { headers });
+    if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+    const data = await res.json();
+
+    // Stats
+    statsEl.style.display = 'block';
+    document.getElementById('unified-stats-grid').innerHTML = `
+      <div class="stat-card"><div class="label">CMS Providers</div><div class="value">${data.cms_provider_count}</div><div class="sub">in area with specialty</div></div>
+      <div class="stat-card green"><div class="label">Places Enriched</div><div class="value green">${data.total_with_places}</div><div class="sub">have Google data</div></div>
+      <div class="stat-card purple"><div class="label">Practice Groups</div><div class="value" style="color:var(--purple)">${data.total_practice_groups}</div><div class="sub">detected from addresses</div></div>
+      <div class="stat-card"><div class="label">Places Results</div><div class="value">${data.places_result_count}</div><div class="sub">via ${data.places_source || 'none'}</div></div>
+      <div class="stat-card orange"><div class="label">Solo Providers</div><div class="value" style="color:var(--orange)">${data.ungrouped_providers.length}</div><div class="sub">independent practice</div></div>
+      <div class="stat-card"><div class="label">Response</div><div class="value">${(data.elapsed_ms/1000).toFixed(1)}s</div><div class="sub">total query time</div></div>
+    `;
+
+    // Render practice groups
+    let html = '';
+    
+    if (data.practice_groups.length > 0) {
+      html += '<h3 style="font-size:15px; color:var(--text); margin:20px 0 12px;">Practice Groups</h3>';
+      
+      data.practice_groups.forEach((group, gi) => {
+        const hasPlaces = !!group.place_id;
+        const borderColor = hasPlaces ? 'var(--purple)' : 'var(--border)';
+        
+        html += `
+        <div style="background:var(--surface); border:1px solid var(--border); border-left:4px solid ${borderColor}; border-radius:10px; padding:20px; margin-bottom:16px;">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
+            <div>
+              <div style="font-size:16px; font-weight:700; color:var(--text);">
+                ${group.name ? '🏥 ' + group.name : '📍 ' + group.address}
+              </div>
+              <div style="font-size:13px; color:var(--muted); margin-top:2px;">
+                📍 ${group.address}
+              </div>
+              ${hasPlaces && group.rating ? `
+                <div style="font-size:13px; margin-top:4px;">
+                  <span style="color:var(--yellow)">${'★'.repeat(Math.round(group.rating))}${'☆'.repeat(5-Math.round(group.rating))}</span>
+                  ${group.rating} ${group.reviews ? '(' + group.reviews.toLocaleString() + ' reviews)' : ''}
+                </div>` : ''}
+              ${group.phone || group.website || group.hours ? `
+                <div style="font-size:12px; color:var(--muted); margin-top:6px; display:flex; flex-wrap:wrap; gap:12px;">
+                  ${group.phone ? '📞 ' + group.phone : ''}
+                  ${group.website ? '<a href="' + group.website + '" target="_blank" style="color:var(--accent);text-decoration:none;">🌐 Website</a>' : ''}
+                  ${group.hours ? '🕐 ' + group.hours : ''}
+                </div>` : ''}
+            </div>
+            <div style="text-align:right;">
+              <div style="font-size:24px; font-weight:700; color:var(--green);">${fmtCompact(group.total_medicare_payment)}</div>
+              <div style="font-size:11px; color:var(--muted); text-transform:uppercase;">combined Medicare</div>
+              <div style="font-size:13px; color:var(--purple); font-weight:600; margin-top:4px;">
+                ${group.provider_count} provider${group.provider_count !== 1 ? 's' : ''}
+              </div>
+              <div style="margin-top:4px;">
+                ${hasPlaces ? '<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;background:rgba(56,189,248,0.15);color:var(--accent);">PLACES</span> ' : ''}
+                <span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;background:rgba(74,222,128,0.15);color:var(--green);">CMS</span>
+              </div>
+            </div>
+          </div>
+          
+          <div style="cursor:pointer; user-select:none; font-size:12px; color:var(--accent); margin-bottom:8px;"
+               onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'; this.textContent = this.nextElementSibling.style.display === 'none' ? '▶ Show ${group.provider_count} providers' : '▼ Hide providers'">
+            ▶ Show ${group.provider_count} providers
+          </div>
+          <div style="display:none;">
+            <table style="width:100%; font-size:12px;">
+              <thead>
+                <tr>
+                  <th style="text-align:left; padding:6px 8px; font-size:10px;">Provider</th>
+                  <th style="text-align:left; padding:6px 8px; font-size:10px;">Specialty</th>
+                  <th style="text-align:right; padding:6px 8px; font-size:10px;">Medicare $</th>
+                  <th style="text-align:right; padding:6px 8px; font-size:10px;">Patients</th>
+                  <th style="text-align:right; padding:6px 8px; font-size:10px;">Services</th>
+                  <th style="text-align:right; padding:6px 8px; font-size:10px;">MIPS</th>
+                  <th style="text-align:right; padding:6px 8px; font-size:10px;">Industry $</th>
+                  <th style="text-align:left; padding:6px 8px; font-size:10px;">NPI</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${group.providers.map(p => `
+                  <tr>
+                    <td style="padding:6px 8px; font-weight:600;">${p.first_name} ${p.last_name}</td>
+                    <td style="padding:6px 8px; color:var(--muted); max-width:150px; overflow:hidden; text-overflow:ellipsis;">${p.provider_type || '—'}</td>
+                    <td style="padding:6px 8px; text-align:right; color:var(--green); font-weight:600;">${p.total_medicare_payment ? fmtCompact(p.total_medicare_payment) : '—'}</td>
+                    <td style="padding:6px 8px; text-align:right;">${p.total_beneficiaries ? fmt(p.total_beneficiaries) : '—'}</td>
+                    <td style="padding:6px 8px; text-align:right;">${p.total_services ? fmt(p.total_services) : '—'}</td>
+                    <td style="padding:6px 8px; text-align:right; color:var(--accent);">${p.mips_score || '—'}</td>
+                    <td style="padding:6px 8px; text-align:right; color:var(--orange);">${p.open_payments_total ? fmtCompact(p.open_payments_total) : '—'}</td>
+                    <td style="padding:6px 8px; font-family:monospace; font-size:11px; color:var(--muted);">${p.npi}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>`;
+      });
+    }
+    
+    // Ungrouped providers
+    if (data.ungrouped_providers.length > 0) {
+      html += `
+        <h3 style="font-size:15px; color:var(--text); margin:24px 0 12px;">
+          Solo Providers <span style="font-size:12px; color:var(--muted);">(${data.ungrouped_providers.length} providers not matched to a practice group)</span>
+        </h3>
+        <div style="background:var(--surface); border:1px solid var(--border); border-radius:10px; overflow:hidden;">
+          <div style="overflow-x:auto; max-height:500px; overflow-y:auto;">
+            <table style="width:100%; font-size:12px;">
+              <thead>
+                <tr>
+                  <th style="text-align:left; padding:8px 10px;">Provider</th>
+                  <th style="text-align:left; padding:8px 10px;">Specialty</th>
+                  <th style="text-align:left; padding:8px 10px;">Address</th>
+                  <th style="text-align:right; padding:8px 10px;">Medicare $</th>
+                  <th style="text-align:right; padding:8px 10px;">Patients</th>
+                  <th style="text-align:right; padding:8px 10px;">MIPS</th>
+                  <th style="text-align:right; padding:8px 10px;">Industry $</th>
+                  <th style="text-align:left; padding:8px 10px;">NPI</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${data.ungrouped_providers.map(p => `
+                  <tr>
+                    <td style="padding:6px 10px; font-weight:600;">${p.first_name} ${p.last_name}</td>
+                    <td style="padding:6px 10px; color:var(--muted);">${p.provider_type || '—'}</td>
+                    <td style="padding:6px 10px; color:var(--muted); max-width:200px; overflow:hidden; text-overflow:ellipsis;">${p.address || '—'}, ${p.city || ''}</td>
+                    <td style="padding:6px 10px; text-align:right; color:var(--green); font-weight:600;">${p.total_medicare_payment ? fmtCompact(p.total_medicare_payment) : '—'}</td>
+                    <td style="padding:6px 10px; text-align:right;">${p.total_beneficiaries ? fmt(p.total_beneficiaries) : '—'}</td>
+                    <td style="padding:6px 10px; text-align:right; color:var(--accent);">${p.mips_score || '—'}</td>
+                    <td style="padding:6px 10px; text-align:right; color:var(--orange);">${p.open_payments_total ? fmtCompact(p.open_payments_total) : '—'}</td>
+                    <td style="padding:6px 10px; font-family:monospace; font-size:11px; color:var(--muted);">${p.npi}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>`;
+    }
+    
+    resultsEl.innerHTML = html;
+    
+  } catch(e) {
+    resultsEl.innerHTML = `<div class="error">❌ ${e.message}</div>`;
+    statsEl.style.display = 'none';
+  }
+  
+  btn.disabled = false; btn.textContent = 'Search ▶';
+}
+
+init();
+</script>
+</body>
+</html>
