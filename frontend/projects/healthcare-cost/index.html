@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Healthcare Cost Analysis Project | HealthcareDataAI</title>
+<meta name="description" content="What does healthcare actually cost to deliver? Multi-method research project using CMS data to separate direct care from waste and overhead.">
+<link rel="stylesheet" href="/styles/global.css">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-container">
+    <a href="/" class="nav-brand">🏥 HealthcareDataAI</a>
+    <button class="nav-toggle" onclick="toggleNav()" aria-label="Toggle navigation">☰</button>
+    <ul class="nav-links" id="navLinks">
+      <li><a href="/">Home</a></li>
+      <li><a href="/dashboard/">Dashboard</a></li>
+      <li><a href="/projects/" class="active">Projects</a></li>
+      <li><a href="/access/">Data Access</a></li>
+      <li><a href="/about/">About</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="container-narrow">
+    <div style="margin-bottom: 16px;">
+      <a href="/projects/" style="color: var(--accent); font-size: 14px;">← Back to Projects</a>
+    </div>
+    <span class="badge badge-purple" style="margin-bottom: 16px;">Research Phase</span>
+    <h1 style="margin-bottom: 24px;">Healthcare Cost Analysis</h1>
+    <p class="tagline" style="font-size: 18px;">
+      What does healthcare <em>actually</em> cost to deliver in the United States? 
+      We're using multiple independent methods to separate direct patient care from 
+      administrative overhead and systemic waste.
+    </p>
+  </div>
+</section>
+
+<!-- The Question -->
+<section class="section">
+  <div class="container-narrow">
+    <h2>The Question</h2>
+    <p style="font-size: 18px; line-height: 1.8; margin-bottom: 24px;">
+      The United States spends <strong>$4.5 trillion annually</strong> on healthcare — 
+      roughly 18% of GDP, twice the per-capita rate of peer countries. But how much of that 
+      spending actually goes to <em>delivering patient care</em> versus insurance complexity, 
+      administrative overhead, and systemic inefficiency?
+    </p>
+    
+    <div style="background: var(--surface); border-left: 4px solid var(--accent); padding: 24px; border-radius: 6px; margin: 32px 0;">
+      <h3 style="font-size: 18px; margin-bottom: 12px;">Key Questions We're Answering:</h3>
+      <ul style="font-size: 16px; line-height: 1.8; margin-left: 20px; color: var(--muted);">
+        <li>What is the true cost of a physician visit, hospital stay, or procedure?</li>
+        <li>How much do we spend on administration, billing, and insurance overhead?</li>
+        <li>What portion of spending is "waste" — unnecessary tests, defensive medicine, fraud?</li>
+        <li>How does US healthcare cost compare to actual resource requirements?</li>
+        <li>If we eliminated inefficiency, what would healthcare cost?</li>
+      </ul>
+    </div>
+
+    <h3>Why This Matters</h3>
+    <p>
+      Understanding true healthcare costs is critical for policy decisions, health system strategy, 
+      and identifying opportunities for savings. If administrative overhead accounts for 15-25% of 
+      spending ($680B - $1.1T), that's actionable. If pharmaceutical prices are marked up 5-10x 
+      manufacturing cost, that's policy-relevant.
+    </p>
+    <p>
+      But we can't just trust anecdotes. This requires rigorous analysis with multiple validation approaches.
+    </p>
+  </div>
+</section>
+
+<!-- Four Approaches -->
+<section class="section" style="background: var(--surface);">
+  <div class="container-narrow">
+    <h2 style="text-align: center;">Four Calculation Approaches</h2>
+    <p class="subtitle">
+      Multiple independent methods provide confidence through triangulation. 
+      If all four approaches converge to a similar range, we know we're on the right track.
+    </p>
+
+    <div style="margin-top: 48px;">
+      <!-- Approach 1 -->
+      <div style="background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 32px; margin-bottom: 24px;">
+        <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px;">
+          <div style="font-size: 48px; color: var(--accent);">1</div>
+          <div>
+            <h3 style="margin-bottom: 4px;">Provider Capacity Model</h3>
+            <p style="color: var(--muted); font-size: 14px; margin-bottom: 0;">Bottom-up from physician workforce</p>
+          </div>
+        </div>
+        <p style="margin-bottom: 16px;">
+          Start with the physician workforce (1M+ practicing physicians in US), estimate average patient 
+          volume per specialty, and calculate cost per encounter based on time, overhead, and resources.
+        </p>
+        <div style="background: var(--surface); padding: 16px; border-radius: 6px; margin-bottom: 16px;">
+          <p style="font-family: monospace; font-size: 13px; color: var(--muted); margin: 0;">
+            <strong>Formula:</strong><br>
+            Total Cost = (# Physicians) × (Patients/Year) × (Cost/Visit) + (Overhead/Admin)
+          </p>
+        </div>
+        <p style="font-size: 14px; color: var(--muted);">
+          <strong>Data sources:</strong> BLS employment data, AMA physician surveys, Medicare utilization by provider
+        </p>
+      </div>
+
+      <!-- Approach 2 -->
+      <div style="background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 32px; margin-bottom: 24px;">
+        <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px;">
+          <div style="font-size: 48px; color: var(--green);">2</div>
+          <div>
+            <h3 style="margin-bottom: 4px;">Facility Cost Model</h3>
+            <p style="color: var(--muted); font-size: 14px; margin-bottom: 0;">Hospital infrastructure + utilization</p>
+          </div>
+        </div>
+        <p style="margin-bottom: 16px;">
+          Use hospital cost reports (Form 2552-10) to calculate cost per bed-day, then multiply by 
+          occupancy rates. Add outpatient costs, physician services, and ancillary care.
+        </p>
+        <div style="background: var(--surface); padding: 16px; border-radius: 6px; margin-bottom: 16px;">
+          <p style="font-family: monospace; font-size: 13px; color: var(--muted); margin: 0;">
+            <strong>Formula:</strong><br>
+            Hospital Cost = (Beds) × (Occupancy %) × (365 days) × (Cost/Bed-Day)<br>
+            + Outpatient Cost + Ancillary Services
+          </p>
+        </div>
+        <p style="font-size: 14px; color: var(--muted);">
+          <strong>Data sources:</strong> CMS hospital cost reports (2010-2024), AHA hospital statistics
+        </p>
+      </div>
+
+      <!-- Approach 3 -->
+      <div style="background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 32px; margin-bottom: 24px;">
+        <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px;">
+          <div style="font-size: 48px; color: var(--purple);">3</div>
+          <div>
+            <h3 style="margin-bottom: 4px;">Claims Bottom-Up</h3>
+            <p style="color: var(--muted); font-size: 14px; margin-bottom: 0;">Medicare data extrapolated to full population</p>
+          </div>
+        </div>
+        <p style="margin-bottom: 16px;">
+          Analyze Medicare claims data (known costs), age-adjust to younger populations, and extrapolate 
+          to the full US population using demographic factors and utilization patterns.
+        </p>
+        <div style="background: var(--surface); padding: 16px; border-radius: 6px; margin-bottom: 16px;">
+          <p style="font-family: monospace; font-size: 13px; color: var(--muted); margin: 0;">
+            <strong>Formula:</strong><br>
+            Medicare Cost/Beneficiary × Age Adjustment Factor × Total Population<br>
+            + Commercial/Medicaid Adjustments
+          </p>
+        </div>
+        <p style="font-size: 14px; color: var(--muted);">
+          <strong>Data sources:</strong> Medicare Part A/B utilization, MEPS survey data, commercial benchmarks
+        </p>
+      </div>
+
+      <!-- Approach 4 -->
+      <div style="background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 32px;">
+        <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px;">
+          <div style="font-size: 48px; color: var(--orange);">4</div>
+          <div>
+            <h3 style="margin-bottom: 4px;">Top-Down National Accounting</h3>
+            <p style="color: var(--muted); font-size: 14px; margin-bottom: 0;">Decompose the $4.5T and net out waste</p>
+          </div>
+        </div>
+        <p style="margin-bottom: 16px;">
+          Start with NHEA (National Health Expenditure Accounts) total spending, categorize by type 
+          (hospital, physician, pharma, admin), and subtract identified waste, overhead, and inefficiency.
+        </p>
+        <div style="background: var(--surface); padding: 16px; border-radius: 6px; margin-bottom: 16px;">
+          <p style="font-family: monospace; font-size: 13px; color: var(--muted); margin: 0;">
+            <strong>Formula:</strong><br>
+            Direct Care Cost = Total Spending - Admin Overhead - Insurance Complexity<br>
+            - Fraud/Waste - Price Markups - Defensive Medicine
+          </p>
+        </div>
+        <p style="font-size: 14px; color: var(--muted);">
+          <strong>Data sources:</strong> CMS NHEA tables, JAMA waste studies, Commonwealth Fund research
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Data Sources -->
+<section class="section">
+  <div class="container-narrow">
+    <h2>Data Sources & Literature</h2>
+    <p>
+      This analysis combines CMS public use files, academic research, and government statistics:
+    </p>
+
+    <div class="card-grid" style="margin-top: 32px;">
+      <div class="card">
+        <h4>CMS Hospital Cost Reports</h4>
+        <p style="font-size: 14px;">Form 2552-10, fiscal years 2010-2024. Detailed cost accounting by service line and cost center.</p>
+        <span class="badge badge-green" style="margin-top: 8px;">Available</span>
+      </div>
+
+      <div class="card">
+        <h4>Medicare Utilization Data</h4>
+        <p style="font-size: 14px;">Part A/B claims by provider and service. 1.2M providers, 10M service records.</p>
+        <span class="badge badge-green" style="margin-top: 8px;">Available</span>
+      </div>
+
+      <div class="card">
+        <h4>NHEA Spending Tables</h4>
+        <p style="font-size: 14px;">National Health Expenditure Accounts. Annual spending by category, 1960-2024.</p>
+        <span class="badge badge-green" style="margin-top: 8px;">Available</span>
+      </div>
+
+      <div class="card">
+        <h4>Academic Literature</h4>
+        <p style="font-size: 14px;">Peer-reviewed studies on administrative costs, waste, inefficiency, and international comparisons.</p>
+        <span class="badge badge-blue" style="margin-top: 8px;">In Progress</span>
+      </div>
+
+      <div class="card">
+        <h4>BLS Employment Data</h4>
+        <p style="font-size: 14px;">Healthcare workforce statistics, wages, and productivity metrics by occupation.</p>
+        <span class="badge badge-green" style="margin-top: 8px;">Available</span>
+      </div>
+
+      <div class="card">
+        <h4>International Benchmarks</h4>
+        <p style="font-size: 14px;">OECD health data, Commonwealth Fund studies. Per-capita spending and outcomes in peer countries.</p>
+        <span class="badge badge-blue" style="margin-top: 8px;">Planned</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Expected Findings -->
+<section class="section" style="background: var(--surface);">
+  <div class="container-narrow">
+    <h2>Expected Findings (Hypotheses)</h2>
+    <p>
+      Based on preliminary research, we expect to find:
+    </p>
+
+    <div style="margin-top: 32px;">
+      <div style="padding: 24px; background: var(--bg); border-left: 4px solid var(--accent); border-radius: 6px; margin-bottom: 24px;">
+        <h4 style="color: var(--accent);">Direct Care Cost: $2-3 Trillion</h4>
+        <p style="margin-bottom: 0;">
+          Physicians, nurses, hospital beds, medical equipment, drugs at manufacturing cost — 
+          the actual resources required to deliver care. Approximately 40-60% of current spending.
+        </p>
+      </div>
+
+      <div style="padding: 24px; background: var(--bg); border-left: 4px solid var(--orange); border-radius: 6px; margin-bottom: 24px;">
+        <h4 style="color: var(--orange);">Administrative Overhead: $600B-900B</h4>
+        <p style="margin-bottom: 0;">
+          Billing, insurance administration, claims processing, authorization, compliance. 
+          Studies suggest 15-25% of spending is pure administrative cost.
+        </p>
+      </div>
+
+      <div style="padding: 24px; background: var(--bg); border-left: 4px solid var(--red); border-radius: 6px; margin-bottom: 24px;">
+        <h4 style="color: var(--red);">Waste & Fraud: $760B-935B</h4>
+        <p style="margin-bottom: 0;">
+          Unnecessary services, defensive medicine, pricing failures, fraud, duplication. 
+          JAMA study estimated $760B-935B annually (25% of spending).
+        </p>
+      </div>
+
+      <div style="padding: 24px; background: var(--bg); border-left: 4px solid var(--purple); border-radius: 6px;">
+        <h4 style="color: var(--purple);">Price Markups: $300B-500B</h4>
+        <p style="margin-bottom: 0;">
+          US pays 2-10x international prices for drugs, devices, and services. 
+          Not cost difference — pure price extraction.
+        </p>
+      </div>
+    </div>
+
+    <p style="margin-top: 32px; font-style: italic; color: var(--muted);">
+      These are starting hypotheses based on existing literature. Our analysis will provide 
+      independent validation and more precise estimates.
+    </p>
+  </div>
+</section>
+
+<!-- Status & Timeline -->
+<section class="section">
+  <div class="container-narrow">
+    <h2>Project Status & Timeline</h2>
+    
+    <div style="max-width: 600px; margin: 32px auto;">
+      <div style="margin-bottom: 32px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h4 style="margin: 0;">Research Design</h4>
+          <span class="badge badge-green">Complete</span>
+        </div>
+        <div style="height: 8px; background: var(--border); border-radius: 4px; overflow: hidden;">
+          <div style="height: 100%; width: 100%; background: var(--green);"></div>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 32px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h4 style="margin: 0;">Data Acquisition</h4>
+          <span class="badge badge-blue">In Progress</span>
+        </div>
+        <div style="height: 8px; background: var(--border); border-radius: 4px; overflow: hidden;">
+          <div style="height: 100%; width: 70%; background: var(--accent);"></div>
+        </div>
+        <p style="font-size: 13px; color: var(--muted); margin-top: 8px;">
+          Hospital cost reports downloaded, Medicare data loaded, literature review underway
+        </p>
+      </div>
+
+      <div style="margin-bottom: 32px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h4 style="margin: 0;">Pilot Calculations</h4>
+          <span class="badge badge-purple">Planned Q2 2026</span>
+        </div>
+        <div style="height: 8px; background: var(--border); border-radius: 4px; overflow: hidden;">
+          <div style="height: 100%; width: 20%; background: var(--purple);"></div>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 32px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h4 style="margin: 0;">Full Analysis & Validation</h4>
+          <span class="badge badge-purple">Planned Q3 2026</span>
+        </div>
+        <div style="height: 8px; background: var(--border); border-radius: 4px; overflow: hidden;">
+          <div style="height: 100%; width: 10%; background: var(--purple);"></div>
+        </div>
+      </div>
+
+      <div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h4 style="margin: 0;">Publication</h4>
+          <span class="badge badge-purple">Target Q4 2026</span>
+        </div>
+        <div style="height: 8px; background: var(--border); border-radius: 4px; overflow: hidden;">
+          <div style="height: 100%; width: 5%; background: var(--purple);"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="section" style="background: var(--surface);">
+  <div class="container-narrow" style="text-align: center;">
+    <h2>Want This Analysis for Your Region or Health System?</h2>
+    <p style="font-size: 16px; color: var(--muted); margin-bottom: 32px; max-width: 600px; margin-left: auto; margin-right: auto;">
+      This research framework can be applied to specific regions, health systems, or payer populations. 
+      If you need cost analysis for strategic planning, rate negotiations, or policy advocacy — we can adapt 
+      this methodology to your specific needs.
+    </p>
+    <a href="mailto:blake@blakethomson.com?subject=Healthcare Cost Analysis Inquiry" class="btn btn-primary" style="margin-right: 16px;">
+      Contact Us
+    </a>
+    <a href="/projects/" class="btn btn-secondary">
+      Back to Projects
+    </a>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div class="footer-container">
+    <div class="footer-grid">
+      <div class="footer-section">
+        <h4>Navigation</h4>
+        <ul>
+          <li><a href="/">Home</a></li>
+          <li><a href="/dashboard/">Dashboard</a></li>
+          <li><a href="/projects/">Projects</a></li>
+          <li><a href="/access/">Data Access</a></li>
+          <li><a href="/about/">About</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h4>Resources</h4>
+        <ul>
+          <li><a href="/api/docs" target="_blank">API Documentation</a></li>
+          <li><a href="https://github.com/blakethom8/cms-data" target="_blank">GitHub Repository</a></li>
+          <li><a href="https://data.cms.gov" target="_blank">CMS Data Source</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h4>Projects</h4>
+        <ul>
+          <li><a href="/projects/healthcare-cost/">Healthcare Cost Analysis</a></li>
+          <li><a href="/projects/fraud-analysis/">Fraud Detection</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h4>Connect</h4>
+        <ul>
+          <li><a href="mailto:blake@blakethomson.com">blake@blakethomson.com</a></li>
+          <li><a href="https://blakethomson.studio" target="_blank">blakethomson.studio</a></li>
+          <li><a href="https://linkedin.com/in/blakethom" target="_blank">LinkedIn</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>Data provided by CMS via data.cms.gov • Not affiliated with CMS • Independent analysis</p>
+      <p>© 2026 Blake Thomson • HealthcareDataAI.com</p>
+    </div>
+  </div>
+</footer>
+
+<script>
+function toggleNav() {
+  const nav = document.getElementById('navLinks');
+  nav.classList.toggle('open');
+}
+document.addEventListener('click', (e) => {
+  const nav = document.getElementById('navLinks');
+  const toggle = document.querySelector('.nav-toggle');
+  if (!nav.contains(e.target) && !toggle.contains(e.target)) {
+    nav.classList.remove('open');
+  }
+});
+</script>
+
+</body>
+</html>

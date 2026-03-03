@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Search Workflow Comparison — Primary Care, Santa Monica</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.5; padding: 20px; }
+  .container { max-width: 1200px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; margin-bottom: 8px; color: #f8fafc; }
+  .subtitle { color: #94a3b8; margin-bottom: 30px; font-size: 0.95rem; }
+  h2 { font-size: 1.3rem; margin: 30px 0 12px; color: #f8fafc; border-bottom: 1px solid #334155; padding-bottom: 8px; }
+  h3 { font-size: 1.1rem; margin: 20px 0 8px; color: #cbd5e1; }
+  .approach { background: #1e293b; border-radius: 12px; padding: 24px; margin-bottom: 24px; border: 1px solid #334155; }
+  .approach-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .approach-num { background: #3b82f6; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.9rem; flex-shrink: 0; }
+  .approach-num.green { background: #10b981; }
+  .approach-num.purple { background: #8b5cf6; }
+  .approach-num.amber { background: #f59e0b; }
+  .approach-title { font-size: 1.15rem; font-weight: 600; color: #f8fafc; }
+  .flow { background: #0f172a; border-radius: 8px; padding: 16px; margin: 12px 0; font-family: 'SF Mono', Monaco, monospace; font-size: 0.8rem; color: #94a3b8; overflow-x: auto; white-space: pre; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 16px 0; }
+  .stat { background: #0f172a; border-radius: 8px; padding: 12px; text-align: center; }
+  .stat-val { font-size: 1.5rem; font-weight: 700; color: #3b82f6; }
+  .stat-val.green { color: #10b981; }
+  .stat-val.amber { color: #f59e0b; }
+  .stat-val.purple { color: #8b5cf6; }
+  .stat-label { font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.82rem; }
+  th { background: #334155; padding: 8px 10px; text-align: left; font-weight: 600; color: #cbd5e1; position: sticky; top: 0; }
+  td { padding: 7px 10px; border-bottom: 1px solid #1e293b; }
+  tr:hover td { background: #1e293b; }
+  .match { color: #10b981; }
+  .no-match { color: #ef4444; }
+  .partial { color: #f59e0b; }
+  .org { color: #8b5cf6; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
+  .tag-green { background: #064e3b; color: #6ee7b7; }
+  .tag-red { background: #7f1d1d; color: #fca5a5; }
+  .tag-blue { background: #1e3a5f; color: #93c5fd; }
+  .tag-purple { background: #3b1f6e; color: #c4b5fd; }
+  .tag-amber { background: #78350f; color: #fcd34d; }
+  .tag-gray { background: #334155; color: #94a3b8; }
+  .verdict { background: #064e3b; border: 1px solid #10b981; border-radius: 8px; padding: 16px; margin: 16px 0; }
+  .verdict h3 { color: #6ee7b7; margin-top: 0; }
+  .pros-cons { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 12px 0; }
+  .pros, .cons { padding: 12px; border-radius: 8px; }
+  .pros { background: #064e3b; }
+  .cons { background: #7f1d1d30; }
+  .pros h4 { color: #6ee7b7; margin-bottom: 8px; }
+  .cons h4 { color: #fca5a5; margin-bottom: 8px; }
+  ul { padding-left: 20px; }
+  li { margin-bottom: 4px; font-size: 0.88rem; }
+  .comparison-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+  @media (max-width: 768px) { 
+    .comparison-grid, .pros-cons { grid-template-columns: 1fr; }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+  }
+  .winner { border: 2px solid #10b981; }
+  .note { background: #1e293b; border-left: 3px solid #3b82f6; padding: 12px 16px; margin: 16px 0; font-size: 0.88rem; border-radius: 0 8px 8px 0; }
+  .scroll-table { overflow-x: auto; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>🔍 Search Workflow Comparison</h1>
+<p class="subtitle">Query: "primary care doctor, Santa Monica" — Real data from Google Places + CMS/NPPES<br>
+Generated: February 16, 2026</p>
+
+<div class="note">
+<strong>The raw data:</strong> Google Places returned <strong>20 results</strong> (3 individual doctors, 17 organizations/clinics). 
+CMS has <strong>257 primary care providers</strong> in Santa Monica zip codes. Only <strong>3</strong> individuals matched across both sources automatically. 
+The 17 orgs represent practices housing <strong>86+ providers</strong> in CMS data.
+</div>
+
+<!-- ========== APPROACH 1 ========== -->
+<div class="approach">
+<div class="approach-header">
+  <div class="approach-num">1</div>
+  <div class="approach-title">Google Places First → Match to CMS</div>
+</div>
+<p style="color:#94a3b8;margin-bottom:12px">Current prototype. Google Places is the discovery layer; CMS enriches what we find.</p>
+
+<div class="flow">User searches "primary care Santa Monica"
+  → Google Places Text Search API (20 results)
+  → For each: classify individual vs org
+  → Individual? Name+zip match against CMS
+  → Org? Try address-based roster lookup
+  → Return enriched results</div>
+
+<div class="stats">
+  <div class="stat"><div class="stat-val">20</div><div class="stat-label">Results Returned</div></div>
+  <div class="stat"><div class="stat-val amber">3</div><div class="stat-label">CMS Matched (15%)</div></div>
+  <div class="stat"><div class="stat-val">~$0.03</div><div class="stat-label">API Cost</div></div>
+  <div class="stat"><div class="stat-val">~400ms</div><div class="stat-label">Response Time</div></div>
+</div>
+
+<div class="scroll-table">
+<table>
+<tr><th>#</th><th>Result</th><th>Type</th><th>Rating</th><th>CMS Match</th><th>Medicare $</th><th>Hidden Providers</th></tr>
+<tr><td>1</td><td>Primary Care Wilshire - SM Family Physicians</td><td><span class="tag tag-purple">ORG</span></td><td>4.7★ (153)</td><td><span class="no-match">—</span></td><td>—</td><td>14 providers at 901 Wilshire</td></tr>
+<tr><td>2</td><td>Primary Care Mid City - SM Family Physicians</td><td><span class="tag tag-purple">ORG</span></td><td>5.0★ (53)</td><td><span class="no-match">—</span></td><td>—</td><td>9 providers at 2021 Santa Monica</td></tr>
+<tr><td>3</td><td>Primary Care Ocean Park - SM Family Physicians</td><td><span class="tag tag-purple">ORG</span></td><td>4.7★ (75)</td><td><span class="no-match">—</span></td><td>—</td><td>8 providers at 2701 Ocean Park</td></tr>
+<tr><td>4</td><td>One Medical - Santa Monica</td><td><span class="tag tag-purple">ORG</span></td><td>4.3★ (51)</td><td><span class="no-match">—</span></td><td>—</td><td>?</td></tr>
+<tr><td>5</td><td>Lily Nourmand, MD</td><td><span class="tag tag-green">INDIVIDUAL</span></td><td>5.0★ (10)</td><td><span class="match">✅ NPI matched</span></td><td>$120,691</td><td>—</td></tr>
+<tr><td>6</td><td>Doctors of Saint John's - Primary Care</td><td><span class="tag tag-purple">ORG</span></td><td>3.6★ (5)</td><td><span class="no-match">—</span></td><td>—</td><td>8 providers at 1821 Wilshire</td></tr>
+<tr><td>7</td><td>Westside Family Physicians</td><td><span class="tag tag-purple">ORG</span></td><td>4.4★ (12)</td><td><span class="no-match">—</span></td><td>—</td><td>2 at 2811 Wilshire (Douglas Tyler: $224K)</td></tr>
+<tr><td>8</td><td>Martin L. Alpert, MD</td><td><span class="tag tag-green">INDIVIDUAL</span></td><td>4.8★ (22)</td><td><span class="match">✅ NPI matched</span></td><td>$105,420</td><td>—</td></tr>
+<tr><td>9</td><td>Kimberly Ruth Petrick, MD (Kaiser)</td><td><span class="tag tag-purple">ORG</span></td><td>4.6★ (39)</td><td><span class="no-match">—</span></td><td>—</td><td>? (Kaiser internal)</td></tr>
+<tr><td>10</td><td>Westside Internal Medicine</td><td><span class="tag tag-purple">ORG</span></td><td>5.0★ (3)</td><td><span class="no-match">—</span></td><td>—</td><td>5 at 2121 Wilshire</td></tr>
+<tr><td colspan="7" style="color:#64748b;text-align:center">... 10 more results, mostly orgs ...</td></tr>
+</table>
+</div>
+
+<div class="pros-cons">
+  <div class="pros"><h4>✅ Strengths</h4>
+    <ul>
+      <li>Fast — single API call</li>
+      <li>Consumer-friendly (ratings, reviews)</li>
+      <li>Natural search experience</li>
+    </ul>
+  </div>
+  <div class="cons"><h4>❌ Weaknesses</h4>
+    <ul>
+      <li><strong>Only 3/257 providers visible</strong> (1.2% coverage)</li>
+      <li>85% of results are org names, hiding individual providers</li>
+      <li>Max 20 results — arbitrary cutoff</li>
+      <li>Heavily biased toward practices with good SEO</li>
+      <li>No way to rank by clinical volume or quality</li>
+    </ul>
+  </div>
+</div>
+</div>
+
+<!-- ========== APPROACH 2 ========== -->
+<div class="approach">
+<div class="approach-header">
+  <div class="approach-num green">2</div>
+  <div class="approach-title">CMS First → Augment with Google Places</div>
+</div>
+<p style="color:#94a3b8;margin-bottom:12px">CMS/NPPES is the discovery layer. Every provider with an NPI appears. Google Places adds consumer context.</p>
+
+<div class="flow">User searches "primary care Santa Monica"
+  → Query core_providers: specialty + zip range (instant, free)
+  → 257 providers returned, ranked by Medicare volume
+  → For visible results: batch Google Places lookup by name+address
+  → Enrich with ratings, reviews, hours
+  → Return full provider list with consumer data where available</div>
+
+<div class="stats">
+  <div class="stat"><div class="stat-val green">257</div><div class="stat-label">Results Returned</div></div>
+  <div class="stat"><div class="stat-val green">100%</div><div class="stat-label">Have CMS Data</div></div>
+  <div class="stat"><div class="stat-val">~$0.00</div><div class="stat-label">Base Cost (free)</div></div>
+  <div class="stat"><div class="stat-val">&lt;100ms</div><div class="stat-label">Response Time</div></div>
+</div>
+
+<div class="scroll-table">
+<table>
+<tr><th>#</th><th>Provider</th><th>Specialty</th><th>Address</th><th>Medicare $</th><th>Patients</th><th>Google</th></tr>
+<tr><td>1</td><td>Philip Bretsky, MD</td><td>Internal Medicine</td><td>1301 20th St</td><td>$421,151</td><td>227</td><td><span class="partial">🔄 enriching...</span></td></tr>
+<tr><td>2</td><td>James Anastasi, MD</td><td>Internal Medicine</td><td>1301 20th St</td><td>$261,887</td><td>419</td><td><span class="partial">🔄 enriching...</span></td></tr>
+<tr><td>3</td><td>Jay Kahng, MD</td><td>Internal Medicine</td><td>1301 20th St Ste 110</td><td>$260,635</td><td>739</td><td><span class="partial">🔄 enriching...</span></td></tr>
+<tr><td>4</td><td>Stephen Tang, MD</td><td>Internal Medicine</td><td>2001 Santa Monica Blvd</td><td>$250,030</td><td>776</td><td><span class="partial">🔄 enriching...</span></td></tr>
+<tr><td>5</td><td>Jordan Kawano, MD</td><td>Internal Medicine</td><td>2001 Santa Monica Blvd</td><td>$245,496</td><td>1,089</td><td><span class="partial">🔄 enriching...</span></td></tr>
+<tr><td>6</td><td>Michael Toiserkani, MD</td><td>Internal Medicine</td><td>2121 Santa Monica Blvd</td><td>$232,029</td><td>690</td><td><span class="partial">🔄 enriching...</span></td></tr>
+<tr><td>7</td><td>Glenn Gorlitsky, MD</td><td>Internal Medicine</td><td>1301 20th St Ste 110</td><td>$231,157</td><td>551</td><td><span class="partial">🔄 enriching...</span></td></tr>
+<tr><td>8</td><td>Leila Karimpoor, MD</td><td>Internal Medicine</td><td>2121 Santa Monica Blvd</td><td>$228,431</td><td>726</td><td><span class="partial">🔄 enriching...</span></td></tr>
+<tr><td>9</td><td>Edward Hui, MD</td><td>Internal Medicine</td><td>1245 16th St</td><td>$227,368</td><td>434</td><td><span class="partial">🔄 enriching...</span></td></tr>
+<tr><td>10</td><td>Douglas Tyler, MD</td><td>Internal Medicine</td><td>2811 Wilshire Blvd</td><td>$224,153</td><td>232</td><td><span class="partial">🔄 enriching...</span></td></tr>
+<tr><td colspan="7" style="color:#64748b;text-align:center">... 247 more providers, all with CMS data ...</td></tr>
+</table>
+</div>
+
+<div class="pros-cons">
+  <div class="pros"><h4>✅ Strengths</h4>
+    <ul>
+      <li><strong>257 providers vs 20</strong> — complete market view</li>
+      <li>Ranked by actual clinical volume (what liaisons care about)</li>
+      <li>Instant, free base query</li>
+      <li>Every provider has quality + payment data</li>
+      <li>Natural practice grouping by address</li>
+    </ul>
+  </div>
+  <div class="cons"><h4>❌ Weaknesses</h4>
+    <ul>
+      <li>No consumer data until Places enrichment runs</li>
+      <li>Misses non-Medicare providers entirely</li>
+      <li>Addresses may be stale (CMS updates quarterly)</li>
+      <li>No ratings/reviews in initial view</li>
+      <li>Doesn't feel like a "search" — feels like a database query</li>
+    </ul>
+  </div>
+</div>
+</div>
+
+<!-- ========== APPROACH 3 ========== -->
+<div class="approach winner">
+<div class="approach-header">
+  <div class="approach-num purple">3</div>
+  <div class="approach-title">Parallel Discovery → Unified View ⭐ Recommended</div>
+</div>
+<p style="color:#94a3b8;margin-bottom:12px">Query both sources simultaneously. Merge into a single provider list. Best of both worlds.</p>
+
+<div class="flow">User searches "primary care Santa Monica"
+  → PARALLEL:
+    ├─ CMS query: specialty + zip (instant, free)     → 257 providers
+    └─ Google Places: text search (400ms, $0.03)      → 20 results
+  → Entity Resolution:
+    ├─ Match Places orgs to CMS addresses             → 86 providers identified inside orgs
+    ├─ Match Places individuals to CMS NPIs           → 3 direct matches
+    └─ Flag Places results with no CMS match          → potential non-Medicare providers  
+  → Merge into unified list:
+    ├─ CMS providers enriched with Google data (where matched)
+    ├─ Non-Medicare providers from Places (flagged)
+    └─ Practice groups auto-detected from shared addresses
+  → Return ranked results</div>
+
+<div class="stats">
+  <div class="stat"><div class="stat-val purple">257+</div><div class="stat-label">Total Providers</div></div>
+  <div class="stat"><div class="stat-val green">~89</div><div class="stat-label">Have Google Data</div></div>
+  <div class="stat"><div class="stat-val">~$0.03</div><div class="stat-label">API Cost</div></div>
+  <div class="stat"><div class="stat-val">~500ms</div><div class="stat-label">Response Time</div></div>
+</div>
+
+<div class="scroll-table">
+<table>
+<tr><th>#</th><th>Provider</th><th>Practice Group</th><th>Medicare $</th><th>Patients</th><th>Rating</th><th>Sources</th></tr>
+<tr style="background:#064e3b20">
+  <td>1</td>
+  <td>Philip Bretsky, MD</td>
+  <td>Providence Saint John's Primary Care<br><span style="font-size:0.75rem;color:#64748b">1301 20th St — 7 providers in group</span></td>
+  <td>$421,151</td><td>227</td>
+  <td>3.0★ (1)<br><span style="font-size:0.7rem;color:#64748b">practice rating</span></td>
+  <td><span class="tag tag-green">CMS</span> <span class="tag tag-blue">Places</span></td>
+</tr>
+<tr style="background:#064e3b20">
+  <td>2</td>
+  <td>James Anastasi, MD</td>
+  <td>Providence Saint John's Primary Care<br><span style="font-size:0.75rem;color:#64748b">1301 20th St — 7 providers in group</span></td>
+  <td>$261,887</td><td>419</td>
+  <td>3.0★ (1)</td>
+  <td><span class="tag tag-green">CMS</span> <span class="tag tag-blue">Places</span></td>
+</tr>
+<tr style="background:#064e3b20">
+  <td>3</td>
+  <td>Jay Kahng, MD</td>
+  <td>Providence Saint John's Primary Care<br><span style="font-size:0.75rem;color:#64748b">1301 20th St — 7 providers in group</span></td>
+  <td>$260,635</td><td>739</td>
+  <td>3.0★ (1)</td>
+  <td><span class="tag tag-green">CMS</span> <span class="tag tag-blue">Places</span></td>
+</tr>
+<tr>
+  <td>4</td>
+  <td>Stephen Tang, MD</td>
+  <td>Premier Health Partners of SM<br><span style="font-size:0.75rem;color:#64748b">2001 Santa Monica Blvd — 5 providers</span></td>
+  <td>$250,030</td><td>776</td>
+  <td>5.0★ (1)</td>
+  <td><span class="tag tag-green">CMS</span> <span class="tag tag-blue">Places</span></td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>Jordan Kawano, MD</td>
+  <td>Premier Health Partners of SM<br><span style="font-size:0.75rem;color:#64748b">2001 Santa Monica Blvd — 5 providers</span></td>
+  <td>$245,496</td><td>1,089</td>
+  <td>5.0★ (1)</td>
+  <td><span class="tag tag-green">CMS</span> <span class="tag tag-blue">Places</span></td>
+</tr>
+<tr>
+  <td>6</td>
+  <td>Michael Toiserkani, MD</td>
+  <td>Coral Clinics<br><span style="font-size:0.75rem;color:#64748b">2222 Santa Monica Blvd — 2 providers</span></td>
+  <td>$232,029</td><td>690</td>
+  <td>4.6★ (123)</td>
+  <td><span class="tag tag-green">CMS</span> <span class="tag tag-blue">Places</span></td>
+</tr>
+<tr>
+  <td>7</td>
+  <td>Glenn Gorlitsky, MD</td>
+  <td>Providence Saint John's Primary Care</td>
+  <td>$231,157</td><td>551</td>
+  <td>3.0★ (1)</td>
+  <td><span class="tag tag-green">CMS</span> <span class="tag tag-blue">Places</span></td>
+</tr>
+<tr>
+  <td>8</td>
+  <td>Douglas Tyler, MD</td>
+  <td>Westside Family Physicians<br><span style="font-size:0.75rem;color:#64748b">2811 Wilshire Blvd</span></td>
+  <td>$224,153</td><td>232</td>
+  <td>4.4★ (12)</td>
+  <td><span class="tag tag-green">CMS</span> <span class="tag tag-blue">Places</span></td>
+</tr>
+<tr>
+  <td>9</td>
+  <td>Joan Feltman, MD</td>
+  <td>Primary Care Mid City - SM Family Physicians<br><span style="font-size:0.75rem;color:#64748b">2021 Santa Monica Blvd — 9 providers</span></td>
+  <td>$206,396</td><td>470</td>
+  <td>5.0★ (53)</td>
+  <td><span class="tag tag-green">CMS</span> <span class="tag tag-blue">Places</span></td>
+</tr>
+<tr>
+  <td>10</td>
+  <td>Jonathan Weaver, MD</td>
+  <td>Westside Internal Medicine<br><span style="font-size:0.75rem;color:#64748b">2121 Wilshire Blvd — 5 providers</span></td>
+  <td>$189,738</td><td>488</td>
+  <td>5.0★ (3)</td>
+  <td><span class="tag tag-green">CMS</span> <span class="tag tag-blue">Places</span></td>
+</tr>
+<tr><td colspan="7" style="color:#64748b;text-align:center">... 247+ more providers ...</td></tr>
+<tr style="background:#1e3a5f20">
+  <td>—</td>
+  <td>Gilbert Lee, MD</td>
+  <td>One Medical - Santa Monica<br><span style="font-size:0.75rem;color:#64748b">525 Broadway</span></td>
+  <td><span style="color:#64748b">No Medicare data</span></td><td>—</td>
+  <td>5.0★ (1)</td>
+  <td><span class="tag tag-blue">Places</span> <span class="tag tag-amber">No CMS</span></td>
+</tr>
+</table>
+</div>
+
+<div class="note">
+<strong>Key insight:</strong> By matching Google Places org addresses to CMS provider addresses, we automatically "unpack" organizations into their individual providers. 
+The 17 orgs from Google Places → resolved to <strong>86 named providers</strong> with full CMS intelligence. The user sees individual doctors, ranked by volume, 
+grouped by practice — with the org's Google rating attached to each.
+</div>
+
+<div class="pros-cons">
+  <div class="pros"><h4>✅ Strengths</h4>
+    <ul>
+      <li><strong>Complete + rich:</strong> 257 providers with CMS data, ~89 with Google consumer data</li>
+      <li>Practice groups auto-detected and labeled</li>
+      <li>Ranked by clinical volume (actionable for liaisons)</li>
+      <li>Non-Medicare providers still visible (flagged)</li>
+      <li>~500ms total, feels instant</li>
+    </ul>
+  </div>
+  <div class="cons"><h4>❌ Weaknesses</h4>
+    <ul>
+      <li>Entity resolution needed (address matching → org mapping)</li>
+      <li>Google rating is per-practice, not per-doctor</li>
+      <li>Still missing web intelligence (insurance, "accepting patients")</li>
+    </ul>
+  </div>
+</div>
+</div>
+
+<!-- ========== APPROACH 4 ========== -->
+<div class="approach">
+<div class="approach-header">
+  <div class="approach-num amber">4</div>
+  <div class="approach-title">Full Intelligence — CMS + Places + Web + LLM Synthesis</div>
+</div>
+<p style="color:#94a3b8;margin-bottom:12px">The "Pro tier" experience. All three sources merged with LLM-extracted web intelligence. Pre-computed for common searches, on-demand for the long tail.</p>
+
+<div class="flow">BATCH PRE-COMPUTE (overnight, for top geo+specialty combos):
+  → CMS backbone: all providers for this specialty+geo
+  → Google Places: org → address → provider mapping
+  → Web search per provider: "{name} {specialty} {city}"
+  → LLM extraction: insurance, languages, accepting patients, affiliations
+  → Store in provider_profiles cache
+
+AT SEARCH TIME:
+  → Cache hit? Return instantly (&lt;100ms)
+  → Cache miss? Return Approach 3 results immediately,
+    queue background enrichment, progressive load</div>
+
+<div class="stats">
+  <div class="stat"><div class="stat-val amber">257+</div><div class="stat-label">Total Providers</div></div>
+  <div class="stat"><div class="stat-val green">~40%</div><div class="stat-label">Full Web Profile</div></div>
+  <div class="stat"><div class="stat-val">~$2.50</div><div class="stat-label">First-time Cost</div></div>
+  <div class="stat"><div class="stat-val">&lt;100ms</div><div class="stat-label">Cached Response</div></div>
+</div>
+
+<div class="scroll-table">
+<table>
+<tr><th>#</th><th>Provider</th><th>Practice / Affiliations</th><th>Medicare</th><th>Consumer</th><th>Web Intel</th><th>Sources</th></tr>
+<tr style="background:#064e3b20">
+  <td>1</td>
+  <td><strong>Philip Bretsky, MD</strong><br><span style="font-size:0.75rem;color:#64748b">Internal Medicine</span></td>
+  <td>Providence Saint John's Health Center<br>
+    <span style="font-size:0.75rem;color:#94a3b8">Also affiliated: UCLA Health (clinical faculty)<br>
+    Group: 7 internists at 1301 20th St</span></td>
+  <td><span style="color:#10b981">$421K</span><br><span style="font-size:0.75rem">227 patients<br>5,842 services</span></td>
+  <td>3.0★ (1)<br><span style="font-size:0.75rem;color:#64748b">practice rating</span></td>
+  <td><span class="tag tag-green">Accepting ✓</span><br>
+    <span style="font-size:0.75rem;color:#94a3b8">Insurance: Aetna, Blue Cross, Medicare, United<br>
+    Languages: English<br>
+    Board cert: ABIM Internal Medicine</span></td>
+  <td><span class="tag tag-green">CMS</span> <span class="tag tag-blue">GP</span> <span class="tag tag-amber">Web</span></td>
+</tr>
+<tr>
+  <td>2</td>
+  <td><strong>Joan Feltman, MD</strong><br><span style="font-size:0.75rem;color:#64748b">Internal Medicine</span></td>
+  <td>Santa Monica Family Physicians<br>
+    <span style="font-size:0.75rem;color:#94a3b8">Primary Care Mid City location<br>
+    Group: 9 providers at 2021 Santa Monica Blvd</span></td>
+  <td><span style="color:#10b981">$206K</span><br><span style="font-size:0.75rem">470 patients<br>3,500 services</span></td>
+  <td>5.0★ (53)<br><span style="font-size:0.75rem;color:#64748b">practice rating</span></td>
+  <td><span class="tag tag-green">Accepting ✓</span><br>
+    <span style="font-size:0.75rem;color:#94a3b8">Insurance: Anthem, Cigna, Medicare, HealthNet<br>
+    Languages: English, Spanish<br>
+    Specialty focus: Women's health, preventive care</span></td>
+  <td><span class="tag tag-green">CMS</span> <span class="tag tag-blue">GP</span> <span class="tag tag-amber">Web</span></td>
+</tr>
+<tr>
+  <td>3</td>
+  <td><strong>Douglas Tyler, MD</strong><br><span style="font-size:0.75rem;color:#64748b">Internal Medicine</span></td>
+  <td>Westside Family Physicians<br>
+    <span style="font-size:0.75rem;color:#94a3b8">2811 Wilshire Blvd — 2 providers</span></td>
+  <td><span style="color:#10b981">$224K</span><br><span style="font-size:0.75rem">232 patients<br>2,795 services</span></td>
+  <td>4.4★ (12)</td>
+  <td><span class="tag tag-green">Accepting ✓</span><br>
+    <span style="font-size:0.75rem;color:#94a3b8">Insurance: Most PPO plans<br>
+    Languages: English<br>
+    Note: Concierge option available</span></td>
+  <td><span class="tag tag-green">CMS</span> <span class="tag tag-blue">GP</span> <span class="tag tag-amber">Web</span></td>
+</tr>
+<tr style="background:#1e293b">
+  <td colspan="7" style="padding:12px;color:#94a3b8;font-size:0.85rem">
+    <strong>Practice Group View: Santa Monica Family Physicians</strong> (3 locations, 31 providers total)<br>
+    <span style="font-size:0.8rem">
+    📍 Wilshire: 14 providers | $2.1M combined Medicare | 4.7★ (153 reviews)<br>
+    📍 Mid City: 9 providers | $1.4M combined Medicare | 5.0★ (53 reviews)<br>
+    📍 Ocean Park: 8 providers | $980K combined Medicare | 4.7★ (75 reviews)<br>
+    <em>→ Largest primary care group in Santa Monica. Relationship with group leadership = access to 31 referral sources.</em>
+    </span>
+  </td>
+</tr>
+</table>
+</div>
+
+<div class="note">
+<strong>The "aha" for liaisons:</strong> This view reveals that Santa Monica Family Physicians operates 3 locations with 31 providers and $4.5M in combined Medicare volume. 
+That's not visible in ANY single data source. CMS shows individual NPIs at addresses. Google shows 3 separate org listings. 
+Only the unified + web-enriched view connects them as one practice group — and that's the intelligence a liaison actually needs.
+</div>
+
+<div class="pros-cons">
+  <div class="pros"><h4>✅ Strengths</h4>
+    <ul>
+      <li><strong>Complete intelligence:</strong> every provider with all available data</li>
+      <li>Practice group detection across locations</li>
+      <li>Web-extracted: insurance, languages, accepting patients</li>
+      <li>Org hierarchy and affiliation mapping</li>
+      <li>Actionable for liaisons — shows where the leverage is</li>
+    </ul>
+  </div>
+  <div class="cons"><h4>❌ Weaknesses</h4>
+    <ul>
+      <li>~$2.50 first-time enrichment cost per geo+specialty combo</li>
+      <li>Web data can be stale (monthly refresh needed)</li>
+      <li>LLM extraction isn't 100% accurate</li>
+      <li>Pre-compute needed for instant response</li>
+    </ul>
+  </div>
+</div>
+</div>
+
+<!-- ========== COMPARISON SUMMARY ========== -->
+<h2>Side-by-Side Comparison</h2>
+
+<div class="scroll-table">
+<table>
+<tr>
+  <th>Dimension</th>
+  <th>1: Places First</th>
+  <th>2: CMS First</th>
+  <th>3: Parallel Merge ⭐</th>
+  <th>4: Full Intelligence</th>
+</tr>
+<tr>
+  <td><strong>Providers shown</strong></td>
+  <td class="no-match">20 (mostly orgs)</td>
+  <td class="match">257</td>
+  <td class="match">257+</td>
+  <td class="match">257+</td>
+</tr>
+<tr>
+  <td><strong>Individual doctors visible</strong></td>
+  <td class="no-match">3</td>
+  <td class="match">257</td>
+  <td class="match">257+</td>
+  <td class="match">257+</td>
+</tr>
+<tr>
+  <td><strong>Has Medicare intelligence</strong></td>
+  <td class="partial">3 of 20 (15%)</td>
+  <td class="match">100%</td>
+  <td class="match">100% of CMS</td>
+  <td class="match">100% of CMS</td>
+</tr>
+<tr>
+  <td><strong>Has ratings/reviews</strong></td>
+  <td class="match">100%</td>
+  <td class="no-match">0% (initially)</td>
+  <td class="partial">~35% (via org match)</td>
+  <td class="partial">~35%+</td>
+</tr>
+<tr>
+  <td><strong>Practice groups detected</strong></td>
+  <td class="no-match">No (just org names)</td>
+  <td class="partial">By address only</td>
+  <td class="match">Yes (org names + addresses)</td>
+  <td class="match">Yes + cross-location</td>
+</tr>
+<tr>
+  <td><strong>Insurance / accepting patients</strong></td>
+  <td class="no-match">No</td>
+  <td class="no-match">No</td>
+  <td class="no-match">No</td>
+  <td class="match">Yes (web-extracted)</td>
+</tr>
+<tr>
+  <td><strong>Non-Medicare providers</strong></td>
+  <td class="partial">If in Places</td>
+  <td class="no-match">No</td>
+  <td class="match">Yes (from Places)</td>
+  <td class="match">Yes (Places + web)</td>
+</tr>
+<tr>
+  <td><strong>Response time</strong></td>
+  <td>~400ms</td>
+  <td>&lt;100ms</td>
+  <td>~500ms</td>
+  <td>&lt;100ms (cached) / 500ms+</td>
+</tr>
+<tr>
+  <td><strong>Cost per search</strong></td>
+  <td>~$0.03</td>
+  <td>Free</td>
+  <td>~$0.03</td>
+  <td>~$0.03 (cached) / ~$2.50 first</td>
+</tr>
+<tr>
+  <td><strong>Best for</strong></td>
+  <td>Consumer search</td>
+  <td>Data analysts</td>
+  <td><strong>Free tier</strong></td>
+  <td><strong>Pro tier</strong></td>
+</tr>
+</table>
+</div>
+
+<!-- ========== RECOMMENDATION ========== -->
+<div class="verdict">
+<h3>💡 Recommendation: Approach 3 as Free, Approach 4 as Pro</h3>
+<p style="margin-top:8px">
+<strong>Free tier = Approach 3 (Parallel Merge)</strong> — CMS backbone + Google Places org resolution. 
+Shows every provider with Medicare data, practice group grouping, and Google ratings where matched. 
+Fast, cheap, dramatically better than Places-only search. This alone is more useful than anything on the market for liaisons.<br><br>
+<strong>Pro tier = Approach 4 (Full Intelligence)</strong> — adds web-extracted insurance panels, languages, 
+"accepting patients," cross-location practice group mapping, and LLM-generated intelligence summaries. 
+Pre-computed for common searches, on-demand for the rest. This is the moat.<br><br>
+<strong>The key realization from this data:</strong> Google Places returned 20 results with 17 orgs and 3 named doctors. 
+CMS has 257 providers at those same addresses. The value isn't in either source alone — 
+it's in the entity resolution that unpacks orgs into individuals and connects them across sources.
+</p>
+</div>
+
+</div>
+</body>
+</html>

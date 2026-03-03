@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fraud Detection & Anomaly Analysis | HealthcareDataAI</title>
+<meta name="description" content="Finding the needles in the haystack: using statistical, geographic, and network analysis to detect $60-100B in annual healthcare fraud.">
+<link rel="stylesheet" href="/styles/global.css">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-container">
+    <a href="/" class="nav-brand">🏥 HealthcareDataAI</a>
+    <button class="nav-toggle" onclick="toggleNav()" aria-label="Toggle navigation">☰</button>
+    <ul class="nav-links" id="navLinks">
+      <li><a href="/">Home</a></li>
+      <li><a href="/dashboard/">Dashboard</a></li>
+      <li><a href="/projects/" class="active">Projects</a></li>
+      <li><a href="/access/">Data Access</a></li>
+      <li><a href="/about/">About</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main>
+
+<section class="hero">
+  <div class="container-narrow">
+    <div style="margin-bottom: 16px;">
+      <a href="/projects/" style="color: var(--accent); font-size: 14px;">← Back to Projects</a>
+    </div>
+    <span class="badge badge-green" style="margin-bottom: 16px;">Active Development</span>
+    <h1 style="margin-bottom: 24px;">Fraud Detection & Anomaly Analysis</h1>
+    <p class="tagline" style="font-size: 18px;">
+      Finding the needles in the haystack: Statistical, geographic, and network-based techniques 
+      to identify billing outliers, prescribing anomalies, and suspicious provider patterns 
+      in 100M+ Medicare records.
+    </p>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container-narrow">
+    <h2>The Problem</h2>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 24px; margin: 32px 0;">
+      <div style="text-align: center;">
+        <div class="stat-number" style="color: var(--red);">$60B-100B</div>
+        <div class="stat-label">Annual Fraud</div>
+      </div>
+      <div style="text-align: center;">
+        <div class="stat-number">3-10%</div>
+        <div class="stat-label">Of Total Spending</div>
+      </div>
+      <div style="text-align: center;">
+        <div class="stat-number" style="color: var(--orange);">1B+</div>
+        <div class="stat-label">Claims Per Year</div>
+      </div>
+    </div>
+
+    <p style="font-size: 18px; line-height: 1.8; margin-bottom: 24px;">
+      Healthcare fraud costs taxpayers tens of billions annually, but detecting it is like 
+      finding needles in haystacks. Traditional approaches rely on tips, audits, and 
+      post-payment review — reactive, slow, and expensive.
+    </p>
+
+    <p>
+      <strong>The opportunity:</strong> CMS publishes detailed utilization data on every 
+      Medicare provider. While individual claims are protected, aggregated provider-level 
+      statistics reveal patterns. Statistical outliers, geographic anomalies, and suspicious 
+      networks can be detected using public data alone.
+    </p>
+
+    <div style="background: var(--surface); border-left: 4px solid var(--red); padding: 24px; border-radius: 6px; margin: 32px 0;">
+      <h3 style="font-size: 18px; margin-bottom: 12px;">Common Fraud Schemes:</h3>
+      <ul style="font-size: 16px; line-height: 1.8; margin-left: 20px; color: var(--muted);">
+        <li><strong>Pill mills:</strong> Prescribing opioids without medical justification</li>
+        <li><strong>DME fraud:</strong> Billing for equipment never delivered</li>
+        <li><strong>Upcoding:</strong> Billing for more expensive services than provided</li>
+        <li><strong>Phantom billing:</strong> Billing for services never rendered</li>
+        <li><strong>Kickback schemes:</strong> Illegal referral arrangements between providers</li>
+        <li><strong>COVID testing scams:</strong> Excessive or fake testing during pandemic</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="section" style="background: var(--surface);">
+  <div class="container-narrow">
+    <h2>Five Detection Approaches</h2>
+    <p class="subtitle">
+      Multiple analytical techniques, each revealing different fraud patterns
+    </p>
+
+    <div style="margin-top: 48px;">
+      <!-- Approach 1 -->
+      <div style="background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 32px; margin-bottom: 24px;">
+        <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px;">
+          <div style="font-size: 48px;">📊</div>
+          <div>
+            <h3 style="margin-bottom: 4px;">Statistical Outlier Detection</h3>
+            <p style="color: var(--muted); font-size: 14px; margin-bottom: 0;">Providers billing significantly above peers</p>
+          </div>
+        </div>
+        <p style="margin-bottom: 16px;">
+          Calculate z-scores for key metrics (total payment, services per beneficiary, average charge) 
+          and flag providers more than 3 standard deviations above their specialty/geography peers.
+        </p>
+        <div style="background: var(--surface); padding: 16px; border-radius: 6px; margin-bottom: 16px;">
+          <h4 style="font-size: 14px; margin-bottom: 8px;">Red Flags:</h4>
+          <ul style="font-size: 13px; color: var(--muted); margin-left: 20px;">
+            <li>Top 1% Medicare payment by specialty (potential upcoding)</li>
+            <li>Services per beneficiary 3+ std dev above mean (volume fraud)</li>
+            <li>High beneficiary churn rate (doctor shopping enabler)</li>
+            <li>Unusual service mix (billing procedures outside specialty)</li>
+          </ul>
+        </div>
+        <p style="font-size: 14px; color: var(--muted);">
+          <strong>Data:</strong> Medicare Part B utilization by provider, specialty benchmarks
+        </p>
+      </div>
+
+      <!-- Approach 2 -->
+      <div style="background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 32px; margin-bottom: 24px;">
+        <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px;">
+          <div style="font-size: 48px;">💊</div>
+          <div>
+            <h3 style="margin-bottom: 4px;">Prescribing Pattern Analysis</h3>
+            <p style="color: var(--muted); font-size: 14px; margin-bottom: 0;">Opioid mills and kickback indicators</p>
+          </div>
+        </div>
+        <p style="margin-bottom: 16px;">
+          Analyze Part D prescriber data to identify dangerous or suspicious prescribing behavior: 
+          excessive opioids, brand-name preference without justification, or single-drug specialists.
+        </p>
+        <div style="background: var(--surface); padding: 16px; border-radius: 6px; margin-bottom: 16px;">
+          <h4 style="font-size: 14px; margin-bottom: 8px;">Red Flags:</h4>
+          <ul style="font-size: 13px; color: var(--muted); margin-left: 20px;">
+            <li>Opioid prescribing rate > 95th percentile (pill mill indicator)</li>
+            <li>Brand-name preference > 90% (kickback suspicion)</li>
+            <li>Single-drug specialist (99% claims for one medication)</li>
+            <li>Contraindicated drug combinations (dangerous or fraudulent)</li>
+            <li>High-dose oxycodone without cancer diagnosis</li>
+          </ul>
+        </div>
+        <p style="font-size: 14px; color: var(--muted);">
+          <strong>Data:</strong> Part D prescriber by drug, opioid flags, Open Payments pharma relationships
+        </p>
+      </div>
+
+      <!-- Approach 3 -->
+      <div style="background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 32px; margin-bottom: 24px;">
+        <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px;">
+          <div style="font-size: 48px;">🗺️</div>
+          <div>
+            <h3 style="margin-bottom: 4px;">Geographic Clustering</h3>
+            <p style="color: var(--muted); font-size: 14px; margin-bottom: 0;">Fraud hotspots by county/zip code</p>
+          </div>
+        </div>
+        <p style="margin-bottom: 16px;">
+          Map provider density, claim volume, and payment by geography. Identify zip codes with 
+          unusual patterns: too many providers for population, sudden spikes, or known fraud regions.
+        </p>
+        <div style="background: var(--surface); padding: 16px; border-radius: 6px; margin-bottom: 16px;">
+          <h4 style="font-size: 14px; margin-bottom: 8px;">Red Flags:</h4>
+          <ul style="font-size: 13px; color: var(--muted); margin-left: 20px;">
+            <li>Provider density >> population (fraud factories)</li>
+            <li>Claim volume spikes (sudden increase in one area)</li>
+            <li>Known hotspots (South Florida, Southern California DME clusters)</li>
+            <li>Billing from residential addresses (phantom clinics)</li>
+            <li>Interstate patient flows (long-distance fraud rings)</li>
+          </ul>
+        </div>
+        <p style="font-size: 14px; color: var(--muted);">
+          <strong>Visualization:</strong> Heatmap of providers per capita, claim volume timeline by county
+        </p>
+      </div>
+
+      <!-- Approach 4 -->
+      <div style="background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 32px; margin-bottom: 24px;">
+        <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px;">
+          <div style="font-size: 48px;">🔗</div>
+          <div>
+            <h3 style="margin-bottom: 4px;">Network Analysis</h3>
+            <p style="color: var(--muted); font-size: 14px; margin-bottom: 0;">Referral rings and kickback schemes</p>
+          </div>
+        </div>
+        <p style="margin-bottom: 16px;">
+          Build provider referral networks from facility affiliations and shared patients. 
+          Detect circular referrals, exclusive relationships, and shell company patterns.
+        </p>
+        <div style="background: var(--surface); padding: 16px; border-radius: 6px; margin-bottom: 16px;">
+          <h4 style="font-size: 14px; margin-bottom: 8px;">Red Flags:</h4>
+          <ul style="font-size: 13px; color: var(--muted); margin-left: 20px;">
+            <li>Circular referrals (A → B → C → A)</li>
+            <li>Exclusive relationships (doc only refers to one facility, owns equity)</li>
+            <li>Shared addresses (multiple NPIs, same location = shell companies)</li>
+            <li>Open Payments connections (ownership + high referral volume)</li>
+            <li>Isolated clusters (tight networks disconnected from mainstream)</li>
+          </ul>
+        </div>
+        <p style="font-size: 14px; color: var(--muted);">
+          <strong>Data:</strong> DAC facility affiliations, Open Payments ownership interests, shared billing addresses
+        </p>
+      </div>
+
+      <!-- Approach 5 -->
+      <div style="background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 32px;">
+        <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px;">
+          <div style="font-size: 48px;">📈</div>
+          <div>
+            <h3 style="margin-bottom: 4px;">Time Series Anomalies</h3>
+            <p style="color: var(--muted); font-size: 14px; margin-bottom: 0;">Sudden changes in billing patterns</p>
+          </div>
+        </div>
+        <p style="margin-bottom: 16px;">
+          Analyze year-over-year billing trends to detect sudden spikes, new procedure codes, 
+          or pre-retirement fraud patterns.
+        </p>
+        <div style="background: var(--surface); padding: 16px; border-radius: 6px; margin-bottom: 16px;">
+          <h4 style="font-size: 14px; margin-bottom: 8px;">Red Flags:</h4>
+          <ul style="font-size: 13px; color: var(--muted); margin-left: 20px;">
+            <li>Billing spike (3x normal volume in one month)</li>
+            <li>New specialty codes (provider suddenly billing unfamiliar procedures)</li>
+            <li>COVID testing scams (massive 2020-2021 spike, then disappears)</li>
+            <li>Pre-retirement cash-out (final year billing surge before leaving)</li>
+            <li>Post-disaster fraud (Hurricane Harvey, COVID — opportunistic schemes)</li>
+          </ul>
+        </div>
+        <p style="font-size: 14px; color: var(--muted);">
+          <strong>Data:</strong> Medicare utilization 2013-2024 trend data, year-over-year comparisons
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container-narrow">
+    <h2>Example Patterns We're Looking For</h2>
+    <p>
+      These are real fraud scheme types documented in DOJ cases. Our analysis will identify 
+      similar patterns in public data:
+    </p>
+
+    <div style="margin-top: 32px;">
+      <!-- Pattern 1 -->
+      <div style="background: var(--surface); border-radius: 10px; padding: 24px; margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
+          <h3 style="margin: 0;">The Pill Mill</h3>
+          <span class="badge badge-red">High Priority</span>
+        </div>
+        <p style="color: var(--muted); margin-bottom: 16px;">
+          <strong>Pattern:</strong> Provider prescribing 10x peer opioid rate, high cash-pay patients, 
+          minimal documentation
+        </p>
+        <p style="font-size: 14px; margin-bottom: 8px;">
+          <strong>Detection:</strong> Prescribing outlier analysis + geographic clustering
+        </p>
+        <p style="font-size: 14px; margin-bottom: 0;">
+          <strong>Real example:</strong> Appalachian "pain clinics" (2015-2017 opioid crisis epicenter)
+        </p>
+      </div>
+
+      <!-- Pattern 2 -->
+      <div style="background: var(--surface); border-radius: 10px; padding: 24px; margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
+          <h3 style="margin: 0;">DME Kickback Ring</h3>
+          <span class="badge badge-orange">Medium Priority</span>
+        </div>
+        <p style="color: var(--muted); margin-bottom: 16px;">
+          <strong>Pattern:</strong> Circular referrals (doc → DME supplier → doc's office), 
+          shared addresses, Open Payments ties
+        </p>
+        <p style="font-size: 14px; margin-bottom: 8px;">
+          <strong>Detection:</strong> Network analysis + Open Payments cross-reference
+        </p>
+        <p style="font-size: 14px; margin-bottom: 0;">
+          <strong>Real example:</strong> South Florida DME fraud rings ($1.2B scheme, 2019)
+        </p>
+      </div>
+
+      <!-- Pattern 3 -->
+      <div style="background: var(--surface); border-radius: 10px; padding: 24px; margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
+          <h3 style="margin: 0;">COVID Testing Scam</h3>
+          <span class="badge badge-red">High Priority</span>
+        </div>
+        <p style="color: var(--muted); margin-bottom: 16px;">
+          <strong>Pattern:</strong> Massive billing spike (March-Dec 2020), then disappears; 
+          no prior billing history; residential addresses
+        </p>
+        <p style="font-size: 14px; margin-bottom: 8px;">
+          <strong>Detection:</strong> Time series anomaly + geographic analysis
+        </p>
+        <p style="font-size: 14px; margin-bottom: 0;">
+          <strong>Real example:</strong> Fake testing sites, excessive billing for asymptomatic patients
+        </p>
+      </div>
+
+      <!-- Pattern 4 -->
+      <div style="background: var(--surface); border-radius: 10px; padding: 24px;">
+        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
+          <h3 style="margin: 0;">Pre-Retirement Cash-Out</h3>
+          <span class="badge badge-yellow">Watch List</span>
+        </div>
+        <p style="color: var(--muted); margin-bottom: 16px;">
+          <strong>Pattern:</strong> Provider billing 3x normal volume in final year before retirement, 
+          unfamiliar procedure codes, age 65+
+        </p>
+        <p style="font-size: 14px; margin-bottom: 8px;">
+          <strong>Detection:</strong> Time series analysis + age correlation
+        </p>
+        <p style="font-size: 14px; margin-bottom: 0;">
+          <strong>Note:</strong> Not always fraud (retiring docs work harder), but worth investigation
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" style="background: var(--surface);">
+  <div class="container-narrow">
+    <h2>Data Sources & Validation</h2>
+    <p>
+      All analysis uses CMS public use files — no PHI, no restricted data. Findings are validated 
+      against known fraud cases and exclusion lists.
+    </p>
+
+    <div class="card-grid" style="margin-top: 32px;">
+      <div class="card">
+        <h4>Medicare Part B Utilization</h4>
+        <p style="font-size: 14px;">1.2M providers, total services, payments, beneficiaries by provider</p>
+        <span class="badge badge-green" style="margin-top: 8px;">Primary Source</span>
+      </div>
+
+      <div class="card">
+        <h4>Part D Prescriber Data</h4>
+        <p style="font-size: 14px;">1.4M prescribers, 26M drug claims, opioid flags, brand vs. generic rates</p>
+        <span class="badge badge-green" style="margin-top: 8px;">Primary Source</span>
+      </div>
+
+      <div class="card">
+        <h4>Open Payments (Sunshine Act)</h4>
+        <p style="font-size: 14px;">15.7M industry payments, ownership interests, conflict of interest detection</p>
+        <span class="badge badge-green" style="margin-top: 8px;">Primary Source</span>
+      </div>
+
+      <div class="card">
+        <h4>DAC Facility Affiliations</h4>
+        <p style="font-size: 14px;">1.6M provider-hospital relationships for referral network construction</p>
+        <span class="badge badge-green" style="margin-top: 8px;">Primary Source</span>
+      </div>
+
+      <div class="card">
+        <h4>OIG LEIE Exclusion List</h4>
+        <p style="font-size: 14px;">Known bad actors (convicted fraudsters) for validation cross-check</p>
+        <span class="badge badge-blue" style="margin-top: 8px;">Validation</span>
+      </div>
+
+      <div class="card">
+        <h4>DOJ Press Releases</h4>
+        <p style="font-size: 14px;">Announced fraud cases (2018-2024) to validate detection techniques</p>
+        <span class="badge badge-blue" style="margin-top: 8px;">Validation</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container-narrow">
+    <h2>Project Status & Next Steps</h2>
+    
+    <div style="max-width: 600px; margin: 32px auto;">
+      <div style="margin-bottom: 32px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h4 style="margin: 0;">Methodology Design</h4>
+          <span class="badge badge-green">Complete</span>
+        </div>
+        <div style="height: 8px; background: var(--border); border-radius: 4px; overflow: hidden;">
+          <div style="height: 100%; width: 100%; background: var(--green);"></div>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 32px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h4 style="margin: 0;">Statistical Analysis</h4>
+          <span class="badge badge-blue">In Progress</span>
+        </div>
+        <div style="height: 8px; background: var(--border); border-radius: 4px; overflow: hidden;">
+          <div style="height: 100%; width: 40%; background: var(--accent);"></div>
+        </div>
+        <p style="font-size: 13px; color: var(--muted); margin-top: 8px;">
+          Running outlier detection, z-score calculations for 1.2M providers
+        </p>
+      </div>
+
+      <div style="margin-bottom: 32px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h4 style="margin: 0;">Network Analysis</h4>
+          <span class="badge badge-purple">Planned Q2 2026</span>
+        </div>
+        <div style="height: 8px; background: var(--border); border-radius: 4px; overflow: hidden;">
+          <div style="height: 100%; width: 20%; background: var(--purple);"></div>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 32px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h4 style="margin: 0;">Case Studies & Writeup</h4>
+          <span class="badge badge-purple">Target Q2-Q3 2026</span>
+        </div>
+        <div style="height: 8px; background: var(--border); border-radius: 4px; overflow: hidden;">
+          <div style="height: 100%; width: 10%; background: var(--purple);"></div>
+        </div>
+      </div>
+
+      <div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h4 style="margin: 0;">Interactive Tools</h4>
+          <span class="badge badge-purple">Target Q3 2026</span>
+        </div>
+        <div style="height: 8px; background: var(--border); border-radius: 4px; overflow: hidden;">
+          <div style="height: 100%; width: 5%; background: var(--purple);"></div>
+        </div>
+        <p style="font-size: 13px; color: var(--muted); margin-top: 8px;">
+          Provider outlier explorer, geographic heatmap, network visualizer
+        </p>
+      </div>
+    </div>
+
+    <div style="background: var(--surface); padding: 24px; border-radius: 10px; margin-top: 48px;">
+      <h3 style="margin-bottom: 16px;">Important Disclaimers</h3>
+      <ul style="font-size: 14px; color: var(--muted); line-height: 1.8; margin-left: 20px;">
+        <li><strong>Statistical anomalies ≠ proof of fraud.</strong> Legitimate outliers exist (rural providers, specialized practices).</li>
+        <li><strong>These are patterns worth investigating,</strong> not accusations. Real fraud requires investigation.</li>
+        <li><strong>False positives are expected.</strong> We aim to minimize them, but they're unavoidable with statistical methods.</li>
+        <li><strong>Data is 1-2 years old.</strong> Some flagged providers may already be under investigation or convicted.</li>
+        <li><strong>This is research, not law enforcement.</strong> Findings are for educational and policy purposes.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="section" style="background: var(--surface);">
+  <div class="container-narrow" style="text-align: center;">
+    <h2>Want Fraud Detection for Your Claims Data?</h2>
+    <p style="font-size: 16px; color: var(--muted); margin-bottom: 32px; max-width: 600px; margin-left: auto; margin-right: auto;">
+      This methodology can be applied to any claims dataset — commercial insurance, Medicaid, 
+      health system internal data. If you need fraud detection, waste identification, or 
+      anomaly monitoring — we can build custom systems tailored to your data.
+    </p>
+    <a href="mailto:blake@blakethomson.com?subject=Fraud Detection Inquiry" class="btn btn-primary" style="margin-right: 16px;">
+      Contact Us
+    </a>
+    <a href="/projects/" class="btn btn-secondary">
+      Back to Projects
+    </a>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div class="footer-container">
+    <div class="footer-grid">
+      <div class="footer-section">
+        <h4>Navigation</h4>
+        <ul>
+          <li><a href="/">Home</a></li>
+          <li><a href="/dashboard/">Dashboard</a></li>
+          <li><a href="/projects/">Projects</a></li>
+          <li><a href="/access/">Data Access</a></li>
+          <li><a href="/about/">About</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h4>Resources</h4>
+        <ul>
+          <li><a href="/api/docs" target="_blank">API Documentation</a></li>
+          <li><a href="https://github.com/blakethom8/cms-data" target="_blank">GitHub Repository</a></li>
+          <li><a href="https://data.cms.gov" target="_blank">CMS Data Source</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h4>Projects</h4>
+        <ul>
+          <li><a href="/projects/healthcare-cost/">Healthcare Cost Analysis</a></li>
+          <li><a href="/projects/fraud-analysis/">Fraud Detection</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h4>Connect</h4>
+        <ul>
+          <li><a href="mailto:blake@blakethomson.com">blake@blakethomson.com</a></li>
+          <li><a href="https://blakethomson.studio" target="_blank">blakethomson.studio</a></li>
+          <li><a href="https://linkedin.com/in/blakethom" target="_blank">LinkedIn</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>Data provided by CMS via data.cms.gov • Not affiliated with CMS • Independent analysis</p>
+      <p>© 2026 Blake Thomson • HealthcareDataAI.com</p>
+    </div>
+  </div>
+</footer>
+
+<script>
+function toggleNav() {
+  const nav = document.getElementById('navLinks');
+  nav.classList.toggle('open');
+}
+document.addEventListener('click', (e) => {
+  const nav = document.getElementById('navLinks');
+  const toggle = document.querySelector('.nav-toggle');
+  if (!nav.contains(e.target) && !toggle.contains(e.target)) {
+    nav.classList.remove('open');
+  }
+});
+</script>
+
+</body>
+</html>

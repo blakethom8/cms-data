@@ -1,0 +1,128 @@
+========================================
+CMS Provider Search - Enhanced Matching
+========================================
+
+TEST: Name Parser - Dr. prefix stripping
+Name: Dr. Smith
+Address: Beverly Hills, CA
+---
+Input parsed as: Dr. Smith
+Matches found: 1
+  1. Marlisha Smith, Nurse Practitioner
+     Beverly Hills, CA 90211
+     Match: loose_name_state (confidence: 0.5)
+     Medicare: $2,530.91
+
+
+TEST: Name Parser - Middle initial stripping
+Name: John A Smith
+Address: Los Angeles, CA 90012
+---
+Input parsed as: John A Smith
+Matches found: 10
+  1. Madalyn Smith, Nurse Practitioner
+     Los Angeles, CA 90017
+     Match: loose_name_state (confidence: 0.5)
+     Medicare: $7,859.73
+  2. Erik Smith, Anesthesiology
+     Los Angeles, CA 90033
+     Match: loose_name_state (confidence: 0.5)
+     Medicare: $5,722.60
+  3. Lemuel Smith, Emergency Medicine
+     Los Angeles, CA 90048
+     Match: loose_name_state (confidence: 0.5)
+     Medicare: $17,199.54
+
+
+TEST: Name Parser - Possessive extraction
+Name: Dr. Smith's Clinic
+Address: Los Angeles, CA
+---
+Input parsed as: Dr. Smith's Clinic
+Matches found: 10
+  1. Madalyn Smith, Nurse Practitioner
+     Los Angeles, CA 90017
+     Match: loose_name_state (confidence: 0.5)
+     Medicare: $7,859.73
+  2. Erik Smith, Anesthesiology
+     Los Angeles, CA 90033
+     Match: loose_name_state (confidence: 0.5)
+     Medicare: $5,722.60
+  3. Lemuel Smith, Emergency Medicine
+     Los Angeles, CA 90048
+     Match: loose_name_state (confidence: 0.5)
+     Medicare: $17,199.54
+
+
+TEST: Multi-address matching
+Name: Jennifer Lee
+Address: Los Angeles, CA 90024
+---
+Input parsed as: Jennifer Lee
+Matches found: 1
+  1. Jennifer Lee, Certified Registered Nurse Anesthetist (CRNA)
+     Los Angeles, CA 90033
+     Match: fuzzy_name_city (confidence: 0.8)
+     Medicare: $19,211.51
+
+
+TEST: Fuzzy city matching
+Name: Robert Chen
+Address: Beverly Hills, CA
+---
+Input parsed as: Robert Chen
+Matches found: 3
+  1. Jennifer Chen, Obstetrics & Gynecology
+     Beverly Hills, CA 90210
+     Match: loose_name_state (confidence: 0.5)
+     Medicare: $3,592.89
+  2. Andrew Chen, Urology
+     Beverly Hills, CA 90211
+     Match: loose_name_state (confidence: 0.5)
+     Medicare: $109,287.76
+  3. Vicki Chen, Physician Assistant
+     Beverly Hills, CA 90210
+     Match: loose_name_state (confidence: 0.5)
+     Medicare: $20,635.96
+
+
+TEST: Specialty hint boosting
+Name: Sarah Johnson
+Address: Santa Monica, CA
+Specialty: Internal Medicine
+---
+Matches found: 2
+  1. Gadson Johnson, Psychiatry 
+     Confidence: 0.5
+  2. Eileen Johnson, Physical Therapist in Private Practice 
+     Confidence: 0.5
+
+
+TEST: Integrated Provider Search (Google Places + CMS)
+Searching: endocrinologist in Santa Monica, CA
+---
+Google Places results: 20
+CMS matched: 8
+Match rate: 40.0%
+
+Sample results:
+  1. UCLA Endocrine Center
+     Google: 4.8 stars, 50 reviews
+     ❌ No CMS match found
+  2. Sarah R. Rettinger, MD
+     Google: 4.5 stars, 15 reviews
+     CMS: Sarah Rettinger, NPI 1366691842
+     Match: exact_name_zip (confidence: 0.95)
+  3. UCLA Gonda (Goldschmied) Diabetes Center, Santa Monica
+     Google: 3.6 stars, 8 reviews
+     ❌ No CMS match found
+
+
+========================================
+All tests completed!
+========================================
+
+Next steps:
+1. Open dashboard: open ~/Repo/cms-data/dashboard/index.html
+2. To enable LLM matching, add OPENAI_API_KEY to /etc/systemd/system/cms-api.service
+3. See TEST_DEPLOYMENT.md for full documentation

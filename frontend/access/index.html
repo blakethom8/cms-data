@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Data Access | HealthcareDataAI</title>
+<meta name="description" content="Three ways to access 100M+ Medicare provider records: free API, research access, or enterprise solutions.">
+<link rel="stylesheet" href="/styles/global.css">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-container">
+    <a href="/" class="nav-brand">🏥 HealthcareDataAI</a>
+    <button class="nav-toggle" onclick="toggleNav()" aria-label="Toggle navigation">☰</button>
+    <ul class="nav-links" id="navLinks">
+      <li><a href="/">Home</a></li>
+      <li><a href="/dashboard/">Dashboard</a></li>
+      <li><a href="/projects/">Projects</a></li>
+      <li><a href="/access/" class="active">Data Access</a></li>
+      <li><a href="/about/">About</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main>
+
+<section class="hero">
+  <div class="container">
+    <h1>Access CMS Healthcare Data</h1>
+    <p class="tagline">
+      Three ways to work with 100M+ Medicare provider records — from quick queries 
+      to full database downloads to enterprise deployments.
+    </p>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <h2 style="text-align: center; margin-bottom: 48px;">Choose Your Access Tier</h2>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 32px;">
+      
+      <!-- Tier 1: Free API -->
+      <div style="background: var(--surface); border: 2px solid var(--accent); border-radius: 10px; padding: 32px; position: relative;">
+        <div style="position: absolute; top: -12px; left: 24px; background: var(--accent); color: #0f172a; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: 700;">
+          MOST POPULAR
+        </div>
+        <h3 style="margin-top: 8px; margin-bottom: 16px;">Tier 1: Public API</h3>
+        <div style="font-size: 36px; font-weight: 700; color: var(--accent); margin-bottom: 8px;">Free</div>
+        <p style="color: var(--muted); margin-bottom: 24px;">For developers, researchers, and builders</p>
+        
+        <ul style="margin-bottom: 32px; padding-left: 20px; line-height: 1.8;">
+          <li>Query our database via REST API</li>
+          <li>100 requests per minute</li>
+          <li>Up to 1,000 rows per query</li>
+          <li>All 30 datasets accessible</li>
+          <li>Interactive dashboard included</li>
+        </ul>
+
+        <a href="#api-quickstart" class="btn btn-primary" style="width: 100%; text-align: center;">
+          Get Started
+        </a>
+
+        <p style="margin-top: 16px; font-size: 13px; color: var(--muted);">
+          No signup required • Start querying immediately
+        </p>
+      </div>
+
+      <!-- Tier 2: Research Access -->
+      <div style="background: var(--surface); border: 2px solid var(--border); border-radius: 10px; padding: 32px;">
+        <h3 style="margin-bottom: 16px;">Tier 2: Research Access</h3>
+        <div style="font-size: 36px; font-weight: 700; color: var(--green); margin-bottom: 8px;">Email Required</div>
+        <p style="color: var(--muted); margin-bottom: 24px;">For academics and serious analysts</p>
+        
+        <ul style="margin-bottom: 32px; padding-left: 20px; line-height: 1.8;">
+          <li>Larger queries (up to 10K rows)</li>
+          <li>Bulk table exports (CSV/Parquet)</li>
+          <li>Full database snapshot (6GB DuckDB)</li>
+          <li>24-48 hour approval turnaround</li>
+          <li>Academic/research priority</li>
+        </ul>
+
+        <a href="#request-form" class="btn btn-secondary" style="width: 100%; text-align: center;">
+          Request Access
+        </a>
+
+        <p style="margin-top: 16px; font-size: 13px; color: var(--muted);">
+          Tell us your use case • Manual approval
+        </p>
+      </div>
+
+      <!-- Tier 3: Enterprise -->
+      <div style="background: var(--surface); border: 2px solid var(--border); border-radius: 10px; padding: 32px;">
+        <h3 style="margin-bottom: 16px;">Tier 3: Enterprise API</h3>
+        <div style="font-size: 36px; font-weight: 700; color: var(--purple); margin-bottom: 8px;">Custom</div>
+        <p style="color: var(--muted); margin-bottom: 24px;">For health systems and organizations</p>
+        
+        <ul style="margin-bottom: 32px; padding-left: 20px; line-height: 1.8;">
+          <li>Unlimited queries and downloads</li>
+          <li>Real-time data updates</li>
+          <li>Custom transformations & enrichment</li>
+          <li>Azure deployment (your tenant)</li>
+          <li>Match engine + LLM integration</li>
+          <li>White-glove support</li>
+        </ul>
+
+        <a href="mailto:blake@blakethomson.com?subject=Enterprise API Inquiry" class="btn btn-secondary" style="width: 100%; text-align: center;">
+          Contact Sales
+        </a>
+
+        <p style="margin-top: 16px; font-size: 13px; color: var(--muted);">
+          Starting at $2K/month + setup
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- API Quick Start -->
+<section class="section" id="api-quickstart" style="background: var(--surface);">
+  <div class="container-narrow">
+    <h2>API Quick Start</h2>
+    <p>
+      Start querying immediately. No authentication required for basic access. 
+      API key required for higher rate limits.
+    </p>
+
+    <h3 style="margin-top: 32px;">Basic Query Example</h3>
+    <p style="color: var(--muted); margin-bottom: 16px;">
+      Find top California providers by Medicare payment:
+    </p>
+
+    <div style="background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 20px; overflow-x: auto; margin-bottom: 24px;">
+      <pre style="margin: 0; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; line-height: 1.6;"><code style="color: var(--text);">curl -X POST https://healthcaredataai.com/api/query \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -d '{
+    "sql": "SELECT npi, first_name, last_name, provider_type, city, 
+            ROUND(tot_medicare_payment,2) as payment 
+     FROM core_providers c 
+     JOIN utilization_metrics u ON c.npi = u.npi 
+     WHERE c.state = '\''CA'\'' 
+     ORDER BY payment DESC 
+     LIMIT 10"
+  }'</code></pre>
+    </div>
+
+    <h3>Response Format</h3>
+    <div style="background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 20px; overflow-x: auto; margin-bottom: 24px;">
+      <pre style="margin: 0; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; line-height: 1.6;"><code style="color: var(--text);">{
+  "columns": ["npi", "first_name", "last_name", "provider_type", "city", "payment"],
+  "rows": [
+    ["1003053851", "Aaron", "Jeng", "Internal Medicine", "San Gabriel", 44581902.37],
+    ["1174718134", "Richard", "Park", "Internal Medicine", "Granada Hills", 32374385.82],
+    ...
+  ],
+  "row_count": 10,
+  "elapsed_ms": 42.3,
+  "truncated": false
+}</code></pre>
+    </div>
+
+    <h3>Available Endpoints</h3>
+    <div class="card-grid" style="margin-top: 24px;">
+      <div class="card">
+        <h4 style="font-family: monospace; color: var(--accent);">GET /health</h4>
+        <p style="font-size: 14px;">Health check and database stats</p>
+      </div>
+
+      <div class="card">
+        <h4 style="font-family: monospace; color: var(--accent);">GET /tables</h4>
+        <p style="font-size: 14px;">List all tables with row counts</p>
+      </div>
+
+      <div class="card">
+        <h4 style="font-family: monospace; color: var(--accent);">GET /tables/{name}/schema</h4>
+        <p style="font-size: 14px;">Get table schema (columns, types)</p>
+      </div>
+
+      <div class="card">
+        <h4 style="font-family: monospace; color: var(--accent);">POST /query</h4>
+        <p style="font-size: 14px;">Execute SQL query (read-only)</p>
+      </div>
+
+      <div class="card">
+        <h4 style="font-family: monospace; color: var(--accent);">GET /search/places</h4>
+        <p style="font-size: 14px;">Provider search with Google Places</p>
+      </div>
+
+      <div class="card">
+        <h4 style="font-family: monospace; color: var(--accent);">GET /match/search</h4>
+        <p style="font-size: 14px;">Match provider name to CMS data</p>
+      </div>
+    </div>
+
+    <div style="text-align: center; margin-top: 32px;">
+      <a href="/api/docs" target="_blank" class="btn btn-primary">
+        View Full API Documentation
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- Request Form -->
+<section class="section" id="request-form">
+  <div class="container-narrow">
+    <h2>Request Research Access</h2>
+    <p style="margin-bottom: 32px;">
+      Need larger queries or bulk downloads? Fill out this form and we'll review your request. 
+      Academic researchers and non-profit organizations are prioritized.
+    </p>
+
+    <form id="accessForm" style="background: var(--surface); padding: 32px; border-radius: 10px; border: 1px solid var(--border);">
+      <div class="form-group">
+        <label for="name">Name *</label>
+        <input type="text" id="name" name="name" required>
+      </div>
+
+      <div class="form-group">
+        <label for="email">Email *</label>
+        <input type="email" id="email" name="email" required>
+      </div>
+
+      <div class="form-group">
+        <label for="organization">Organization</label>
+        <input type="text" id="organization" name="organization" placeholder="University, Company, or Independent">
+      </div>
+
+      <div class="form-group">
+        <label for="use_case">Use Case *</label>
+        <select id="use_case" name="use_case" required>
+          <option value="">-- Select one --</option>
+          <option value="research">Academic Research</option>
+          <option value="product">Product Development</option>
+          <option value="healthcare_org">Healthcare Organization (internal use)</option>
+          <option value="consulting">Consulting / Analysis</option>
+          <option value="student">Student / Learning</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="description">Project Description *</label>
+        <textarea id="description" name="description" required placeholder="Tell us what you're working on and how you'll use the data. The more detail, the faster we can approve your request."></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="datasets">Which datasets do you need?</label>
+        <textarea id="datasets" name="datasets" placeholder="e.g., Medicare Part B utilization, Open Payments, NPPES providers. Or 'all datasets' for full database."></textarea>
+      </div>
+
+      <div style="background: var(--bg); padding: 16px; border-radius: 6px; margin-bottom: 24px; font-size: 14px;">
+        <p style="margin: 0; color: var(--muted);">
+          <strong>Note:</strong> We typically respond within 24-48 hours. Academic researchers 
+          (.edu email) and non-profit organizations are prioritized. Commercial use cases are 
+          reviewed individually.
+        </p>
+      </div>
+
+      <button type="submit" class="btn btn-primary" style="width: 100%;">
+        Submit Request
+      </button>
+    </form>
+
+    <div id="form-success" style="display: none; background: var(--surface); padding: 32px; border-radius: 10px; border: 2px solid var(--green); text-align: center; margin-top: 24px;">
+      <div style="font-size: 48px; margin-bottom: 16px;">✅</div>
+      <h3 style="color: var(--green); margin-bottom: 16px;">Request Submitted!</h3>
+      <p style="color: var(--muted);">
+        Thanks for your interest. We'll review your request and respond within 24-48 hours. 
+        If approved, you'll receive a download link via email.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- Data Attribution -->
+<section class="section" style="background: var(--surface);">
+  <div class="container-narrow">
+    <h2>Data Sources & Attribution</h2>
+    <p>
+      All data provided by the Centers for Medicare & Medicaid Services (CMS) via 
+      <a href="https://data.cms.gov" target="_blank">data.cms.gov</a>.
+    </p>
+
+    <div style="background: var(--bg); padding: 24px; border-radius: 6px; margin: 24px 0;">
+      <h3 style="font-size: 16px; margin-bottom: 12px;">What We Do:</h3>
+      <ul style="color: var(--muted); line-height: 1.8; margin-left: 20px;">
+        <li>Aggregate and consolidate 30+ CMS public use files into one database</li>
+        <li>Transform and enrich data for easier analysis (entity resolution, matching)</li>
+        <li>Serve via modern API and interactive dashboard</li>
+        <li>Update quarterly following CMS release schedules</li>
+      </ul>
+    </div>
+
+    <div style="background: var(--bg); padding: 24px; border-radius: 6px; margin-bottom: 24px;">
+      <h3 style="font-size: 16px; margin-bottom: 12px;">What We Don't Have:</h3>
+      <ul style="color: var(--muted); line-height: 1.8; margin-left: 20px;">
+        <li>Protected Health Information (PHI) — our data is provider-level aggregates only</li>
+        <li>Individual patient records or claims (requires Data Use Agreement with CMS)</li>
+        <li>Real-time data — typically 1-2 years lag between service and public release</li>
+        <li>Non-Medicare data — Medicaid, commercial insurance, other payers not included</li>
+      </ul>
+    </div>
+
+    <p style="font-size: 14px; color: var(--muted);">
+      <strong>Not affiliated with CMS.</strong> HealthcareDataAI is an independent project. 
+      All analysis, opinions, and interpretations are our own. For official CMS data and 
+      documentation, visit <a href="https://data.cms.gov" target="_blank">data.cms.gov</a>.
+    </p>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div class="footer-container">
+    <div class="footer-grid">
+      <div class="footer-section">
+        <h4>Navigation</h4>
+        <ul>
+          <li><a href="/">Home</a></li>
+          <li><a href="/dashboard/">Dashboard</a></li>
+          <li><a href="/projects/">Projects</a></li>
+          <li><a href="/access/">Data Access</a></li>
+          <li><a href="/about/">About</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h4>Resources</h4>
+        <ul>
+          <li><a href="/api/docs" target="_blank">API Documentation</a></li>
+          <li><a href="https://github.com/blakethom8/cms-data" target="_blank">GitHub Repository</a></li>
+          <li><a href="https://data.cms.gov" target="_blank">CMS Data Source</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h4>Projects</h4>
+        <ul>
+          <li><a href="/projects/healthcare-cost/">Healthcare Cost Analysis</a></li>
+          <li><a href="/projects/fraud-analysis/">Fraud Detection</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h4>Connect</h4>
+        <ul>
+          <li><a href="mailto:blake@blakethomson.com">blake@blakethomson.com</a></li>
+          <li><a href="https://blakethomson.studio" target="_blank">blakethomson.studio</a></li>
+          <li><a href="https://linkedin.com/in/blakethom" target="_blank">LinkedIn</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>Data provided by CMS via data.cms.gov • Not affiliated with CMS • Independent analysis</p>
+      <p>© 2026 Blake Thomson • HealthcareDataAI.com</p>
+    </div>
+  </div>
+</footer>
+
+<script>
+function toggleNav() {
+  const nav = document.getElementById('navLinks');
+  nav.classList.toggle('open');
+}
+
+document.addEventListener('click', (e) => {
+  const nav = document.getElementById('navLinks');
+  const toggle = document.querySelector('.nav-toggle');
+  if (!nav.contains(e.target) && !toggle.contains(e.target)) {
+    nav.classList.remove('open');
+  }
+});
+
+// Form handling (placeholder - will integrate with Formspree or custom endpoint)
+document.getElementById('accessForm').addEventListener('submit', function(e) {
+  e.preventDefault();
+  
+  // For now, just show success message
+  // In production, this would POST to Formspree or custom endpoint
+  document.getElementById('accessForm').style.display = 'none';
+  document.getElementById('form-success').style.display = 'block';
+  
+  // Scroll to success message
+  document.getElementById('form-success').scrollIntoView({ behavior: 'smooth' });
+  
+  // TODO: Integrate with Formspree.io or custom API endpoint
+  // fetch('https://formspree.io/f/YOUR_FORM_ID', {
+  //   method: 'POST',
+  //   body: new FormData(this),
+  //   headers: { 'Accept': 'application/json' }
+  // }).then(response => {
+  //   if (response.ok) {
+  //     // Show success
+  //   }
+  // });
+});
+</script>
+
+</body>
+</html>

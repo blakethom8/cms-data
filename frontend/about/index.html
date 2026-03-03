@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>About | HealthcareDataAI</title>
+<meta name="description" content="Free and open-source CMS healthcare data platform built by healthcare data experts. Learn about the mission, the builder, and custom services.">
+<link rel="stylesheet" href="/styles/global.css">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-container">
+    <a href="/" class="nav-brand">🏥 HealthcareDataAI</a>
+    <button class="nav-toggle" onclick="toggleNav()" aria-label="Toggle navigation">☰</button>
+    <ul class="nav-links" id="navLinks">
+      <li><a href="/">Home</a></li>
+      <li><a href="/dashboard/">Dashboard</a></li>
+      <li><a href="/projects/">Projects</a></li>
+      <li><a href="/access/">Data Access</a></li>
+      <li><a href="/about/" class="active">About</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main>
+
+<section class="hero">
+  <div class="container">
+    <h1>About HealthcareDataAI</h1>
+    <p class="tagline">
+      A free and open-source platform making CMS healthcare data accessible, 
+      analyzable, and actionable for researchers, builders, and healthcare organizations.
+    </p>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container-narrow">
+    <h2>The Mission</h2>
+    <p style="font-size: 18px; line-height: 1.8; margin-bottom: 24px;">
+      CMS publishes incredible datasets — 100M+ records on Medicare providers, utilization, 
+      payments, and quality. But accessing it requires navigating fragmented websites, 
+      inconsistent formats, and cryptic documentation. HealthcareDataAI solves this.
+    </p>
+
+    <div class="card-grid" style="margin: 32px 0;">
+      <div class="card">
+        <h3>🎯 Make Data Accessible</h3>
+        <p>
+          Consolidate 30+ CMS datasets into one place with a modern API and interactive dashboard. 
+          No more hunting across data.cms.gov for scattered files.
+        </p>
+      </div>
+
+      <div class="card">
+        <h3>💡 Showcase Possibilities</h3>
+        <p>
+          Real analysis projects (cost modeling, fraud detection) demonstrate what's possible 
+          when you combine domain expertise with data engineering.
+        </p>
+      </div>
+
+      <div class="card">
+        <h3>🤝 Build Community</h3>
+        <p>
+          Empower researchers, startups, and healthcare organizations with the intelligence 
+          tools that only well-resourced health systems could afford.
+        </p>
+      </div>
+
+      <div class="card">
+        <h3>🔓 Stay Open</h3>
+        <p>
+          Free API, open methodology, transparent analysis. Healthcare data should serve 
+          the public good, not just those who can pay.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" style="background: var(--surface);">
+  <div class="container-narrow">
+    <h2>The Builder</h2>
+    <p style="font-size: 18px; margin-bottom: 32px;">
+      HealthcareDataAI is built by <strong>Blake Thomson</strong>, a healthcare data strategist 
+      with deep experience in provider intelligence and claims analysis.
+    </p>
+
+    <div style="background: var(--bg); padding: 32px; border-radius: 10px; margin-bottom: 32px;">
+      <h3 style="margin-bottom: 16px;">Professional Background</h3>
+      <div style="margin-bottom: 24px;">
+        <h4 style="color: var(--accent); margin-bottom: 8px;">Cedars-Sinai Health System</h4>
+        <p style="color: var(--muted); font-size: 14px; margin-bottom: 8px;">
+          <strong>Business Development Team</strong> • 2+ years
+        </p>
+        <p>
+          Known as the "data guru" — built intelligence systems for physician liaisons and strategic 
+          planners working with 10,000+ LA County providers. Designed data workflows, claims analysis 
+          tools, and referral intelligence systems that turned raw data into actionable insights.
+        </p>
+      </div>
+
+      <div style="margin-bottom: 24px;">
+        <h4 style="color: var(--accent); margin-bottom: 8px;">Consulting & Startups</h4>
+        <p style="color: var(--muted); font-size: 14px; margin-bottom: 8px;">
+          <strong>Med Tech & Pharma Consulting</strong> • Prior experience
+        </p>
+        <p>
+          Sales consulting and PowerPoint storytelling for complex stakeholders. Biotech startup 
+          in SF Bay Area. Learned to translate technical complexity into business value.
+        </p>
+      </div>
+
+      <div>
+        <h4 style="color: var(--accent); margin-bottom: 8px;">Education</h4>
+        <p style="color: var(--muted); font-size: 14px;">
+          <strong>MS, Biomedical Engineering</strong> • Systems-level thinking meets healthcare domain
+        </p>
+      </div>
+    </div>
+
+    <h3>Why This Project?</h3>
+    <p>
+      After 2+ years building data systems inside a health system, I realized two things:
+    </p>
+    <ol style="line-height: 1.8; margin-left: 20px; margin-bottom: 24px;">
+      <li><strong>CMS data is underutilized.</strong> Organizations don't know what's available or how to use it.</li>
+      <li><strong>Intelligence systems shouldn't be exclusive.</strong> Smaller organizations need the same tools as big health systems.</li>
+    </ol>
+    <p>
+      HealthcareDataAI is both a public service (free data access) and a portfolio (demonstrating 
+      what's possible for clients who need custom solutions).
+    </p>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container-narrow">
+    <h2>The Platform</h2>
+    <p style="margin-bottom: 32px;">
+      Built from scratch to serve healthcare data at scale.
+    </p>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 24px; margin-bottom: 32px;">
+      <div style="background: var(--surface); padding: 24px; border-radius: 10px;">
+        <div class="stat-number" style="color: var(--accent);">107M</div>
+        <div class="stat-label">Total Records</div>
+        <p style="font-size: 13px; color: var(--muted); margin-top: 8px;">
+          Across 30 datasets: providers, claims, payments, quality, hospitals
+        </p>
+      </div>
+
+      <div style="background: var(--surface); padding: 24px; border-radius: 10px;">
+        <div class="stat-number" style="color: var(--green);">6GB</div>
+        <div class="stat-label">Database Size</div>
+        <p style="font-size: 13px; color: var(--muted); margin-top: 8px;">
+          Compressed DuckDB format for fast queries
+        </p>
+      </div>
+
+      <div style="background: var(--surface); padding: 24px; border-radius: 10px;">
+        <div class="stat-number" style="color: var(--purple);">Quarterly</div>
+        <div class="stat-label">Update Frequency</div>
+        <p style="font-size: 13px; color: var(--muted); margin-top: 8px;">
+          Following CMS release schedules
+        </p>
+      </div>
+    </div>
+
+    <h3>Technology Stack</h3>
+    <div style="background: var(--surface); padding: 24px; border-radius: 10px; margin-bottom: 32px;">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+        <div>
+          <h4 style="font-size: 14px; color: var(--accent); margin-bottom: 8px;">Database</h4>
+          <p style="font-size: 14px; color: var(--muted);">DuckDB (columnar, analytics-optimized)</p>
+        </div>
+        <div>
+          <h4 style="font-size: 14px; color: var(--accent); margin-bottom: 8px;">API</h4>
+          <p style="font-size: 14px; color: var(--muted);">FastAPI (Python, async)</p>
+        </div>
+        <div>
+          <h4 style="font-size: 14px; color: var(--accent); margin-bottom: 8px;">Frontend</h4>
+          <p style="font-size: 14px; color: var(--muted);">Vanilla JS, no framework bloat</p>
+        </div>
+        <div>
+          <h4 style="font-size: 14px; color: var(--accent); margin-bottom: 8px;">Deployment</h4>
+          <p style="font-size: 14px; color: var(--muted);">Docker + nginx on Hetzner VPS</p>
+        </div>
+        <div>
+          <h4 style="font-size: 14px; color: var(--accent); margin-bottom: 8px;">Pipeline</h4>
+          <p style="font-size: 14px; color: var(--muted);">Python scripts + data.cms.gov</p>
+        </div>
+        <div>
+          <h4 style="font-size: 14px; color: var(--accent); margin-bottom: 8px;">Hosting</h4>
+          <p style="font-size: 14px; color: var(--muted);">$80/month (accessible at scale)</p>
+        </div>
+      </div>
+    </div>
+
+    <div style="background: var(--bg); border-left: 4px solid var(--accent); padding: 24px; border-radius: 6px;">
+      <h4 style="margin-bottom: 12px;">Open Source Approach</h4>
+      <p style="color: var(--muted); margin-bottom: 0;">
+        The code is available on <a href="https://github.com/blakethom8/cms-data" target="_blank">GitHub</a>. 
+        Data pipeline scripts, API endpoints, and dashboard code are all public. If you want to run your 
+        own instance or contribute improvements — you're welcome to.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section class="section" style="background: var(--surface);">
+  <div class="container-narrow">
+    <h2>Custom Services</h2>
+    <p style="margin-bottom: 32px;">
+      While the platform is free, Blake offers bespoke data intelligence services for healthcare 
+      organizations that need more than self-service access.
+    </p>
+
+    <div class="card-grid">
+      <div class="card">
+        <h3>🤖 Bespoke AI Agents</h3>
+        <p>
+          Custom LLM-powered agents for provider search, claims analysis, referral intelligence. 
+          Deployed in your Azure tenant (your data never leaves your environment).
+        </p>
+      </div>
+
+      <div class="card">
+        <h3>📊 Intelligence Platforms</h3>
+        <p>
+          Full-stack data platforms tailored to your needs: dashboards, APIs, automated reports, 
+          alerting systems. Built on your data sources, not just CMS.
+        </p>
+      </div>
+
+      <div class="card">
+        <h3>🔍 Custom Analysis</h3>
+        <p>
+          One-off research projects: market assessments, fraud detection, cost analysis, 
+          network intelligence. Academic rigor, business focus.
+        </p>
+      </div>
+
+      <div class="card">
+        <h3>💼 Data Strategy</h3>
+        <p>
+          Consulting on data architecture, vendor selection, build-vs-buy decisions. 
+          Help you think through what's possible and what's worth building.
+        </p>
+      </div>
+    </div>
+
+    <div style="background: var(--bg); padding: 32px; border-radius: 10px; text-align: center; margin-top: 48px;">
+      <h3 style="margin-bottom: 16px;">Interested in Custom Work?</h3>
+      <p style="color: var(--muted); margin-bottom: 24px; max-width: 600px; margin-left: auto; margin-right: auto;">
+        If you need provider intelligence tools, claims analytics, fraud detection, or custom data 
+        solutions — let's talk. I've built these systems before and can do it again for you.
+      </p>
+      <a href="mailto:blake@blakethomson.com?subject=Custom Healthcare Data Services" class="btn btn-primary">
+        Contact Blake
+      </a>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container-narrow">
+    <h2>Frequently Asked Questions</h2>
+
+    <div style="margin-top: 32px;">
+      <div style="margin-bottom: 32px; padding-bottom: 32px; border-bottom: 1px solid var(--border);">
+        <h3 style="font-size: 18px; margin-bottom: 12px;">Where does the data come from?</h3>
+        <p style="color: var(--muted);">
+          All data is from CMS public use files available at <a href="https://data.cms.gov" target="_blank">data.cms.gov</a>. 
+          We download, consolidate, and serve it through a modern API. No private or restricted data.
+        </p>
+      </div>
+
+      <div style="margin-bottom: 32px; padding-bottom: 32px; border-bottom: 1px solid var(--border);">
+        <h3 style="font-size: 18px; margin-bottom: 12px;">Is this affiliated with CMS?</h3>
+        <p style="color: var(--muted);">
+          No. HealthcareDataAI is an independent project. We use CMS data but are not endorsed by, 
+          sponsored by, or affiliated with CMS or the federal government. All analysis and opinions are our own.
+        </p>
+      </div>
+
+      <div style="margin-bottom: 32px; padding-bottom: 32px; border-bottom: 1px solid var(--border);">
+        <h3 style="font-size: 18px; margin-bottom: 12px;">Can I use this for commercial purposes?</h3>
+        <p style="color: var(--muted);">
+          Yes. CMS data is public domain and can be used commercially. Our API and transformed datasets 
+          are also free to use. Just attribute the data source (CMS) and respect our rate limits.
+        </p>
+      </div>
+
+      <div style="margin-bottom: 32px; padding-bottom: 32px; border-bottom: 1px solid var(--border);">
+        <h3 style="font-size: 18px; margin-bottom: 12px;">How often is data updated?</h3>
+        <p style="color: var(--muted);">
+          Quarterly, following CMS release schedules. NPPES updates monthly, Open Payments updates 
+          quarterly, Medicare utilization updates annually. We track the latest releases and refresh our database accordingly.
+        </p>
+      </div>
+
+      <div style="margin-bottom: 32px; padding-bottom: 32px; border-bottom: 1px solid var(--border);">
+        <h3 style="font-size: 18px; margin-bottom: 12px;">Do you have patient-level data?</h3>
+        <p style="color: var(--muted);">
+          No. All our data is provider-level aggregates (total services, total payments, etc.). 
+          Individual patient claims require a Data Use Agreement with CMS and are not available through 
+          our platform.
+        </p>
+      </div>
+
+      <div style="margin-bottom: 32px; padding-bottom: 32px; border-bottom: 1px solid var(--border);">
+        <h3 style="font-size: 18px; margin-bottom: 12px;">Can I download the entire database?</h3>
+        <p style="color: var(--muted);">
+          Yes, via Research Access (Tier 2). Request access through our <a href="/access/">data access page</a>, 
+          describe your use case, and we'll send you a download link for the full DuckDB database (6GB).
+        </p>
+      </div>
+
+      <div>
+        <h3 style="font-size: 18px; margin-bottom: 12px;">How can I contribute or report issues?</h3>
+        <p style="color: var(--muted);">
+          The project is on <a href="https://github.com/blakethom8/cms-data" target="_blank">GitHub</a>. 
+          Open an issue for bugs or feature requests. Pull requests welcome for pipeline improvements or 
+          new data sources.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" style="background: var(--surface);">
+  <div class="container-narrow" style="text-align: center;">
+    <h2>Connect</h2>
+    <p style="margin-bottom: 32px; color: var(--muted);">
+      Questions, feedback, or collaboration ideas? Get in touch.
+    </p>
+    
+    <div style="display: flex; justify-content: center; gap: 24px; flex-wrap: wrap; margin-bottom: 32px;">
+      <a href="mailto:blake@blakethomson.com" style="display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 20px; background: var(--bg); border-radius: 10px; min-width: 160px;">
+        <div style="font-size: 32px;">📧</div>
+        <div style="font-size: 14px; font-weight: 600;">Email</div>
+        <div style="font-size: 13px; color: var(--muted);">blake@blakethomson.com</div>
+      </a>
+
+      <a href="https://blakethomson.studio" target="_blank" style="display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 20px; background: var(--bg); border-radius: 10px; min-width: 160px;">
+        <div style="font-size: 32px;">🌐</div>
+        <div style="font-size: 14px; font-weight: 600;">Personal Site</div>
+        <div style="font-size: 13px; color: var(--muted);">blakethomson.studio</div>
+      </a>
+
+      <a href="https://linkedin.com/in/blakethom" target="_blank" style="display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 20px; background: var(--bg); border-radius: 10px; min-width: 160px;">
+        <div style="font-size: 32px;">💼</div>
+        <div style="font-size: 14px; font-weight: 600;">LinkedIn</div>
+        <div style="font-size: 13px; color: var(--muted);">/in/blakethom</div>
+      </a>
+
+      <a href="https://github.com/blakethom8/cms-data" target="_blank" style="display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 20px; background: var(--bg); border-radius: 10px; min-width: 160px;">
+        <div style="font-size: 32px;">💻</div>
+        <div style="font-size: 14px; font-weight: 600;">GitHub</div>
+        <div style="font-size: 13px; color: var(--muted);">blakethom8/cms-data</div>
+      </a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div class="footer-container">
+    <div class="footer-grid">
+      <div class="footer-section">
+        <h4>Navigation</h4>
+        <ul>
+          <li><a href="/">Home</a></li>
+          <li><a href="/dashboard/">Dashboard</a></li>
+          <li><a href="/projects/">Projects</a></li>
+          <li><a href="/access/">Data Access</a></li>
+          <li><a href="/about/">About</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h4>Resources</h4>
+        <ul>
+          <li><a href="/api/docs" target="_blank">API Documentation</a></li>
+          <li><a href="https://github.com/blakethom8/cms-data" target="_blank">GitHub Repository</a></li>
+          <li><a href="https://data.cms.gov" target="_blank">CMS Data Source</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h4>Projects</h4>
+        <ul>
+          <li><a href="/projects/healthcare-cost/">Healthcare Cost Analysis</a></li>
+          <li><a href="/projects/fraud-analysis/">Fraud Detection</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h4>Connect</h4>
+        <ul>
+          <li><a href="mailto:blake@blakethomson.com">blake@blakethomson.com</a></li>
+          <li><a href="https://blakethomson.studio" target="_blank">blakethomson.studio</a></li>
+          <li><a href="https://linkedin.com/in/blakethom" target="_blank">LinkedIn</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>Data provided by CMS via data.cms.gov • Not affiliated with CMS • Independent analysis</p>
+      <p>© 2026 Blake Thomson • HealthcareDataAI.com</p>
+    </div>
+  </div>
+</footer>
+
+<script>
+function toggleNav() {
+  const nav = document.getElementById('navLinks');
+  nav.classList.toggle('open');
+}
+
+document.addEventListener('click', (e) => {
+  const nav = document.getElementById('navLinks');
+  const toggle = document.querySelector('.nav-toggle');
+  if (!nav.contains(e.target) && !toggle.contains(e.target)) {
+    nav.classList.remove('open');
+  }
+});
+</script>
+
+</body>
+</html>

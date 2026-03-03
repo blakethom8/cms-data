@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Projects | HealthcareDataAI</title>
+<meta name="description" content="Healthcare data analysis projects showcasing real-world applications of CMS data - cost analysis, fraud detection, and more.">
+<link rel="stylesheet" href="/styles/global.css">
+</head>
+<body>
+
+<!-- Navigation -->
+<nav class="nav">
+  <div class="nav-container">
+    <a href="/" class="nav-brand">🏥 HealthcareDataAI</a>
+    <button class="nav-toggle" onclick="toggleNav()" aria-label="Toggle navigation">☰</button>
+    <ul class="nav-links" id="navLinks">
+      <li><a href="/">Home</a></li>
+      <li><a href="/dashboard/">Dashboard</a></li>
+      <li><a href="/projects/" class="active">Projects</a></li>
+      <li><a href="/access/">Data Access</a></li>
+      <li><a href="/about/">About</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- Main Content -->
+<main>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="container">
+    <h1>Healthcare Data Projects</h1>
+    <p class="tagline">
+      Real analysis on real data. Showcasing what's possible when you combine domain expertise, 
+      data engineering, and modern analytics on 100M+ Medicare records.
+    </p>
+  </div>
+</section>
+
+<!-- Featured Projects -->
+<section class="section">
+  <div class="container">
+    <h2>Featured Projects</h2>
+    <p class="subtitle">
+      Each project demonstrates different analytical approaches and business applications using CMS public data
+    </p>
+
+    <div class="project-grid">
+      <!-- Healthcare Cost Analysis -->
+      <div class="project-card">
+        <img src="/assets/images/healthcare-cost-placeholder.jpg" alt="Healthcare Cost Analysis" 
+             style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; align-items: center; justify-content: center; color: white; font-size: 64px; font-weight: 700;">
+        <div class="project-card-content">
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+            <h3 style="margin-bottom: 0;">Healthcare Cost Analysis</h3>
+            <span class="badge badge-purple">Research Phase</span>
+          </div>
+          <p style="font-size: 15px; line-height: 1.6; margin-bottom: 16px;">
+            <strong>The Question:</strong> What does healthcare actually <em>cost</em> to deliver in the United States?
+          </p>
+          <p style="margin-bottom: 16px;">
+            We spend $4.5 trillion annually on healthcare — but how much of that is direct patient care 
+            versus administrative overhead, insurance complexity, and systemic waste? This multi-method 
+            research project uses hospital cost reports, Medicare utilization data, and national spending 
+            tables to triangulate the true cost.
+          </p>
+          <div style="background: var(--bg); border-radius: 6px; padding: 16px; margin-bottom: 16px;">
+            <h4 style="font-size: 14px; margin-bottom: 8px;">Four Calculation Approaches:</h4>
+            <ul style="font-size: 13px; color: var(--muted); margin-left: 20px;">
+              <li>Provider capacity model (physician count × volume × cost/encounter)</li>
+              <li>Facility cost model (hospital beds × occupancy × cost/bed-day)</li>
+              <li>Claims bottom-up (Medicare → age-adjust → extrapolate)</li>
+              <li>Top-down national accounting ($4.5T → decompose → net out waste)</li>
+            </ul>
+          </div>
+          <p style="font-size: 13px; color: var(--muted); margin-bottom: 16px;">
+            <strong>Status:</strong> Research design complete, data acquisition in progress, pilot calculations starting Q2 2026
+          </p>
+          <a href="/projects/healthcare-cost/" class="btn btn-primary">View Project Details</a>
+        </div>
+      </div>
+
+      <!-- Fraud Detection -->
+      <div class="project-card">
+        <img src="/assets/images/fraud-analysis-placeholder.jpg" alt="Fraud Detection" 
+             style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); display: flex; align-items: center; justify-content: center; color: white; font-size: 64px; font-weight: 700;">
+        <div class="project-card-content">
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+            <h3 style="margin-bottom: 0;">Fraud Detection & Anomaly Analysis</h3>
+            <span class="badge badge-green">Active</span>
+          </div>
+          <p style="font-size: 15px; line-height: 1.6; margin-bottom: 16px;">
+            <strong>The Problem:</strong> $60-100 billion in healthcare fraud annually. Can we find it in public data?
+          </p>
+          <p style="margin-bottom: 16px;">
+            Medicare fraud costs taxpayers billions, but detecting it requires finding needles in haystacks of 
+            legitimate billing. This project applies statistical, geographic, and network-based techniques to 
+            identify billing outliers, prescribing anomalies, and suspicious provider patterns.
+          </p>
+          <div style="background: var(--bg); border-radius: 6px; padding: 16px; margin-bottom: 16px;">
+            <h4 style="font-size: 14px; margin-bottom: 8px;">Five Detection Approaches:</h4>
+            <ul style="font-size: 13px; color: var(--muted); margin-left: 20px;">
+              <li>Statistical outlier detection (billing 3+ std dev above peers)</li>
+              <li>Prescribing pattern analysis (pill mills, opioid red flags)</li>
+              <li>Geographic clustering (fraud hotspots by county/zip)</li>
+              <li>Network analysis (referral rings, kickback schemes)</li>
+              <li>Time series anomalies (COVID scams, pre-retirement fraud)</li>
+            </ul>
+          </div>
+          <p style="font-size: 13px; color: var(--muted); margin-bottom: 16px;">
+            <strong>Status:</strong> Methodology complete, initial outlier analysis underway, case studies targeted for Q2 2026
+          </p>
+          <a href="/projects/fraud-analysis/" class="btn btn-primary">View Project Details</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- What These Showcase -->
+<section class="section" style="background: var(--surface);">
+  <div class="container-narrow">
+    <h2>What These Projects Showcase</h2>
+    <p class="subtitle">
+      Demonstrating end-to-end capabilities in healthcare data intelligence
+    </p>
+
+    <div class="card-grid">
+      <div class="card">
+        <h3>🎯 Domain Expertise</h3>
+        <p>
+          Deep understanding of healthcare business models, provider networks, claims data structures, 
+          and regulatory frameworks (Medicare, CMS, HIPAA, Stark Law).
+        </p>
+      </div>
+
+      <div class="card">
+        <h3>📊 Data Engineering</h3>
+        <p>
+          Building production data pipelines: acquiring, cleaning, transforming, and serving 100M+ records. 
+          DuckDB, FastAPI, nginx, Docker — the full stack.
+        </p>
+      </div>
+
+      <div class="card">
+        <h3>🔬 Analytical Rigor</h3>
+        <p>
+          Multiple validation methods, transparent assumptions, peer-reviewable methodology. 
+          Academic-quality analysis, business-friendly presentation.
+        </p>
+      </div>
+
+      <div class="card">
+        <h3>💼 Business Value</h3>
+        <p>
+          Every analysis answers a real business question: How can we reduce costs? Where's the fraud? 
+          What's the ROI? Data for decisions, not just dashboards.
+        </p>
+      </div>
+    </div>
+
+    <div style="text-align: center; margin-top: 48px; padding: 32px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px;">
+      <h3 style="margin-bottom: 16px;">Want Custom Analysis for Your Organization?</h3>
+      <p style="color: var(--muted); margin-bottom: 24px; max-width: 600px; margin-left: auto; margin-right: auto;">
+        These projects are proof-of-concept for what's possible with healthcare data. 
+        If you need similar analysis for your health system, claims data, or provider network — 
+        we can build it.
+      </p>
+      <a href="mailto:blake@blakethomson.com?subject=Custom Healthcare Data Analysis" class="btn btn-primary">
+        Contact Us
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- Coming Soon -->
+<section class="section">
+  <div class="container">
+    <h2>Coming Soon</h2>
+    <p class="subtitle">
+      Projects in the pipeline for 2026
+    </p>
+
+    <div class="card-grid">
+      <div class="card" style="opacity: 0.7;">
+        <div class="icon">📍</div>
+        <h3>Provider Network Intelligence</h3>
+        <p>
+          Mapping referral patterns, identifying key opinion leaders, and quantifying provider influence 
+          within regional healthcare networks.
+        </p>
+        <span class="badge badge-blue" style="margin-top: 12px;">Q2 2026</span>
+      </div>
+
+      <div class="card" style="opacity: 0.7;">
+        <div class="icon">💊</div>
+        <h3>Prescribing Pattern Analysis</h3>
+        <p>
+          Deep-dive into Part D prescriber data: brand vs. generic preferences, specialty drug adoption 
+          patterns, and physician-pharma relationships.
+        </p>
+        <span class="badge badge-blue" style="margin-top: 12px;">Q3 2026</span>
+      </div>
+
+      <div class="card" style="opacity: 0.7;">
+        <div class="icon">🏥</div>
+        <h3>Hospital Market Analysis</h3>
+        <p>
+          Competitive dynamics in major metro markets: bed capacity, service lines, patient migration, 
+          and market share shifts over time.
+        </p>
+        <span class="badge badge-blue" style="margin-top: 12px;">Q3 2026</span>
+      </div>
+
+      <div class="card" style="opacity: 0.7;">
+        <div class="icon">⚖️</div>
+        <h3>Price Transparency Analysis</h3>
+        <p>
+          What hospital price transparency data reveals about negotiated rates, price variation, 
+          and the true cost of common procedures.
+        </p>
+        <span class="badge badge-blue" style="margin-top: 12px;">Q4 2026</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- Footer -->
+<footer class="footer">
+  <div class="footer-container">
+    <div class="footer-grid">
+      <div class="footer-section">
+        <h4>Navigation</h4>
+        <ul>
+          <li><a href="/">Home</a></li>
+          <li><a href="/dashboard/">Dashboard</a></li>
+          <li><a href="/projects/">Projects</a></li>
+          <li><a href="/access/">Data Access</a></li>
+          <li><a href="/about/">About</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-section">
+        <h4>Resources</h4>
+        <ul>
+          <li><a href="/api/docs" target="_blank">API Documentation</a></li>
+          <li><a href="https://github.com/blakethom8/cms-data" target="_blank">GitHub Repository</a></li>
+          <li><a href="https://data.cms.gov" target="_blank">CMS Data Source</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-section">
+        <h4>Projects</h4>
+        <ul>
+          <li><a href="/projects/healthcare-cost/">Healthcare Cost Analysis</a></li>
+          <li><a href="/projects/fraud-analysis/">Fraud Detection</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-section">
+        <h4>Connect</h4>
+        <ul>
+          <li><a href="mailto:blake@blakethomson.com">blake@blakethomson.com</a></li>
+          <li><a href="https://blakethomson.studio" target="_blank">blakethomson.studio</a></li>
+          <li><a href="https://linkedin.com/in/blakethom" target="_blank">LinkedIn</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <p>Data provided by CMS via data.cms.gov • Not affiliated with CMS • Independent analysis</p>
+      <p>© 2026 Blake Thomson • HealthcareDataAI.com</p>
+    </div>
+  </div>
+</footer>
+
+<script>
+function toggleNav() {
+  const nav = document.getElementById('navLinks');
+  nav.classList.toggle('open');
+}
+
+document.addEventListener('click', (e) => {
+  const nav = document.getElementById('navLinks');
+  const toggle = document.querySelector('.nav-toggle');
+  if (!nav.contains(e.target) && !toggle.contains(e.target)) {
+    nav.classList.remove('open');
+  }
+});
+</script>
+
+</body>
+</html>

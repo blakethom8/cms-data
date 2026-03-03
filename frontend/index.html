@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HealthcareDataAI | Free CMS Healthcare Data Intelligence Platform</title>
+<meta name="description" content="Free access to 100M+ Medicare provider records. Query, analyze, and build on the largest public healthcare dataset.">
+<link rel="stylesheet" href="/styles/global.css">
+</head>
+<body>
+
+<!-- Navigation -->
+<nav class="nav">
+  <div class="nav-container">
+    <a href="/" class="nav-brand">
+      🏥 HealthcareDataAI
+    </a>
+    <button class="nav-toggle" onclick="toggleNav()" aria-label="Toggle navigation">☰</button>
+    <ul class="nav-links" id="navLinks">
+      <li><a href="/" class="active">Home</a></li>
+      <li><a href="/dashboard/">Dashboard</a></li>
+      <li><a href="/projects/">Projects</a></li>
+      <li><a href="/access/">Data Access</a></li>
+      <li><a href="/about/">About</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- Main Content -->
+<main>
+
+<!-- Hero Section -->
+<section class="hero">
+  <div class="container">
+    <h1>CMS Healthcare Data Intelligence</h1>
+    <p class="tagline">
+      Free access to 100M+ Medicare provider records. Query, analyze, and build on the largest public healthcare dataset.
+    </p>
+    <div class="cta-buttons">
+      <a href="/dashboard/" class="btn btn-primary">Explore Dashboard</a>
+      <a href="/access/" class="btn btn-secondary">Request Data Access</a>
+    </div>
+  </div>
+</section>
+
+<!-- What's Inside Section -->
+<section class="section">
+  <div class="container">
+    <h2>107 Million Records. 30 Datasets. One API.</h2>
+    <p class="subtitle">
+      Everything you need to understand the US healthcare provider landscape
+    </p>
+
+    <div class="card-grid">
+      <div class="card">
+        <div class="icon">🏥</div>
+        <h3>Provider Intelligence</h3>
+        <p>7.1M NPPES providers with utilization data, quality scores, and hospital affiliations</p>
+      </div>
+
+      <div class="card">
+        <div class="icon">💰</div>
+        <h3>Financial Transparency</h3>
+        <p>15.7M Open Payments transactions revealing industry relationships (Sunshine Act)</p>
+      </div>
+
+      <div class="card">
+        <div class="icon">🏨</div>
+        <h3>Hospital Data</h3>
+        <p>5.4K hospitals with cost reports, quality ratings, and facility affiliations</p>
+      </div>
+
+      <div class="card">
+        <div class="icon">💊</div>
+        <h3>Prescribing Patterns</h3>
+        <p>28M Part D drug claims by provider, including opioid prescribing flags</p>
+      </div>
+    </div>
+
+    <div style="text-align: center; margin-top: 48px;">
+      <div class="card" style="display: inline-block; max-width: 600px;">
+        <h4 style="margin-bottom: 16px;">Data Sources</h4>
+        <p style="font-size: 14px; margin-bottom: 12px;">
+          All data from CMS public use files • Updated quarterly following CMS releases • No PHI or restricted data
+        </p>
+        <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+          <span class="badge badge-blue">Medicare Part B</span>
+          <span class="badge badge-green">NPPES</span>
+          <span class="badge badge-orange">Open Payments</span>
+          <span class="badge badge-purple">Part D</span>
+          <span class="badge badge-blue">MIPS</span>
+          <span class="badge badge-green">DAC</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Built on Real Data Section -->
+<section class="section" style="background: var(--surface);">
+  <div class="container">
+    <h2>Built on Real Data</h2>
+    <p class="subtitle">
+      Healthcare data analysis projects showcasing what's possible
+    </p>
+
+    <div class="project-grid">
+      <div class="project-card">
+        <img src="/assets/images/healthcare-cost-placeholder.jpg" alt="Healthcare Cost Analysis" 
+             style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; align-items: center; justify-content: center; color: white; font-size: 48px;">
+        <div class="project-card-content">
+          <h3>Healthcare Cost Analysis</h3>
+          <p>
+            What does healthcare actually cost to deliver? Multi-method calculation using hospital cost reports, 
+            Medicare utilization, and national spending data to separate direct care from overhead and waste.
+          </p>
+          <p style="margin-bottom: 16px;"><span class="badge badge-purple">In Progress</span></p>
+          <a href="/projects/healthcare-cost/">Learn more →</a>
+        </div>
+      </div>
+
+      <div class="project-card">
+        <img src="/assets/images/fraud-analysis-placeholder.jpg" alt="Fraud Detection" 
+             style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); display: flex; align-items: center; justify-content: center; color: white; font-size: 48px;">
+        <div class="project-card-content">
+          <h3>Fraud Detection & Anomaly Analysis</h3>
+          <p>
+            Finding the needles in the haystack. Statistical, geographic, and network-based techniques to identify 
+            billing outliers, prescribing anomalies, and suspicious provider patterns in Medicare data.
+          </p>
+          <p style="margin-bottom: 16px;"><span class="badge badge-green">Active</span></p>
+          <a href="/projects/fraud-analysis/">Learn more →</a>
+        </div>
+      </div>
+    </div>
+
+    <div style="text-align: center; margin-top: 32px;">
+      <a href="/projects/" class="btn btn-secondary">View All Projects</a>
+    </div>
+  </div>
+</section>
+
+<!-- Who Uses This Section -->
+<section class="section">
+  <div class="container">
+    <h2>Who Uses This?</h2>
+    <p class="subtitle">
+      From academic research to healthcare startups, HealthcareDataAI powers insights across the industry
+    </p>
+
+    <div class="card-grid">
+      <div class="card">
+        <div class="icon">🔬</div>
+        <h3>Researchers</h3>
+        <p>Academic studies, health policy analysis, health economics research</p>
+      </div>
+
+      <div class="card">
+        <div class="icon">🏢</div>
+        <h3>Health Systems</h3>
+        <p>Provider network analysis, referral intelligence, market assessment, benchmarking</p>
+      </div>
+
+      <div class="card">
+        <div class="icon">🚀</div>
+        <h3>Startups</h3>
+        <p>Provider search tools, credentialing platforms, market analysis, data products</p>
+      </div>
+
+      <div class="card">
+        <div class="icon">💼</div>
+        <h3>Consultants</h3>
+        <p>Due diligence, strategic assessments, competitive intelligence, client deliverables</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- About / CTA Section -->
+<section class="section" style="background: var(--surface);">
+  <div class="container-narrow" style="text-align: center;">
+    <h2>Built by Healthcare Data Experts</h2>
+    <p style="font-size: 16px; color: var(--muted); margin-bottom: 24px;">
+      Blake Thomson spent 2+ years as the "data guru" on Cedars-Sinai Health System's Business Development team, 
+      building intelligence systems for physician liaisons and strategic planners working with LA County providers.
+    </p>
+    <p style="font-size: 16px; color: var(--muted); margin-bottom: 32px;">
+      HealthcareDataAI showcases what's possible when you combine deep healthcare domain expertise with modern 
+      data engineering and AI agent systems.
+    </p>
+    <div style="background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 32px; margin-bottom: 32px;">
+      <h3 style="margin-bottom: 16px;">Need Custom Healthcare Data Solutions?</h3>
+      <p style="color: var(--muted); margin-bottom: 24px;">
+        We build bespoke AI agents and intelligence platforms for health systems, payers, and healthcare companies. 
+        If you need provider search tools, claims intelligence, fraud detection, or custom analytics — let's talk.
+      </p>
+      <a href="mailto:blake@blakethomson.com?subject=Healthcare%20Data%20Intelligence" class="btn btn-primary">
+        Contact Us
+      </a>
+    </div>
+    <p style="font-size: 14px; color: var(--muted);">
+      Want to learn more about the builder? Visit 
+      <a href="https://blakethomson.studio" target="_blank">blakethomson.studio</a>
+    </p>
+  </div>
+</section>
+
+</main>
+
+<!-- Footer -->
+<footer class="footer">
+  <div class="footer-container">
+    <div class="footer-grid">
+      <div class="footer-section">
+        <h4>Navigation</h4>
+        <ul>
+          <li><a href="/">Home</a></li>
+          <li><a href="/dashboard/">Dashboard</a></li>
+          <li><a href="/projects/">Projects</a></li>
+          <li><a href="/access/">Data Access</a></li>
+          <li><a href="/about/">About</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-section">
+        <h4>Resources</h4>
+        <ul>
+          <li><a href="/api/docs" target="_blank">API Documentation</a></li>
+          <li><a href="https://github.com/blakethom8/cms-data" target="_blank">GitHub Repository</a></li>
+          <li><a href="https://data.cms.gov" target="_blank">CMS Data Source</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-section">
+        <h4>Projects</h4>
+        <ul>
+          <li><a href="/projects/healthcare-cost/">Healthcare Cost Analysis</a></li>
+          <li><a href="/projects/fraud-analysis/">Fraud Detection</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-section">
+        <h4>Connect</h4>
+        <ul>
+          <li><a href="mailto:blake@blakethomson.com">blake@blakethomson.com</a></li>
+          <li><a href="https://blakethomson.studio" target="_blank">blakethomson.studio</a></li>
+          <li><a href="https://linkedin.com/in/blakethom" target="_blank">LinkedIn</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <p>Data provided by CMS via data.cms.gov • Not affiliated with CMS • Independent analysis</p>
+      <p>© 2026 Blake Thomson • HealthcareDataAI.com</p>
+    </div>
+  </div>
+</footer>
+
+<script>
+function toggleNav() {
+  const nav = document.getElementById('navLinks');
+  nav.classList.toggle('open');
+}
+
+// Close mobile nav when clicking outside
+document.addEventListener('click', (e) => {
+  const nav = document.getElementById('navLinks');
+  const toggle = document.querySelector('.nav-toggle');
+  if (!nav.contains(e.target) && !toggle.contains(e.target)) {
+    nav.classList.remove('open');
+  }
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,1287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Provider Search Comparison Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .header {
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            font-weight: 600;
+        }
+
+        .back-link {
+            color: #38bdf8;
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+
+        .search-section {
+            background: #1e293b;
+            padding: 24px;
+            border-radius: 10px;
+            margin-bottom: 24px;
+            border: 1px solid #334155;
+        }
+
+        .search-inputs {
+            display: grid;
+            grid-template-columns: 1fr 1fr auto;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        input {
+            background: #0f172a;
+            border: 1px solid #334155;
+            color: #e2e8f0;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #38bdf8;
+        }
+
+        button {
+            background: #38bdf8;
+            color: #0f172a;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            background: #7dd3fc;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .quick-queries {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .chip {
+            background: #334155;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+        }
+
+        .chip:hover {
+            background: #475569;
+            border-color: #38bdf8;
+        }
+
+        .view-controls {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+            align-items: center;
+        }
+
+        .view-toggle {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 4px;
+            display: flex;
+            gap: 4px;
+        }
+
+        .view-toggle button {
+            background: transparent;
+            color: #94a3b8;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+
+        .view-toggle button.active {
+            background: #38bdf8;
+            color: #0f172a;
+        }
+
+        /* Accordion View */
+        .accordion-view {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .accordion-section {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .accordion-header {
+            padding: 16px 20px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+            transition: background 0.2s;
+        }
+
+        .accordion-header:hover {
+            background: #334155;
+        }
+
+        .accordion-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .result-count {
+            background: #334155;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 13px;
+            color: #94a3b8;
+        }
+
+        .accordion-arrow {
+            transition: transform 0.3s;
+            color: #94a3b8;
+        }
+
+        .accordion-arrow.open {
+            transform: rotate(180deg);
+        }
+
+        .accordion-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .accordion-content.open {
+            max-height: 2000px;
+            padding: 20px;
+            border-top: 1px solid #334155;
+        }
+
+        /* Column View */
+        .column-view {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            height: calc(100vh - 400px);
+        }
+
+        .column {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .column-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid #334155;
+            position: sticky;
+            top: 0;
+            background: #1e293b;
+            z-index: 10;
+        }
+
+        .column-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .column-content {
+            padding: 16px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        /* Loading state */
+        .loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            color: #94a3b8;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #334155;
+            border-top-color: #38bdf8;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-bottom: 12px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Result cards */
+        .place-card {
+            background: #0f172a;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            border: 1px solid #334155;
+        }
+
+        .place-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 12px;
+        }
+
+        .place-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #e2e8f0;
+            margin-bottom: 4px;
+        }
+
+        .place-type {
+            font-size: 13px;
+            color: #94a3b8;
+        }
+
+        .place-rating {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 14px;
+        }
+
+        .rating-stars {
+            color: #fbbf24;
+        }
+
+        .rating-count {
+            color: #94a3b8;
+            font-size: 13px;
+        }
+
+        .place-details {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        .place-detail {
+            color: #94a3b8;
+        }
+
+        .place-link {
+            color: #38bdf8;
+            text-decoration: none;
+        }
+
+        .place-link:hover {
+            text-decoration: underline;
+        }
+
+        .place-hours {
+            color: #4ade80;
+        }
+
+        .place-hours.closed {
+            color: #fb923c;
+        }
+
+        /* Web results */
+        .web-result {
+            background: #0f172a;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            border: 1px solid #334155;
+        }
+
+        .web-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .web-title a {
+            color: #38bdf8;
+            text-decoration: none;
+        }
+
+        .web-title a:hover {
+            text-decoration: underline;
+        }
+
+        .web-link {
+            font-size: 13px;
+            color: #4ade80;
+            margin-bottom: 8px;
+        }
+
+        .web-snippet {
+            font-size: 14px;
+            color: #94a3b8;
+            line-height: 1.5;
+        }
+
+        /* Knowledge graph */
+        .knowledge-graph {
+            background: #1e293b;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            border: 2px solid #a78bfa;
+        }
+
+        .kg-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #a78bfa;
+        }
+
+        .kg-content {
+            font-size: 14px;
+            color: #94a3b8;
+            line-height: 1.6;
+        }
+
+        /* Provider table */
+        .provider-row {
+            background: #0f172a;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            border: 1px solid #334155;
+        }
+
+        .provider-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 8px;
+        }
+
+        .provider-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: #e2e8f0;
+        }
+
+        .provider-npi {
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+            color: #94a3b8;
+        }
+
+        .provider-specialty {
+            font-size: 14px;
+            color: #a78bfa;
+            margin-bottom: 8px;
+        }
+
+        .provider-address {
+            font-size: 13px;
+            color: #94a3b8;
+            margin-bottom: 12px;
+        }
+
+        .provider-metrics {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #334155;
+        }
+
+        .metric {
+            text-align: center;
+        }
+
+        .metric-value {
+            font-size: 18px;
+            font-weight: 600;
+            font-family: 'Monaco', 'Courier New', monospace;
+            color: #4ade80;
+        }
+
+        .metric-value.payment {
+            color: #fbbf24;
+        }
+
+        .metric-label {
+            font-size: 12px;
+            color: #94a3b8;
+            margin-top: 4px;
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 40px;
+            color: #94a3b8;
+            font-size: 14px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        @media (max-width: 1200px) {
+            .column-view {
+                grid-template-columns: 1fr;
+                height: auto;
+            }
+
+            .column {
+                min-height: 400px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .search-inputs {
+                grid-template-columns: 1fr;
+            }
+
+            .header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 Provider Search Comparison</h1>
+            <a href="index.html" class="back-link">← Back to Dashboard</a>
+        </div>
+
+        <div class="search-section">
+            <div class="search-inputs">
+                <input type="text" id="specialty" placeholder="Specialty (e.g., endocrinologist, primary care)">
+                <input type="text" id="location" placeholder="Location (e.g., Santa Monica, CA)">
+                <button id="searchBtn" onclick="performSearch()">Search</button>
+            </div>
+            <div class="quick-queries">
+                <div class="chip" onclick="quickSearch('primary care', 'Santa Monica, CA')">Primary Care — Santa Monica</div>
+                <div class="chip" onclick="quickSearch('endocrinologist', 'Santa Monica, CA')">Endocrinologist — Santa Monica</div>
+                <div class="chip" onclick="quickSearch('cardiologist', 'Beverly Hills, CA')">Cardiologist — Beverly Hills</div>
+                <div class="chip" onclick="quickSearch('orthopedic surgeon', 'Pasadena, CA')">Orthopedic Surgeon — Pasadena</div>
+                <div class="chip" onclick="quickSearch('dermatologist', 'Los Angeles, CA')">Dermatologist — Los Angeles</div>
+            </div>
+        </div>
+
+        <div class="view-controls">
+            <div class="view-toggle">
+                <button class="active" onclick="switchView('accordion')">📋 Accordion View</button>
+                <button onclick="switchView('column')">📊 Column View</button>
+                <button id="exportBtn" onclick="openExportModal()" style="display:none; margin-left:12px; background:#7c3aed;">📋 Copy LLM Prompt</button>
+            </div>
+        </div>
+
+        <div id="accordionView" class="accordion-view">
+            <div class="accordion-section">
+                <div class="accordion-header" onclick="toggleAccordion(0)">
+                    <div class="accordion-title">
+                        <span>📍 SearchAPI Places</span>
+                        <span class="result-count" id="placesCount">0 results</span>
+                    </div>
+                    <div class="accordion-arrow">▼</div>
+                </div>
+                <div class="accordion-content" id="placesContent">
+                    <div class="no-results">Enter a search query to see results</div>
+                </div>
+            </div>
+
+            <div class="accordion-section">
+                <div class="accordion-header" onclick="toggleAccordion(1)">
+                    <div class="accordion-title">
+                        <span>🌐 SearchAPI Web</span>
+                        <span class="result-count" id="webCount">0 results</span>
+                    </div>
+                    <div class="accordion-arrow">▼</div>
+                </div>
+                <div class="accordion-content" id="webContent">
+                    <div class="no-results">Enter a search query to see results</div>
+                </div>
+            </div>
+
+            <div class="accordion-section">
+                <div class="accordion-header" onclick="toggleAccordion(2)">
+                    <div class="accordion-title">
+                        <span>🏥 CMS/NPPES Data</span>
+                        <span class="result-count" id="cmsCount">0 results</span>
+                    </div>
+                    <div class="accordion-arrow">▼</div>
+                </div>
+                <div class="accordion-content" id="cmsContent">
+                    <div class="no-results">Enter a search query to see results</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="columnView" class="column-view hidden">
+            <div class="column">
+                <div class="column-header">
+                    <div class="column-title">📍 SearchAPI Places</div>
+                    <div class="result-count" id="placesCountCol">0 results</div>
+                </div>
+                <div class="column-content" id="placesContentCol">
+                    <div class="no-results">Enter a search query to see results</div>
+                </div>
+            </div>
+
+            <div class="column">
+                <div class="column-header">
+                    <div class="column-title">🌐 SearchAPI Web</div>
+                    <div class="result-count" id="webCountCol">0 results</div>
+                </div>
+                <div class="column-content" id="webContentCol">
+                    <div class="no-results">Enter a search query to see results</div>
+                </div>
+            </div>
+
+            <div class="column">
+                <div class="column-header">
+                    <div class="column-title">🏥 CMS/NPPES Data</div>
+                    <div class="result-count" id="cmsCountCol">0 results</div>
+                </div>
+                <div class="column-content" id="cmsContentCol">
+                    <div class="no-results">Enter a search query to see results</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SEARCHAPI_KEY = 'Wf9YpXRy3i5Z3AMS5NBDF79A';
+        const CMS_API_BASE = 'http://5.78.148.70:8080';
+        const CMS_API_KEY = '1bb250cdd582258595a5d2bebd9493f2c74a7999';
+
+        const STATE_ABBREV = {
+            'alabama':'AL','alaska':'AK','arizona':'AZ','arkansas':'AR','california':'CA',
+            'colorado':'CO','connecticut':'CT','delaware':'DE','florida':'FL','georgia':'GA',
+            'hawaii':'HI','idaho':'ID','illinois':'IL','indiana':'IN','iowa':'IA','kansas':'KS',
+            'kentucky':'KY','louisiana':'LA','maine':'ME','maryland':'MD','massachusetts':'MA',
+            'michigan':'MI','minnesota':'MN','mississippi':'MS','missouri':'MO','montana':'MT',
+            'nebraska':'NE','nevada':'NV','new hampshire':'NH','new jersey':'NJ','new mexico':'NM',
+            'new york':'NY','north carolina':'NC','north dakota':'ND','ohio':'OH','oklahoma':'OK',
+            'oregon':'OR','pennsylvania':'PA','rhode island':'RI','south carolina':'SC',
+            'south dakota':'SD','tennessee':'TN','texas':'TX','utah':'UT','vermont':'VT',
+            'virginia':'VA','washington':'WA','west virginia':'WV','wisconsin':'WI','wyoming':'WY',
+            'district of columbia':'DC'
+        };
+
+        function normalizeState(raw) {
+            const trimmed = raw.trim();
+            if (trimmed.length === 2) return trimmed.toUpperCase();
+            return STATE_ABBREV[trimmed.toLowerCase()] || trimmed.toUpperCase();
+        }
+
+        const SPECIALTY_MAP = {
+            'primary care': ['internal medicine', 'family practice', 'family medicine', 'general practice'],
+            'cardiologist': ['cardiol'],
+            'cardiology': ['cardiol'],
+            'endocrinologist': ['endocrinol'],
+            'endocrinology': ['endocrinol'],
+            'orthopedic': ['orthop'],
+            'orthopedics': ['orthop'],
+            'dermatologist': ['dermatol'],
+            'dermatology': ['dermatol'],
+            'neurologist': ['neurol'],
+            'neurology': ['neurol'],
+            'gastroenterologist': ['gastroenterol'],
+            'gastroenterology': ['gastroenterol'],
+            'oncologist': ['oncol'],
+            'oncology': ['oncol'],
+            'psychiatrist': ['psychiatr'],
+            'psychiatry': ['psychiatr'],
+            'ob-gyn': ['obstetric', 'gynecol'],
+            'obgyn': ['obstetric', 'gynecol'],
+            'pediatrician': ['pediatric'],
+            'pediatrics': ['pediatric'],
+            'surgeon': ['surgery', 'surgical'],
+        };
+
+        function lookupSpecialty(raw) {
+            const key = raw.toLowerCase().trim();
+            if (SPECIALTY_MAP[key]) return SPECIALTY_MAP[key];
+            // Try stripping trailing 's' for plurals (cardiologists -> cardiologist)
+            const singular = key.replace(/s$/, '');
+            if (SPECIALTY_MAP[singular]) return SPECIALTY_MAP[singular];
+            // Fallback: use stem-style match
+            return [key.replace(/(?:ists?|ology|ies|s)$/, '')];
+        }
+
+        let currentView = 'accordion';
+        let lastSearchResults = { query: {}, places: null, web: null, cms: null };
+
+        function switchView(view) {
+            currentView = view;
+            const accordionView = document.getElementById('accordionView');
+            const columnView = document.getElementById('columnView');
+            const buttons = document.querySelectorAll('.view-toggle button');
+
+            if (view === 'accordion') {
+                accordionView.classList.remove('hidden');
+                columnView.classList.add('hidden');
+                buttons[0].classList.add('active');
+                buttons[1].classList.remove('active');
+            } else {
+                accordionView.classList.add('hidden');
+                columnView.classList.remove('hidden');
+                buttons[0].classList.remove('active');
+                buttons[1].classList.add('active');
+            }
+        }
+
+        function toggleAccordion(index) {
+            const sections = document.querySelectorAll('.accordion-section');
+            const content = sections[index].querySelector('.accordion-content');
+            const arrow = sections[index].querySelector('.accordion-arrow');
+            
+            content.classList.toggle('open');
+            arrow.classList.toggle('open');
+        }
+
+        function quickSearch(specialty, location) {
+            document.getElementById('specialty').value = specialty;
+            document.getElementById('location').value = location;
+            performSearch();
+        }
+
+        async function performSearch() {
+            const specialty = document.getElementById('specialty').value.trim();
+            const location = document.getElementById('location').value.trim();
+
+            if (!specialty || !location) {
+                alert('Please enter both specialty and location');
+                return;
+            }
+
+            const searchBtn = document.getElementById('searchBtn');
+            searchBtn.disabled = true;
+            searchBtn.textContent = 'Searching...';
+
+            // Show loading states
+            showLoading('places');
+            showLoading('web');
+            showLoading('cms');
+
+            // Fire all three searches in parallel
+            const results = await Promise.allSettled([
+                searchGoogleMaps(specialty, location),
+                searchGoogleWeb(specialty, location),
+                searchCMSProviders(specialty, location)
+            ]);
+
+            // Store search context
+            lastSearchResults = { query: { specialty, location }, places: null, web: null, cms: null };
+
+            // Handle results
+            if (results[0].status === 'fulfilled') {
+                lastSearchResults.places = results[0].value;
+                renderPlacesResults(results[0].value);
+            } else {
+                renderError('places', results[0].reason);
+            }
+
+            if (results[1].status === 'fulfilled') {
+                lastSearchResults.web = results[1].value;
+                renderWebResults(results[1].value);
+            } else {
+                renderError('web', results[1].reason);
+            }
+
+            if (results[2].status === 'fulfilled') {
+                lastSearchResults.cms = results[2].value;
+                renderCMSResults(results[2].value);
+            } else {
+                renderError('cms', results[2].reason);
+            }
+
+            // Show export button
+            document.getElementById('exportBtn').style.display = 'inline-flex';
+
+            searchBtn.disabled = false;
+            searchBtn.textContent = 'Search';
+        }
+
+        function showLoading(section) {
+            const loadingHTML = `
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <div>Searching...</div>
+                </div>
+            `;
+
+            document.getElementById(`${section}Content`).innerHTML = loadingHTML;
+            document.getElementById(`${section}ContentCol`).innerHTML = loadingHTML;
+        }
+
+        function renderError(section, error) {
+            const errorHTML = `
+                <div class="no-results">
+                    Error loading results: ${error.message || error}
+                </div>
+            `;
+
+            document.getElementById(`${section}Content`).innerHTML = errorHTML;
+            document.getElementById(`${section}ContentCol`).innerHTML = errorHTML;
+        }
+
+        async function searchGoogleMaps(specialty, location) {
+            const query = `${specialty} ${location}`;
+            const url = `https://www.searchapi.io/api/v1/search?api_key=${SEARCHAPI_KEY}&engine=google_maps&q=${encodeURIComponent(query)}&type=search&gl=us&hl=en`;
+            
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`SearchAPI Maps error: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            return data.local_results || [];
+        }
+
+        async function searchGoogleWeb(specialty, location) {
+            const query = `${specialty} ${location}`;
+            const url = `https://www.searchapi.io/api/v1/search?api_key=${SEARCHAPI_KEY}&engine=google&q=${encodeURIComponent(query)}&num=15`;
+            
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`SearchAPI Web error: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            return {
+                organic: data.organic_results || [],
+                knowledge_graph: data.knowledge_graph || null
+            };
+        }
+
+        async function searchCMSProviders(specialty, location) {
+            // Parse location to get city and state
+            const locationParts = location.split(',').map(s => s.trim());
+            const city = locationParts[0] || '';
+            const stateRaw = locationParts[1]?.split(' ')[0] || '';
+
+            if (!city || !stateRaw) {
+                throw new Error('Invalid location format. Use: City, State');
+            }
+
+            const state = normalizeState(stateRaw);
+
+            // Get specialty patterns (handles plurals, alternate forms)
+            const patterns = lookupSpecialty(specialty);
+
+            // First, get zip codes for the city
+            const zipQuery = `
+                SELECT DISTINCT zip5 
+                FROM core_providers 
+                WHERE LOWER(city) = LOWER('${city.replace(/'/g, "''")}') 
+                AND state = '${state.toUpperCase()}'
+            `;
+
+            const zipResponse = await fetch(`${CMS_API_BASE}/query`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-API-Key': CMS_API_KEY
+                },
+                body: JSON.stringify({ sql: zipQuery })
+            });
+
+            if (!zipResponse.ok) {
+                throw new Error(`CMS API error: ${zipResponse.status}`);
+            }
+
+            const zipData = await zipResponse.json();
+            // Rows come back as arrays, not objects — extract first column
+            const zips = (zipData.rows || []).map(r => r[0]).filter(Boolean);
+
+            if (zips.length === 0) {
+                return { cms: [], nppes: [] };
+            }
+
+            // Build WHERE clause for specialty
+            const specialtyConditions = patterns.map(p => 
+                `LOWER(c.provider_type) LIKE '%${p.toLowerCase()}%'`
+            ).join(' OR ');
+
+            // Query CMS data — include org info from reassignment table + DAC
+            const cmsQuery = `
+                SELECT 
+                    c.npi, 
+                    c.first_name, 
+                    c.last_org_name, 
+                    c.provider_type, 
+                    c.street_address_1, 
+                    c.city, 
+                    c.state, 
+                    c.zip5,
+                    u.tot_medicare_payment,
+                    u.tot_services,
+                    u.tot_unique_beneficiaries,
+                    r."Group Legal Business Name" AS org_name,
+                    r."Group PAC ID" AS org_pac_id,
+                    d.num_org_mem AS org_member_count,
+                    d.grp_assgn AS group_assigned
+                FROM core_providers c
+                LEFT JOIN utilization_metrics u ON c.npi = u.npi
+                LEFT JOIN (
+                    SELECT DISTINCT "Individual NPI", "Group Legal Business Name", "Group PAC ID"
+                    FROM raw_reassignment
+                ) r ON CAST(c.npi AS BIGINT) = r."Individual NPI"
+                LEFT JOIN (
+                    SELECT DISTINCT "NPI", num_org_mem, grp_assgn
+                    FROM raw_dac_national
+                ) d ON CAST(c.npi AS VARCHAR) = CAST(d."NPI" AS VARCHAR)
+                WHERE c.zip5 IN (${zips.map(z => `'${z}'`).join(',')})
+                AND (${specialtyConditions})
+                ORDER BY u.tot_medicare_payment DESC NULLS LAST
+                LIMIT 40
+            `;
+
+            const cmsResponse = await fetch(`${CMS_API_BASE}/query`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-API-Key': CMS_API_KEY
+                },
+                body: JSON.stringify({ sql: cmsQuery })
+            });
+
+            const cmsRaw = await cmsResponse.json();
+
+            // Query NPPES data
+            // NPPES query — filter by city+state, use LEFT(zip,5) to match
+            const nppesQuery = `
+                SELECT 
+                    npi, 
+                    first_name, 
+                    last_name, 
+                    credentials, 
+                    practice_address_1, 
+                    practice_city, 
+                    practice_state, 
+                    practice_zip, 
+                    taxonomy_1, 
+                    enumeration_date
+                FROM raw_nppes
+                WHERE LOWER(practice_city) = LOWER('${city.replace(/'/g, "''")}')
+                AND practice_state = '${state.toUpperCase()}'
+                AND entity_type = '1'
+                LIMIT 40
+            `;
+
+            const nppesResponse = await fetch(`${CMS_API_BASE}/query`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-API-Key': CMS_API_KEY
+                },
+                body: JSON.stringify({ sql: nppesQuery })
+            });
+
+            const nppesRaw = await nppesResponse.json();
+
+            // Convert array rows to objects using column names
+            function rowsToObjects(apiResult) {
+                return (apiResult.rows || []).map(row => {
+                    const obj = {};
+                    (apiResult.columns || []).forEach((col, i) => obj[col] = row[i]);
+                    return obj;
+                });
+            }
+
+            return {
+                cms: rowsToObjects(cmsRaw),
+                nppes: rowsToObjects(nppesRaw)
+            };
+        }
+
+        function renderPlacesResults(results) {
+            const count = results.length;
+            document.getElementById('placesCount').textContent = `${count} result${count !== 1 ? 's' : ''}`;
+            document.getElementById('placesCountCol').textContent = `${count} result${count !== 1 ? 's' : ''}`;
+
+            if (count === 0) {
+                const noResults = '<div class="no-results">No places found</div>';
+                document.getElementById('placesContent').innerHTML = noResults;
+                document.getElementById('placesContentCol').innerHTML = noResults;
+                return;
+            }
+
+            const html = results.map(place => {
+                const rating = place.rating ? `
+                    <div class="place-rating">
+                        <span class="rating-stars">⭐ ${place.rating}</span>
+                        <span class="rating-count">(${place.reviews || 0})</span>
+                    </div>
+                ` : '';
+
+                const hours = place.hours ? `
+                    <div class="place-detail place-hours ${place.hours.toLowerCase().includes('closed') ? 'closed' : ''}">
+                        🕐 ${place.hours}
+                    </div>
+                ` : '';
+
+                const phone = place.phone ? `<div class="place-detail">📞 ${place.phone}</div>` : '';
+                const website = place.website ? `<div class="place-detail">🌐 <a href="${place.website}" target="_blank" class="place-link">Visit website</a></div>` : '';
+
+                return `
+                    <div class="place-card">
+                        <div class="place-card-header">
+                            <div>
+                                <div class="place-title">${place.title}</div>
+                                <div class="place-type">${place.type || 'Business'}</div>
+                            </div>
+                            ${rating}
+                        </div>
+                        <div class="place-details">
+                            <div class="place-detail">📍 ${place.address || 'No address'}</div>
+                            ${phone}
+                            ${website}
+                            ${hours}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('placesContent').innerHTML = html;
+            document.getElementById('placesContentCol').innerHTML = html;
+        }
+
+        function renderWebResults(data) {
+            const results = data.organic;
+            const kg = data.knowledge_graph;
+            const count = results.length;
+
+            document.getElementById('webCount').textContent = `${count} result${count !== 1 ? 's' : ''}`;
+            document.getElementById('webCountCol').textContent = `${count} result${count !== 1 ? 's' : ''}`;
+
+            if (count === 0 && !kg) {
+                const noResults = '<div class="no-results">No web results found</div>';
+                document.getElementById('webContent').innerHTML = noResults;
+                document.getElementById('webContentCol').innerHTML = noResults;
+                return;
+            }
+
+            let html = '';
+
+            if (kg && kg.title) {
+                html += `
+                    <div class="knowledge-graph">
+                        <div class="kg-title">${kg.title}</div>
+                        <div class="kg-content">${kg.description || kg.type || 'Knowledge Graph Result'}</div>
+                    </div>
+                `;
+            }
+
+            html += results.map(result => `
+                <div class="web-result">
+                    <div class="web-title">
+                        <a href="${result.link}" target="_blank">${result.title}</a>
+                    </div>
+                    <div class="web-link">${result.displayed_link || result.link}</div>
+                    <div class="web-snippet">${result.snippet || ''}</div>
+                </div>
+            `).join('');
+
+            document.getElementById('webContent').innerHTML = html;
+            document.getElementById('webContentCol').innerHTML = html;
+        }
+
+        function renderCMSResults(data) {
+            const cms = data.cms || [];
+            const nppes = data.nppes || [];
+            
+            // Merge and deduplicate by NPI
+            const npiMap = new Map();
+            
+            cms.forEach(provider => {
+                npiMap.set(provider.npi, {
+                    ...provider,
+                    source: 'cms'
+                });
+            });
+
+            nppes.forEach(provider => {
+                if (!npiMap.has(provider.npi)) {
+                    npiMap.set(provider.npi, {
+                        ...provider,
+                        source: 'nppes'
+                    });
+                }
+            });
+
+            const combined = Array.from(npiMap.values());
+            const count = combined.length;
+
+            document.getElementById('cmsCount').textContent = `${count} result${count !== 1 ? 's' : ''}`;
+            document.getElementById('cmsCountCol').textContent = `${count} result${count !== 1 ? 's' : ''}`;
+
+            if (count === 0) {
+                const noResults = '<div class="no-results">No CMS/NPPES providers found</div>';
+                document.getElementById('cmsContent').innerHTML = noResults;
+                document.getElementById('cmsContentCol').innerHTML = noResults;
+                return;
+            }
+
+            const html = combined.map(provider => {
+                const name = provider.source === 'cms' 
+                    ? `${provider.first_name || ''} ${provider.last_org_name || ''}`.trim() || 'Unknown Provider'
+                    : `${provider.first_name || ''} ${provider.last_name || ''}`.trim() || 'Unknown Provider';
+                
+                const specialty = provider.provider_type || provider.taxonomy_1 || 'Not specified';
+                
+                const address = provider.source === 'cms' ? 
+                    `${provider.street_address_1 || ''}, ${provider.city || ''}, ${provider.state || ''} ${provider.zip5 || ''}` :
+                    `${provider.practice_address_1 || ''}, ${provider.practice_city || ''}, ${provider.practice_state || ''} ${provider.practice_zip || ''}`;
+
+                const credentials = provider.credentials ? ` ${provider.credentials}` : '';
+
+                let metrics = '';
+                if (provider.source === 'cms' && (provider.tot_medicare_payment || provider.tot_services || provider.tot_unique_beneficiaries)) {
+                    const payment = provider.tot_medicare_payment ? `$${parseFloat(provider.tot_medicare_payment).toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 0})}` : 'N/A';
+                    const services = provider.tot_services ? parseInt(provider.tot_services).toLocaleString() : 'N/A';
+                    const beneficiaries = provider.tot_unique_beneficiaries ? parseInt(provider.tot_unique_beneficiaries).toLocaleString() : 'N/A';
+
+                    metrics = `
+                        <div class="provider-metrics">
+                            <div class="metric">
+                                <div class="metric-value payment">${payment}</div>
+                                <div class="metric-label">Medicare $</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-value">${services}</div>
+                                <div class="metric-label">Services</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-value">${beneficiaries}</div>
+                                <div class="metric-label">Patients</div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                // Organization info
+                let orgInfo = '';
+                if (provider.org_name) {
+                    const memberCount = provider.org_member_count ? ` · ${provider.org_member_count} members` : '';
+                    orgInfo = `
+                        <div style="margin-top:6px; padding:6px 10px; background:rgba(167,139,250,0.08); border:1px solid rgba(167,139,250,0.2); border-radius:6px; font-size:12px;">
+                            <span style="color:#a78bfa;">🏢 ${provider.org_name}</span>${memberCount ? `<span style="color:#94a3b8;">${memberCount}</span>` : ''}
+                        </div>
+                    `;
+                } else if (provider.group_assigned === 'Y') {
+                    orgInfo = `<div style="margin-top:4px; font-size:11px; color:#94a3b8;">🏢 Group-assigned (org name not available)</div>`;
+                }
+
+                return `
+                    <div class="provider-row">
+                        <div class="provider-header">
+                            <div class="provider-name">${name}${credentials}</div>
+                            <div class="provider-npi">NPI: ${provider.npi}</div>
+                        </div>
+                        <div class="provider-specialty">${specialty}</div>
+                        <div class="provider-address">📍 ${address}</div>
+                        ${orgInfo}
+                        ${metrics}
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('cmsContent').innerHTML = html;
+            document.getElementById('cmsContentCol').innerHTML = html;
+        }
+
+        // Allow Enter key to trigger search
+        document.getElementById('specialty').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') performSearch();
+        });
+        document.getElementById('location').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') performSearch();
+        });
+    </script>
+
+    <!-- Export Modal -->
+    <div id="exportModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:1000; display:none; align-items:center; justify-content:center;">
+        <div style="background:#1e293b; border:1px solid #334155; border-radius:12px; max-width:900px; width:90%; max-height:85vh; display:flex; flex-direction:column; padding:24px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                <h2 style="font-size:20px; color:#f1f5f9;">📋 LLM Prompt Package</h2>
+                <button onclick="closeExportModal()" style="background:none; border:none; color:#94a3b8; font-size:24px; cursor:pointer;">&times;</button>
+            </div>
+            <div style="margin-bottom:12px; display:flex; gap:8px;">
+                <button onclick="copyExport()" style="background:#7c3aed; color:white; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-size:14px;">📋 Copy to Clipboard</button>
+                <button onclick="downloadExport()" style="background:#334155; color:#e2e8f0; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-size:14px;">💾 Download .txt</button>
+                <span id="copyStatus" style="color:#22c55e; font-size:14px; align-self:center; display:none;">✓ Copied!</span>
+            </div>
+            <textarea id="exportContent" readonly style="flex:1; min-height:400px; background:#0f172a; color:#e2e8f0; border:1px solid #334155; border-radius:8px; padding:16px; font-family:'SF Mono',Monaco,monospace; font-size:12px; line-height:1.5; resize:none;"></textarea>
+        </div>
+    </div>
+
+    <script>
+        function buildExportPrompt() {
+            const q = lastSearchResults.query;
+            const places = lastSearchResults.places;
+            const web = lastSearchResults.web;
+            const cms = lastSearchResults.cms;
+
+            const data = {
+                search: { specialty: q.specialty, location: q.location },
+                sources: {}
+            };
+
+            // Places results — compact
+            if (places && places.length > 0) {
+                data.sources.searchapi_places = places.map(p => ({
+                    title: p.title,
+                    address: p.address,
+                    rating: p.rating,
+                    reviews: p.reviews,
+                    type: p.type,
+                    phone: p.phone,
+                    website: p.website,
+                    place_id: p.place_id,
+                    gps: p.gps_coordinates
+                }));
+            }
+
+            // Web results — compact
+            if (web && web.organic_results) {
+                data.sources.searchapi_web = web.organic_results.map(r => ({
+                    title: r.title,
+                    link: r.link,
+                    snippet: r.snippet,
+                    position: r.position
+                }));
+            }
+
+            // CMS/NPPES — include both sub-arrays
+            if (cms) {
+                if (cms.cms && cms.cms.length > 0) data.sources.cms_providers = cms.cms;
+                if (cms.nppes && cms.nppes.length > 0) data.sources.nppes_providers = cms.nppes;
+            }
+
+            const prompt = `You are helping design a unified provider search product. I searched for "${q.specialty}" in "${q.location}" across three data sources. Below is the raw JSON from each source.
+
+TASK: Analyze these results and recommend how to unify them into a single, enriched provider dataset for end users (physician liaisons doing outreach). Consider:
+
+1. **Entity Resolution** — How would you match the same provider across sources? What fields overlap?
+2. **Data Enrichment** — What unique fields does each source contribute? What's the ideal merged schema?
+3. **Ranking** — How should results be ranked? What signals matter most?
+4. **Gaps** — What's missing from each source? What would you add?
+5. **Display** — What should the unified provider card look like for end users?
+
+Show me a sample of 3-5 merged provider records as JSON to illustrate your recommended unified schema.
+
+---
+
+RAW DATA:
+
+\`\`\`json
+${JSON.stringify(data, null, 2)}
+\`\`\``;
+
+            return prompt;
+        }
+
+        function openExportModal() {
+            const modal = document.getElementById('exportModal');
+            const content = document.getElementById('exportContent');
+            content.value = buildExportPrompt();
+            modal.style.display = 'flex';
+            document.getElementById('copyStatus').style.display = 'none';
+        }
+
+        function closeExportModal() {
+            document.getElementById('exportModal').style.display = 'none';
+        }
+
+        function copyExport() {
+            const content = document.getElementById('exportContent');
+            navigator.clipboard.writeText(content.value).then(() => {
+                const status = document.getElementById('copyStatus');
+                status.style.display = 'inline';
+                setTimeout(() => status.style.display = 'none', 2000);
+            });
+        }
+
+        function downloadExport() {
+            const content = document.getElementById('exportContent').value;
+            const blob = new Blob([content], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const q = lastSearchResults.query;
+            a.href = url;
+            a.download = `provider-compare_${q.specialty}_${q.location}.txt`.replace(/[^a-zA-Z0-9._-]/g, '_');
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // Close modal on backdrop click
+        document.getElementById('exportModal').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('exportModal')) closeExportModal();
+        });
+    </script>
+</body>
+</html>

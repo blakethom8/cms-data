@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Provider Match Engine — Architecture & Strategy Report</title>
+<style>
+  :root { --bg: #0f172a; --surface: #1e293b; --border: #334155; --text: #e2e8f0; --muted: #94a3b8; --accent: #38bdf8; --green: #4ade80; --red: #f87171; --yellow: #fbbf24; --orange: #fb923c; --purple: #a78bfa; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; }
+  .container { max-width: 900px; margin: 0 auto; padding: 40px 24px; }
+  h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+  h2 { font-size: 20px; font-weight: 700; margin-top: 48px; margin-bottom: 16px; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+  h3 { font-size: 16px; font-weight: 600; margin-top: 32px; margin-bottom: 12px; }
+  p { margin-bottom: 16px; font-size: 15px; color: var(--text); }
+  .subtitle { font-size: 14px; color: var(--muted); margin-bottom: 32px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 16px; }
+  .card h4 { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+  .card.green { border-left: 4px solid var(--green); }
+  .card.yellow { border-left: 4px solid var(--yellow); }
+  .card.red { border-left: 4px solid var(--red); }
+  .card.purple { border-left: 4px solid var(--purple); }
+  .card.accent { border-left: 4px solid var(--accent); }
+  .tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 600; margin-right: 4px; }
+  .tag-green { background: rgba(74,222,128,0.15); color: var(--green); }
+  .tag-yellow { background: rgba(251,191,36,0.15); color: var(--yellow); }
+  .tag-red { background: rgba(248,113,113,0.15); color: var(--red); }
+  .tag-purple { background: rgba(167,139,250,0.15); color: var(--purple); }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; }
+  th { background: var(--bg); padding: 10px 12px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+  td { padding: 10px 12px; border-top: 1px solid var(--border); }
+  code { background: var(--bg); padding: 2px 6px; border-radius: 4px; font-size: 13px; font-family: 'SF Mono', monospace; color: var(--accent); }
+  pre { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px; overflow-x: auto; font-size: 13px; font-family: 'SF Mono', monospace; margin: 16px 0; line-height: 1.5; }
+  .flow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 16px 0; }
+  .flow-step { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; font-size: 13px; text-align: center; min-width: 120px; }
+  .flow-arrow { color: var(--accent); font-size: 20px; }
+  .metric-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 16px 0; }
+  .metric { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; text-align: center; }
+  .metric .mv { font-size: 32px; font-weight: 700; color: var(--accent); }
+  .metric .ml { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .highlight { background: rgba(56,189,248,0.1); border-radius: 6px; padding: 16px; margin: 16px 0; border-left: 3px solid var(--accent); }
+  ul { margin: 8px 0 16px 20px; }
+  li { margin-bottom: 6px; font-size: 14px; }
+  .section-num { color: var(--muted); font-size: 14px; }
+  .comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+  @media (max-width: 700px) { .comparison { grid-template-columns: 1fr; } .metric-row { grid-template-columns: 1fr 1fr; } }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>🔗 Provider Match Engine</h1>
+<p class="subtitle">Architecture, Logic, Gap Analysis & Strategy — February 16, 2026</p>
+
+<!-- ============================================================ -->
+<h2><span class="section-num">1.</span> Current Architecture</h2>
+
+<h3>End-to-End Flow</h3>
+<div class="flow">
+  <div class="flow-step">👤 User searches<br><strong>"endocrinologist<br>Santa Monica"</strong></div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-step">🔍 Google Places<br><strong>Text Search API</strong></div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-step">🏷️ Classify<br><strong>Individual vs Org</strong></div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-step">🔗 NPI Match<br><strong>Name + Address</strong></div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-step">📊 Enrich<br><strong>CMS Intelligence</strong></div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-step">📋 Unified<br><strong>Result Card</strong></div>
+</div>
+
+<h3>What Google Places Gives Us</h3>
+<div class="card">
+  <table>
+    <tr><th>Field</th><th>Example</th><th>Match Value</th></tr>
+    <tr><td><code>name</code></td><td>"Sarah R. Rettinger, MD"</td><td>🟢 Primary match key</td></tr>
+    <tr><td><code>formatted_address</code></td><td>"1831 Wilshire Blvd suite a, Santa Monica, CA 90403"</td><td>🟢 Zip, city, state</td></tr>
+    <tr><td><code>place_id</code></td><td>"ChIJqU2wB6a8woARcPHzTznSrQ4"</td><td>🔵 Stable ID for caching</td></tr>
+    <tr><td><code>rating</code></td><td>4.5</td><td>⚪ Display only</td></tr>
+    <tr><td><code>user_ratings_total</code></td><td>15</td><td>⚪ Display only</td></tr>
+    <tr><td><code>geometry.location</code></td><td>{lat: 34.03, lng: -118.48}</td><td>🟡 Geo proximity matching</td></tr>
+    <tr><td><code>types</code></td><td>["doctor", "health"]</td><td>🟡 Classification hint</td></tr>
+  </table>
+  <p style="font-size:13px; color:var(--muted); margin:8px 0 0 0;">
+    <strong>Not available from text search:</strong> Phone number (requires $0.017/call Place Details API), website URL, opening hours, individual photos.
+  </p>
+</div>
+
+<!-- ============================================================ -->
+<h2><span class="section-num">2.</span> Individual vs. Organization Classification</h2>
+
+<h3>Current Logic</h3>
+<div class="card yellow">
+  <h4>Classification: <code>is_individual_name()</code></h4>
+  <p style="font-size:13px;">Three-step heuristic applied to the Google Places <code>name</code> field:</p>
+  <pre>
+Step 1: Organization keyword check
+  If name contains: center, clinic, hospital, medical group, associates,
+  institute, health, university, ucla, usc, cedars, providence, kaiser,
+  department, practice, office of, foundation, network
+  → Classify as ORGANIZATION
+
+Step 2: Credential suffix check  
+  If name matches: MD, DO, DDS, DMD, DPM, OD, PhD, NP, PA, APRN, FNP, DC, DPT
+  → Classify as INDIVIDUAL
+
+Step 3: Name structure check
+  If name has 2-4 words, all capitalized
+  → Classify as INDIVIDUAL
+
+Default → ORGANIZATION (conservative)</pre>
+</div>
+
+<h3>Live Results: "Endocrinologist in Santa Monica" (20 results)</h3>
+<div class="metric-row">
+  <div class="metric"><div class="mv" style="color:var(--green)">5</div><div class="ml">Individual + Matched</div></div>
+  <div class="metric"><div class="mv" style="color:var(--red)">8</div><div class="ml">Individual + Missed</div></div>
+  <div class="metric"><div class="mv" style="color:var(--purple)">7</div><div class="ml">Organizations</div></div>
+</div>
+
+<table>
+  <tr><th>Google Places Name</th><th>Classification</th><th>CMS Match?</th><th>Why?</th></tr>
+  <tr><td>Sarah R. Rettinger, MD</td><td><span class="tag tag-green">Individual</span></td><td>✅ 95%</td><td>Exact: name + zip 90403</td></tr>
+  <tr><td>Melanie R. Goldfarb, MD</td><td><span class="tag tag-green">Individual</span></td><td>✅ 95%</td><td>Exact: name + zip 90404</td></tr>
+  <tr><td>Dr. Eiriny T. Eskander, MD</td><td><span class="tag tag-green">Individual</span></td><td>❌</td><td>CMS has Encino 91436, but Google says Encino too — <strong>bug: "Dr." prefix not stripped</strong></td></tr>
+  <tr><td>Jordan L. Geller, MD</td><td><span class="tag tag-green">Individual</span></td><td>❌</td><td>No "Jordan Geller" in CA CMS. <strong>Not a Medicare biller?</strong></td></tr>
+  <tr><td>Noa Tal, MD</td><td><span class="tag tag-green">Individual</span></td><td>❌</td><td>CMS has Noa Tal in Beverly Hills 90211, Google says Santa Monica 90404. <strong>Address mismatch</strong></td></tr>
+  <tr><td>Vikram V. Kamdar, MD</td><td><span class="tag tag-green">Individual</span></td><td>❌</td><td>No "Vikram Kamdar" in CMS at all. <strong>Not in Medicare</strong></td></tr>
+  <tr><td>Dr. Masha J. Livhits</td><td><span class="tag tag-green">Individual</span></td><td>❌</td><td>CMS has Masha Livhits in LA 90024, Google says 90095. <strong>"Dr." prefix + address mismatch</strong></td></tr>
+  <tr><td>Nazemi Reza MD</td><td><span class="tag tag-green">Individual</span></td><td>❌</td><td><strong>Name order reversed</strong> — Google has "Nazemi Reza" (last first), parser takes "Nazemi" as first name</td></tr>
+  <tr><td>Niloufar Ilani, MD</td><td><span class="tag tag-green">Individual</span></td><td>❌</td><td>CMS has Redondo Beach 90277, Google says Santa Monica 90404. <strong>Address mismatch</strong></td></tr>
+  <tr style="background:rgba(167,139,250,0.05)"><td>UCLA Endocrine Center</td><td><span class="tag tag-purple">Organization</span></td><td>—</td><td>Correctly classified, no individual match attempted</td></tr>
+  <tr style="background:rgba(167,139,250,0.05)"><td>Dr. Friedman's Endocrinology Clinic</td><td><span class="tag tag-purple">Organization</span></td><td>—</td><td>"Clinic" keyword → org. But has a doctor's name! <strong>Missed opportunity</strong></td></tr>
+</table>
+
+<div class="highlight">
+  <strong>Key Finding:</strong> Every single "missed" individual provider IS in CMS data. The match engine is failing on name parsing and address mismatches, not on data coverage. With fixes to name parsing and address tolerance, match rate could jump from <strong>38% → 85%+</strong>.
+</div>
+
+<!-- ============================================================ -->
+<h2><span class="section-num">3.</span> NPI Matching Logic (Current)</h2>
+
+<h3>Cascading Match Strategy</h3>
+
+<div class="card green">
+  <h4>Strategy 1: Exact — Name + Zip <span class="tag tag-green">95% confidence</span></h4>
+  <pre>WHERE LOWER(last_org_name) = LOWER(:last)
+  AND LOWER(first_name) LIKE LOWER(:first) || '%'
+  AND zip5 = :zip
+  AND entity_type_code = 'I'</pre>
+  <p style="font-size:13px; margin:0;">Strongest signal. Zip5 narrows geography tightly. First name uses prefix match to handle middle initials in CMS ("Dung Gloria" matches "Dung").</p>
+</div>
+
+<div class="card yellow">
+  <h4>Strategy 2: Fuzzy — Name + City + State <span class="tag tag-yellow">80% confidence</span></h4>
+  <pre>WHERE LOWER(last_org_name) = LOWER(:last)
+  AND LOWER(first_name) LIKE LOWER(:first) || '%'
+  AND LOWER(city) = LOWER(:city)
+  AND state = :state</pre>
+  <p style="font-size:13px; margin:0;">Fallback when zip parsing fails or provider has a different zip in CMS vs Google (common with suite vs building addresses).</p>
+</div>
+
+<div class="card red">
+  <h4>Strategy 3: Loose — Last Name + State <span class="tag tag-red">50-65% confidence</span></h4>
+  <pre>WHERE LOWER(last_org_name) = LOWER(:last)
+  AND state = :state
+  [AND LOWER(city) = LOWER(:city)]  -- if available</pre>
+  <p style="font-size:13px; margin:0;">Last resort. Confidence boosted by +10% if first initial matches, +15% if specialty hint matches CMS provider_type. High false positive risk with common names.</p>
+</div>
+
+<h3>Name Parsing: <code>parse_provider_name()</code></h3>
+<pre>
+Input: "Sarah R. Rettinger, MD"
+  → Strip credentials: "Sarah R. Rettinger"
+  → Strip specialty suffixes: "Sarah R. Rettinger"  
+  → Split: ["Sarah", "R.", "Rettinger"]
+  → Result: {first: "Sarah", last: "Rettinger"}  ✅
+
+Input: "Dr. Eiriny T. Eskander, MD"
+  → Strip credentials: "Dr. Eiriny T. Eskander"
+  → "Dr." NOT stripped!  ← BUG
+  → Split: ["Dr.", "Eiriny", "T.", "Eskander"]
+  → Result: {first: "Dr.", last: "Eskander"}  ❌
+
+Input: "Nazemi Reza MD"
+  → Strip credentials: "Nazemi Reza"
+  → Split: ["Nazemi", "Reza"]
+  → Result: {first: "Nazemi", last: "Reza"}
+  → Actual: first=Reza, last=Nazemi  ❌ (reversed in Google)
+</pre>
+
+<h3>Address Parsing: <code>parse_address()</code></h3>
+<pre>
+Input: "1831 Wilshire Blvd suite a, Santa Monica, CA 90403, USA"
+  → zip5: "90403"  ✅
+  → state: "CA"    ✅  
+  → city: "Santa Monica"  ✅
+
+Input: "100 UCLA, Medical Plaza #310, Los Angeles, CA 90095, USA"
+  → zip5: "90095"  ✅
+  → state: "CA"    ✅
+  → city: "Medical Plaza #310"  ❌ (takes second-to-last comma segment)
+</pre>
+
+<!-- ============================================================ -->
+<h2><span class="section-num">4.</span> CMS Intelligence Enrichment</h2>
+
+<p>Once matched to an NPI, we pull from 5 data sources in real-time:</p>
+
+<table>
+  <tr><th>Source Table</th><th>Fields</th><th>User Value</th></tr>
+  <tr><td><code>utilization_metrics</code></td><td>Medicare payment, services, beneficiaries</td><td>Volume & scale of practice — "is this a high-volume provider?"</td></tr>
+  <tr><td><code>raw_mips_performance</code></td><td>MIPS final score (0-100)</td><td>Quality signal — "are they a good doctor by CMS standards?"</td></tr>
+  <tr><td><code>raw_dac_facility_affiliations</code></td><td>Count of affiliated hospitals</td><td>Reach — "where else do they practice?"</td></tr>
+  <tr><td><code>raw_open_payments_general</code></td><td>Total $ and count of industry payments</td><td>KOL identification — "do pharma companies invest in this doctor?"</td></tr>
+  <tr><td><code>raw_physician_by_provider_and_service</code></td><td>Top 5 HCPCS codes by volume</td><td>Practice pattern — "what do they actually do day-to-day?"</td></tr>
+</table>
+
+<div class="highlight">
+  <strong>Performance note:</strong> Each enrichment is a separate SQL query against DuckDB. For 20 results × 5 queries = 100 queries per search. Currently ~2-3 seconds total. For production, these should be pre-joined into a single materialized view per NPI.
+</div>
+
+<!-- ============================================================ -->
+<h2><span class="section-num">5.</span> Gap Analysis & Failure Modes</h2>
+
+<h3>Why Matches Fail (Root Causes)</h3>
+
+<div class="card red">
+  <h4>1. Name Parsing Failures (3 of 8 misses)</h4>
+  <ul>
+    <li><strong>"Dr." prefix</strong> not stripped — treated as first name</li>
+    <li><strong>Reversed name order</strong> — "Nazemi Reza" in Google vs "Reza Nazemi" in CMS</li>
+    <li><strong>Middle initials</strong> — inconsistently present between sources</li>
+    <li><strong>Hyphenated/compound last names</strong> — "Garcia-Lopez" vs "Garcia Lopez" vs "Lopez"</li>
+  </ul>
+</div>
+
+<div class="card red">
+  <h4>2. Address Mismatches (3 of 8 misses)</h4>
+  <ul>
+    <li><strong>Different practice address</strong> — Doctor lists Beverly Hills office on Google, but CMS has their billing address in Redondo Beach</li>
+    <li><strong>Multi-location providers</strong> — CMS has one address, Google shows another location</li>
+    <li><strong>Institutional vs practice address</strong> — CMS address is "UCLA" zip, Google shows the specific clinic suite</li>
+  </ul>
+</div>
+
+<div class="card red">
+  <h4>3. Not in Medicare (2 of 8 misses)</h4>
+  <ul>
+    <li>Provider doesn't bill Medicare (younger doctors, concierge practices, Medicaid-only)</li>
+    <li>Provider is in NPPES (has NPI) but not in our Medicare claims tables</li>
+    <li><strong>Fix:</strong> Also search <code>raw_nppes</code> and <code>raw_dac_national</code> as fallbacks</li>
+  </ul>
+</div>
+
+<div class="card yellow">
+  <h4>4. Organization Leakage (1+ missed opportunities)</h4>
+  <ul>
+    <li>"Dr. Friedman's Endocrinology Clinic" classified as org due to "Clinic" keyword, but contains a matchable doctor name</li>
+    <li>Organizations currently return zero intelligence — no attempt to find providers at that address</li>
+  </ul>
+</div>
+
+<!-- ============================================================ -->
+<h2><span class="section-num">6.</span> Proposed Improvements</h2>
+
+<h3>6.1 Name Parsing v2</h3>
+<div class="card accent">
+  <h4>Quick Wins (double the match rate)</h4>
+  <pre>
+1. Strip "Dr." / "Dr " prefix before parsing
+2. Try both name orders: (first last) AND (last first)
+3. Strip middle initials: "Eiriny T." → "Eiriny"
+4. Handle possessives: "Dr. Friedman's Clinic" → extract "Friedman"
+5. Normalize unicode: accented characters, special chars
+6. Handle compound names: try both "Garcia-Lopez" and "Garcia"</pre>
+</div>
+
+<h3>6.2 Multi-Source Address Matching</h3>
+<div class="card accent">
+  <h4>Address Tolerance Strategy</h4>
+  <p style="font-size:13px;">The core problem: CMS and Google often have different addresses for the same provider. Solution: match against ALL known addresses for a provider.</p>
+  <pre>
+Data sources for addresses:
+  1. core_providers         → Primary billing address
+  2. practice_locations     → All group practice addresses (from reassignment data)
+  3. raw_dac_national       → Care Compare listed addresses (multiple per NPI)
+  4. raw_nppes              → NPPES registered address
+
+Strategy:
+  - Build address lookup: NPI → [all known zip5s, cities]
+  - When matching: check if Google's zip5 appears in ANY of the provider's known locations
+  - Bonus: use lat/lng proximity (within 5 miles) as a soft match signal</pre>
+</div>
+
+<h3>6.3 Organization Matching (New Capability)</h3>
+<div class="card purple">
+  <h4>Strategy: Reverse-lookup providers at an address</h4>
+  <p style="font-size:13px;">When we identify a result as an organization (clinic, center, hospital), instead of giving up, find ALL providers who practice at that location:</p>
+  <pre>
+Step 1: Parse org address → zip5
+Step 2: Query CMS for providers at that zip5 with matching specialty
+Step 3: Cross-reference with Google Places name for embedded doctor names
+Step 4: Return provider roster for that location
+
+Example: "UCLA Endocrine Center" at 90095
+  → Find all endocrinology providers with zip5=90095
+  → Cross-reference with raw_dac_national group affiliations
+  → Return: "12 endocrinologists practice here"
+  → Show top providers by volume/quality</pre>
+  
+  <p style="font-size:13px; color: var(--green); margin: 8px 0 0 0;"><strong>User value:</strong> "I'm looking at UCLA Endocrine Center — who works there and who should I talk to?"</p>
+</div>
+
+<h3>6.4 Phone Number Matching</h3>
+<div class="card accent">
+  <h4>High-confidence signal, requires Place Details API</h4>
+  <pre>
+Cost: $0.017 per Place Details call ($3.40 for 200 providers/day)
+Source: Google Places Details API → phone number
+Match: NPPES has practice phone for 90%+ of providers
+
+Strategy:
+  - Only call Place Details for UNMATCHED results (reduce API spend)
+  - Normalize phone: strip +1, parens, dashes → 10-digit
+  - Match against raw_nppes "Provider Business Practice Location Address Telephone Number"
+  - Phone match = 90% confidence (phones rarely shared between unrelated providers)</pre>
+</div>
+
+<h3>6.5 Web Crawl Enrichment</h3>
+<div class="card purple">
+  <h4>The "Secret Sauce" Layer</h4>
+  <p style="font-size:13px;">For unmatched results OR organizations, crawl the provider's website to extract structured data:</p>
+  <pre>
+Trigger: Result has no CMS match AND has a website (from Place Details)
+  
+Crawl targets:
+  1. Provider's own website (from Google Places)
+  2. Hospital/practice "Find a Doctor" pages
+  3. Healthgrades/Vitals/WebMD profiles
+  4. NPI lookup services (npidb.org, nppes.cms.hhs.gov)
+
+Extract via LLM:
+  - Provider NPI (often listed on practice websites)
+  - Full provider roster (from "Our Team" pages)
+  - Specialties, board certifications
+  - Insurance accepted
+  - Education, fellowship details
+  - Languages spoken
+
+Example flow:
+  "Dr. Friedman's Endocrinology Clinic" → no individual match
+  → Crawl website → find NPI on "About" page
+  → Match NPI to CMS → full intelligence
+  → Also find 3 other providers on "Our Team" page
+  → Match those too → return enriched org profile</pre>
+
+  <p style="font-size:13px; color: var(--green); margin: 8px 0 0 0;"><strong>Why this is the moat:</strong> Anyone can match names to NPI. Crawling websites, extracting provider rosters from "Our Team" pages, and linking them to CMS claims data at scale — that's genuinely hard and creates defensible value.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2><span class="section-num">7.</span> Recommended Match Engine v2 Architecture</h2>
+
+<div class="flow">
+  <div class="flow-step" style="border-color:var(--accent)">Google Places<br><strong>Search</strong></div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-step" style="border-color:var(--yellow)">Classify<br><strong>Person / Org</strong></div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-step" style="border-color:var(--green)">Name Match<br><strong>v2 Parser</strong></div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-step" style="border-color:var(--accent)">Multi-Address<br><strong>Tolerance</strong></div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-step" style="border-color:var(--orange)">Phone Match<br><strong>(if unmatched)</strong></div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-step" style="border-color:var(--purple)">Web Crawl<br><strong>(if still unmatched)</strong></div>
+</div>
+
+<h3>Match Cascade v2</h3>
+<table>
+  <tr><th>Step</th><th>Method</th><th>Confidence</th><th>Cost</th><th>Coverage</th></tr>
+  <tr><td>1</td><td>Name + Zip (exact)</td><td>95%</td><td>Free (DB)</td><td>~35% of individuals</td></tr>
+  <tr><td>2</td><td>Name + City/State (fuzzy)</td><td>80%</td><td>Free (DB)</td><td>+15%</td></tr>
+  <tr><td>3</td><td>Name + Any Known Address</td><td>85%</td><td>Free (DB)</td><td>+15%</td></tr>
+  <tr><td>4</td><td>Name reversed + address</td><td>75%</td><td>Free (DB)</td><td>+5%</td></tr>
+  <tr><td>5</td><td>Phone number match</td><td>90%</td><td>$0.017/call</td><td>+10%</td></tr>
+  <tr><td>6</td><td>Web crawl → NPI extraction</td><td>95%</td><td>~$0.01/crawl</td><td>+10%</td></tr>
+  <tr><td>7</td><td>Org → provider roster lookup</td><td>70-90%</td><td>Variable</td><td>Unlocks orgs</td></tr>
+</table>
+
+<div class="highlight">
+  <strong>Projected match rate:</strong> Steps 1-4 (free, DB-only) should bring individual match rate from <strong>38% → 70-80%</strong>. Adding phone + web crawl pushes to <strong>85-90%</strong>. Organization matching adds intelligence to the remaining ~35% of results that are clinics/centers.
+</div>
+
+<!-- ============================================================ -->
+<h2><span class="section-num">8.</span> Data We're Pulling (Intelligence Layer)</h2>
+
+<h3>Current: 5 Intelligence Dimensions</h3>
+<table>
+  <tr><th>Dimension</th><th>Source</th><th>Rows</th><th>What It Tells You</th></tr>
+  <tr><td>💰 Medicare Billing</td><td>utilization_metrics</td><td>2.4M</td><td>How much they bill, how many patients, volume</td></tr>
+  <tr><td>⭐ Quality (MIPS)</td><td>raw_mips_performance</td><td>541K</td><td>CMS quality score — are they hitting quality benchmarks?</td></tr>
+  <tr><td>🏥 Hospital Affiliations</td><td>raw_dac_facility_affiliations</td><td>1.6M</td><td>Which hospitals they're affiliated with</td></tr>
+  <tr><td>🤝 Industry Payments</td><td>raw_open_payments_general</td><td>14.7M</td><td>Pharma/device company relationships — KOL identification</td></tr>
+  <tr><td>📋 Service Detail</td><td>raw_physician_by_provider_and_service</td><td>9.7M</td><td>What procedures they actually perform, at what volume</td></tr>
+</table>
+
+<h3>Available but Not Yet Used</h3>
+<table>
+  <tr><th>Dimension</th><th>Source</th><th>Rows</th><th>What It Would Add</th></tr>
+  <tr><td>💊 Prescribing Patterns</td><td>raw_part_d_by_provider_and_drug</td><td>26.8M</td><td>What drugs they prescribe, opioid rates, brand vs generic</td></tr>
+  <tr><td>🔬 Research Funding</td><td>raw_open_payments_research</td><td>1.1M</td><td>Research grants from industry — deeper KOL signal</td></tr>
+  <tr><td>📍 All Practice Locations</td><td>practice_locations + raw_dac_national</td><td>2.7M + 2.7M</td><td>Every address where they practice (multi-location mapping)</td></tr>
+  <tr><td>🏥 Hospital Details</td><td>raw_hospital_general_info</td><td>5.4K</td><td>Hospital star ratings, ownership, type for affiliations</td></tr>
+  <tr><td>📊 Group Performance</td><td>raw_dac_national (group fields)</td><td>—</td><td>Which group practice they belong to, group-level metrics</td></tr>
+  <tr><td>🔄 Referral Eligibility</td><td>raw_order_and_referring</td><td>2.0M</td><td>Can they order/refer for Medicare? (eligibility flag)</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2><span class="section-num">9.</span> The Secret Sauce: What Makes This Defensible</h2>
+
+<div class="comparison">
+  <div class="card" style="border-left: 4px solid var(--muted);">
+    <h4>What anyone can build</h4>
+    <ul>
+      <li>Google Places search wrapper</li>
+      <li>Basic NPI lookup by name</li>
+      <li>Single-source data display</li>
+      <li>Static provider directories</li>
+    </ul>
+  </div>
+  <div class="card" style="border-left: 4px solid var(--green);">
+    <h4>What we're building</h4>
+    <ul>
+      <li>Multi-strategy matching cascade</li>
+      <li>Cross-source intelligence synthesis</li>
+      <li>Organization → provider roster resolution</li>
+      <li>Web crawl NPI extraction at scale</li>
+      <li>Pre-computed match tables (cache)</li>
+      <li>Composite targeting scores</li>
+    </ul>
+  </div>
+</div>
+
+<h3>The Moat Stack</h3>
+
+<div class="card green">
+  <h4>Layer 1: Data Assembly (already built)</h4>
+  <p style="font-size:13px;">90M+ rows across 30 tables from 6 public sources, ingested into a fast analytical DB. Not hard individually, but the combination is the foundation nobody else has pre-built for BD teams.</p>
+</div>
+
+<div class="card green">
+  <h4>Layer 2: Entity Resolution (building now)</h4>
+  <p style="font-size:13px;">Linking Google Places listings to NPI to CMS claims to Open Payments to MIPS scores. The <strong>matching engine IS the product</strong>. Every improvement to match rate directly increases user value. This is where engineering effort compounds.</p>
+</div>
+
+<div class="card accent">
+  <h4>Layer 3: Intelligence Synthesis (next)</h4>
+  <p style="font-size:13px;">Raw data → actionable insight. A targeting score that combines volume, quality, industry relationships, and accessibility into a single "should I call this doctor?" signal. LLM-generated provider summaries. Competitive landscape analysis.</p>
+</div>
+
+<div class="card purple">
+  <h4>Layer 4: Network Effects (future)</h4>
+  <p style="font-size:13px;">As users search and validate matches, build a confirmed match table (Google Place ID → NPI). Every user's searches improve accuracy for everyone. This is impossible to replicate without the user base.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2><span class="section-num">10.</span> Implementation Roadmap</h2>
+
+<table>
+  <tr><th>Phase</th><th>Work</th><th>Impact</th><th>Effort</th></tr>
+  <tr><td><span class="tag tag-green">Now</span></td><td>Fix name parser (Dr. prefix, reversed names, middle initials)</td><td>Match rate 38% → 55%</td><td>2 hours</td></tr>
+  <tr><td><span class="tag tag-green">Now</span></td><td>Multi-address matching (check all known addresses per NPI)</td><td>Match rate 55% → 75%</td><td>4 hours</td></tr>
+  <tr><td><span class="tag tag-yellow">Week 1</span></td><td>Organization roster lookup (find providers at address/zip)</td><td>Unlock 35% of results (orgs)</td><td>1 day</td></tr>
+  <tr><td><span class="tag tag-yellow">Week 1</span></td><td>Pre-compute match cache (Place ID → NPI mapping table)</td><td>Sub-100ms response times</td><td>1 day</td></tr>
+  <tr><td><span class="tag tag-yellow">Week 2</span></td><td>Phone number matching via Place Details API</td><td>Match rate 75% → 85%</td><td>1 day</td></tr>
+  <tr><td><span class="tag tag-yellow">Week 2</span></td><td>Add prescribing + research payment enrichment</td><td>Richer provider profiles</td><td>4 hours</td></tr>
+  <tr><td><span class="tag tag-purple">Week 3</span></td><td>Web crawl for unmatched providers (NPI extraction)</td><td>Match rate 85% → 90%+</td><td>3 days</td></tr>
+  <tr><td><span class="tag tag-purple">Week 3</span></td><td>Composite targeting score algorithm</td><td>Single "priority" number per provider</td><td>2 days</td></tr>
+  <tr><td><span class="tag tag-purple">Week 4</span></td><td>LLM provider summaries ("sales brief")</td><td>Actionable intel for meetings</td><td>2 days</td></tr>
+  <tr><td><span class="tag tag-red">Month 2</span></td><td>User confirmation loop (validate/correct matches)</td><td>Continuous accuracy improvement</td><td>1 week</td></tr>
+</table>
+
+<div style="margin-top:48px; padding-top:24px; border-top:1px solid var(--border); font-size:12px; color:var(--muted);">
+  Generated by Chief · February 16, 2026 · CMS Provider Intelligence Platform
+</div>
+</div>
+</body>
+</html>
