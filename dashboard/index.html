@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CMS Provider Data — Dashboard</title>
+<link rel="stylesheet" href="/styles/global.css">
 <style>
   :root {
     --bg: #0f172a; --surface: #1e293b; --border: #334155;
@@ -175,6 +176,24 @@
 </head>
 <body>
 
+<!-- Navigation -->
+<nav class="nav">
+  <div class="nav-container">
+    <a href="/" class="nav-brand">
+      🏥 HealthcareDataAI
+    </a>
+    <button class="nav-toggle" onclick="toggleNav()" aria-label="Toggle navigation">☰</button>
+    <ul class="nav-links" id="navLinks">
+      <li><a href="/">Home</a></li>
+      <li><a href="/dashboard/" class="active">Dashboard</a></li>
+      <li><a href="/projects/">Projects</a></li>
+      <li><a href="/access/">Data Access</a></li>
+      <li><a href="/about/">About</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- Dashboard Header -->
 <div class="header">
   <h1>⚕️ CMS Provider Intelligence</h1>
   <div class="header-right">
@@ -1041,5 +1060,71 @@ async function runUnifiedSearch() {
 
 init();
 </script>
+
+<!-- Footer -->
+<footer class="footer">
+  <div class="footer-container">
+    <div class="footer-grid">
+      <div class="footer-section">
+        <h4>Navigation</h4>
+        <ul>
+          <li><a href="/">Home</a></li>
+          <li><a href="/dashboard/">Dashboard</a></li>
+          <li><a href="/projects/">Projects</a></li>
+          <li><a href="/access/">Data Access</a></li>
+          <li><a href="/about/">About</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-section">
+        <h4>Resources</h4>
+        <ul>
+          <li><a href="/api/docs" target="_blank">API Documentation</a></li>
+          <li><a href="https://github.com/blakethom8/cms-data" target="_blank">GitHub Repository</a></li>
+          <li><a href="https://data.cms.gov" target="_blank">CMS Data Source</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-section">
+        <h4>Projects</h4>
+        <ul>
+          <li><a href="/projects/healthcare-cost/">Healthcare Cost Analysis</a></li>
+          <li><a href="/projects/fraud-analysis/">Fraud Detection</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-section">
+        <h4>Connect</h4>
+        <ul>
+          <li><a href="mailto:blake@blakethomson.com">blake@blakethomson.com</a></li>
+          <li><a href="https://blakethomson.studio" target="_blank">blakethomson.studio</a></li>
+          <li><a href="https://linkedin.com/in/blakethom" target="_blank">LinkedIn</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <p>Data provided by CMS via data.cms.gov • Not affiliated with CMS • Independent analysis</p>
+      <p>© 2026 Blake Thomson • HealthcareDataAI.com</p>
+    </div>
+  </div>
+</footer>
+
+<script>
+function toggleNav() {
+  const nav = document.getElementById('navLinks');
+  nav.classList.toggle('open');
+}
+
+// Close mobile nav when clicking outside
+document.addEventListener('click', (e) => {
+  const nav = document.getElementById('navLinks');
+  const toggle = document.querySelector('.nav-toggle');
+  if (!nav.contains(e.target) && !toggle.contains(e.target)) {
+    nav.classList.remove('open');
+  }
+});
+</script>
+
 </body>
 </html>
