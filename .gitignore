@@ -40,3 +40,20 @@ Thumbs.db
 tmp/
 temp/
 *.tmp
+
+# Deployment documentation with sensitive info
+DEPLOYMENT_COMPLETE.md
+DEPLOYMENT-READY.md
+DEPLOYMENT_READY.md
+QUICK_START.md
+TEST_DEPLOYMENT.md
+GITHUB-SETUP.md
+README_ENHANCED_SEARCH.md
+COMPLETE-SITE-READY.md
+WEBSITE-BUILD-SUMMARY.md
+SITE-ARCHITECTURE.md
+
+# Shell scripts with credentials
+add_openai_key.sh
+test_enhanced_matching.sh
+DEPLOY-NOW.sh

@@ -613,8 +613,8 @@
 
     <script>
         const SEARCHAPI_KEY = 'Wf9YpXRy3i5Z3AMS5NBDF79A';
-        const CMS_API_BASE = 'http://5.78.148.70:8080';
-        const CMS_API_KEY = '1bb250cdd582258595a5d2bebd9493f2c74a7999';
+        const CMS_API_BASE = '/api';
+        // API key is injected server-side by nginx (not exposed to browser)
 
         const STATE_ABBREV = {
             'alabama':'AL','alaska':'AK','arizona':'AZ','arkansas':'AR','california':'CA',
@@ -843,8 +843,7 @@
             const zipResponse = await fetch(`${CMS_API_BASE}/query`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'X-API-Key': CMS_API_KEY
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ sql: zipQuery })
             });
@@ -903,8 +902,7 @@
             const cmsResponse = await fetch(`${CMS_API_BASE}/query`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'X-API-Key': CMS_API_KEY
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ sql: cmsQuery })
             });
@@ -935,8 +933,7 @@
             const nppesResponse = await fetch(`${CMS_API_BASE}/query`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'X-API-Key': CMS_API_KEY
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ sql: nppesQuery })
             });
