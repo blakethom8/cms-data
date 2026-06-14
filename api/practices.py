@@ -66,6 +66,30 @@ class PracticeSearchResponse(BaseModel):
     results: list[PracticeResult]
 
 
+# The DAC credentials column name has trailing tabs in the source file.
+CRED_COL = '"Cred\t\t\t\t"'
+
+
+class ProviderResult(BaseModel):
+    npi: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    credentials: Optional[str] = None
+    specialty: Optional[str] = None
+    phone: Optional[str] = None
+    medicare_services: Optional[float] = None
+    medicare_beneficiaries: Optional[int] = None
+    medicare_payments: Optional[float] = None
+    open_payments_total: Optional[float] = None
+
+
+class ProviderRosterResponse(BaseModel):
+    practice_name: Optional[str] = None
+    org_pac_id: Optional[str] = None
+    total: int
+    providers: list[ProviderResult]
+
+
 def get_practices_router(get_conn):
     @router.get("/search", response_model=PracticeSearchResponse)
     async def search(
@@ -184,6 +208,96 @@ def get_practices_router(get_conn):
             location=", ".join(loc_desc) or "anywhere",
             total=len(results),
             results=results,
+        )
+
+    @router.get("/providers", response_model=ProviderRosterResponse)
+    async def providers(
+        street: str,
+        zip: str,
+        org_pac_id: Optional[str] = None,
+        specialty: Optional[str] = None,
+        limit: int = 200,
+    ):
+        """Individual-provider roster for one practice location (address × group)."""
+        limit = max(1, min(limit, 500))
+        params: list = [zip[:5], street]
+
+        org = (org_pac_id or "").strip()
+        if org and org.upper() != "SOLO":
+            org_pred = "CAST(d.org_pac_id AS VARCHAR) = ?"
+            params.append(org)
+        else:
+            org_pred = "d.org_pac_id IS NULL"
+
+        spec_pred = "1=1"
+        if specialty:
+            term = specialty.lower().strip()
+            patterns = SPECIALTY_MAP.get(term, [f"%{term}%"])
+            spec_pred = " OR ".join(["d.pri_spec ILIKE ?"] * len(patterns))
+            params.extend(patterns)
+
+        sql = f"""
+        with roster as (
+            select d."NPI" npi,
+                   any_value(d."Provider First Name") first_name,
+                   any_value(d."Provider Last Name") last_name,
+                   any_value(d.{CRED_COL}) credentials,
+                   any_value(d.pri_spec) specialty,
+                   any_value(CAST(d."Telephone Number" AS VARCHAR)) phone,
+                   any_value(d."Facility Name") practice_name
+            from raw_dac_national d
+            where left(CAST(d."ZIP Code" AS VARCHAR), 5) = ?
+              and upper(trim(d.adr_ln_1)) = upper(trim(?))
+              and {org_pred}
+              and ({spec_pred})
+            group by d."NPI"
+        ),
+        util as (
+            select CAST("Rndrng_NPI" AS VARCHAR) npi, sum("Tot_Srvcs") srv,
+                   sum("Tot_Benes") ben, sum("Tot_Mdcr_Pymt_Amt") pay
+            from raw_physician_by_provider
+            where CAST("Rndrng_NPI" AS VARCHAR) in (select CAST(npi AS VARCHAR) from roster)
+            group by 1
+        ),
+        op as (
+            select CAST("Covered_Recipient_NPI" AS VARCHAR) npi,
+                   sum("Total_Amount_of_Payment_USDollars") optot
+            from raw_open_payments_general
+            where CAST("Covered_Recipient_NPI" AS VARCHAR) in (select CAST(npi AS VARCHAR) from roster)
+            group by 1
+        )
+        select r.npi, r.first_name, r.last_name, r.credentials, r.specialty, r.phone,
+               r.practice_name, u.srv, u.ben, u.pay, o.optot
+        from roster r
+        left join util u on CAST(r.npi AS VARCHAR) = u.npi
+        left join op o on CAST(r.npi AS VARCHAR) = o.npi
+        order by u.pay desc nulls last
+        limit {limit}
+        """
+
+        conn = get_conn()
+        rows = conn.execute(sql, params).fetchall()
+
+        people = [
+            ProviderResult(
+                npi=str(r[0]),
+                first_name=r[1],
+                last_name=r[2],
+                credentials=(r[3] or "").strip() or None,
+                specialty=r[4],
+                phone=r[5],
+                medicare_services=r[7],
+                medicare_beneficiaries=int(r[8]) if r[8] is not None else None,
+                medicare_payments=r[9],
+                open_payments_total=r[10],
+            )
+            for r in rows
+        ]
+        return ProviderRosterResponse(
+            practice_name=rows[0][6] if rows else None,
+            org_pac_id=org or None,
+            total=len(people),
+            providers=people,
         )
 
     return router
