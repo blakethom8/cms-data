@@ -63,6 +63,9 @@ from unified_search import get_unified_router
 unified_router = get_unified_router(get_conn)
 app.include_router(unified_router)
 
+from practices import get_practices_router
+app.include_router(get_practices_router(get_conn))
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Tighten in production
