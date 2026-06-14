@@ -38,7 +38,32 @@ SPECIALTY_MAP: dict[str, list[str]] = {
     "ophthalmology": ["%ophthalmo%"],
     "psychiatry": ["%psychiat%"],
     "obgyn": ["%obstetri%", "%gynecolog%"],
+    "ob/gyn": ["%obstetri%", "%gynecolog%"],
+    "ob gyn": ["%obstetri%", "%gynecolog%"],
+    "pcp": ["%family%", "%internal medicine%", "%general practice%", "%geriatric%"],
+    "primary care physician": ["%family%", "%internal medicine%", "%general practice%", "%geriatric%"],
 }
+
+# Provider-noun suffixes -> strip to the specialty root so a search for
+# "cardiologist" matches "CARDIOLOGY" / "cardiologists" / "pediatrician", etc.
+# Checked longest-first.
+_SPECIALTY_SUFFIXES = ("icians", "ician", "ists", "ist")
+
+
+def specialty_patterns(term: str) -> list[str]:
+    """Resolve a free-text specialty into a list of pri_spec ILIKE patterns.
+
+    Tries the explicit map, then normalizes provider-noun forms
+    ("cardiologist" -> "cardiolog"), then falls back to a substring match.
+    """
+    t = " ".join(term.lower().split())
+    if t in SPECIALTY_MAP:
+        return SPECIALTY_MAP[t]
+    for suffix in _SPECIALTY_SUFFIXES:
+        if t.endswith(suffix) and len(t) - len(suffix) >= 4:
+            root = t[: -len(suffix)]
+            return SPECIALTY_MAP.get(root, [f"%{root}%"])
+    return [f"%{t}%"]
 
 
 class PracticeResult(BaseModel):
@@ -103,8 +128,7 @@ def get_practices_router(get_conn):
         limit: int = 50,
     ):
         limit = max(1, min(limit, 200))
-        term = specialty.lower().strip()
-        patterns = SPECIALTY_MAP.get(term, [f"%{term}%"])
+        patterns = specialty_patterns(specialty)
         spec_pred = " OR ".join(["pri_spec ILIKE ?"] * len(patterns))
         params: list = list(patterns)
 
@@ -231,8 +255,7 @@ def get_practices_router(get_conn):
 
         spec_pred = "1=1"
         if specialty:
-            term = specialty.lower().strip()
-            patterns = SPECIALTY_MAP.get(term, [f"%{term}%"])
+            patterns = specialty_patterns(specialty)
             spec_pred = " OR ".join(["d.pri_spec ILIKE ?"] * len(patterns))
             params.extend(patterns)
 
