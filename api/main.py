@@ -48,34 +48,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Match engine
-import sys, os
-sys.path.insert(0, os.path.dirname(__file__))
-from match import get_match_router
-match_router = get_match_router(get_conn)
-app.include_router(match_router)
-
-from places_match import get_search_router
-search_router = get_search_router(get_conn)
-app.include_router(search_router)
-
-from unified_search import get_unified_router
-unified_router = get_unified_router(get_conn)
-app.include_router(unified_router)
-
-from practices import get_practices_router
-app.include_router(get_practices_router(get_conn))
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Tighten in production
-    allow_methods=["GET", "POST"],
-    allow_headers=["*"],
-)
-
-# --- Auth ---
-
+# --- Auth (defined before router includes so they can require it) ---
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
 
 async def check_api_key(key: Optional[str] = Security(api_key_header)):
     if not API_KEY:
@@ -83,6 +58,30 @@ async def check_api_key(key: Optional[str] = Security(api_key_header)):
     if key != API_KEY:
         raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
+
+# Data routers — every route requires the X-API-Key header.
+import sys, os
+sys.path.insert(0, os.path.dirname(__file__))
+_secured = [Depends(check_api_key)]
+
+from match import get_match_router
+app.include_router(get_match_router(get_conn), dependencies=_secured)
+
+from places_match import get_search_router
+app.include_router(get_search_router(get_conn), dependencies=_secured)
+
+from unified_search import get_unified_router
+app.include_router(get_unified_router(get_conn), dependencies=_secured)
+
+from practices import get_practices_router
+app.include_router(get_practices_router(get_conn), dependencies=_secured)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Tighten in production
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
+)
 
 # --- Models ---
 
