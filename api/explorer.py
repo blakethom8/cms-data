@@ -149,6 +149,7 @@ CATALOG: list[dict] = [
 ]
 
 _row_counts: dict[str, int] = {}
+_col_counts: dict[str, int] = {}
 
 # Per-dataset sample queries. City/state are bound params (%s style via ?);
 # every query returns a curated, human-readable column subset.
@@ -353,6 +354,18 @@ class CatalogEntry(BaseModel):
     description: str
     join_keys: list[str]
     row_count: int
+    column_count: int
+
+
+class ColumnInfo(BaseModel):
+    name: str
+    type: str
+
+
+class ColumnsResponse(BaseModel):
+    key: str
+    table: str
+    columns: list[ColumnInfo]
 
 
 class ShowcaseResult(BaseModel):
@@ -383,8 +396,23 @@ def get_explorer_router(get_conn):
                 _row_counts[table] = conn.execute(
                     f'select count(*) from "{table}"'
                 ).fetchone()[0]
-            out.append(CatalogEntry(**entry, row_count=_row_counts[table]))
+            if table not in _col_counts:
+                _col_counts[table] = len(conn.execute(f"pragma table_info('{table}')").fetchall())
+            out.append(CatalogEntry(**entry, row_count=_row_counts[table],
+                                    column_count=_col_counts[table]))
         return out
+
+    @router.get("/columns/{key}", response_model=ColumnsResponse)
+    async def columns(key: str):
+        """Full column list (name + type) for one catalog dataset."""
+        entry = next((e for e in CATALOG if e["key"] == key), None)
+        if not entry:
+            raise HTTPException(status_code=404, detail=f"Unknown dataset '{key}'")
+        rows = get_conn().execute(f"pragma table_info('{entry['table']}')").fetchall()
+        return ColumnsResponse(
+            key=key, table=entry["table"],
+            columns=[ColumnInfo(name=r[1].strip(), type=r[2]) for r in rows],
+        )
 
     @router.get("/sample/{key}", response_model=TableData)
     async def sample(key: str, city: str = "Los Angeles", state: str = "CA"):
