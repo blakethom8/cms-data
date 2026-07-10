@@ -79,6 +79,9 @@ app.include_router(get_practices_router(get_conn), dependencies=_secured)
 from explorer import get_explorer_router
 app.include_router(get_explorer_router(get_conn), dependencies=_secured)
 
+from profiles import get_profiles_router
+app.include_router(get_profiles_router(get_conn), dependencies=_secured)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Tighten in production
