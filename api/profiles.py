@@ -71,6 +71,113 @@ class SearchHit(BaseModel):
     city: str | None = None
     state: str | None = None
     group_name: str | None = None
+    source: str = "medicare"          # "medicare" (DAC) | "registry" (NPPES-only)
+    match_score: float | None = None  # fuzzy similarity for registry-tier hits
+
+
+# Registry-tier fuzzy thresholds (jaro-winkler); validated on misspelled
+# real-world queries — genuine targets score >=0.92, noise tops out ~0.83.
+_FUZZY_THRESHOLD_FULL = 0.85   # first + last name provided
+_FUZZY_THRESHOLD_LAST = 0.88   # last name only
+
+
+def _search_dac(conn, parts: list[str], city: Optional[str], state: Optional[str],
+                limit: int) -> list[dict]:
+    """Tier 1: strict prefix match against Medicare Doctors & Clinicians."""
+    preds = []
+    params: list = []
+    if len(parts) >= 2:
+        preds.append('(upper("Provider First Name") like ? and upper("Provider Last Name") like ?)')
+        params += [parts[0] + "%", parts[-1] + "%"]
+    else:
+        preds.append('upper("Provider Last Name") like ?')
+        params.append(parts[0] + "%" if parts else "%")
+    if city:
+        preds.append('upper("City/Town") = ?')
+        params.append(city.upper())
+    if state:
+        preds.append('"State" = ?')
+        params.append(state.upper())
+    sql = f"""
+        select CAST("NPI" as varchar) npi,
+               any_value("Provider First Name") || ' ' || any_value("Provider Last Name") as "name",
+               any_value({CRED}) credentials, any_value(pri_spec) specialty,
+               any_value("City/Town") city, any_value("State") state,
+               any_value("Facility Name") group_name
+        from raw_dac_national
+        where {' and '.join(preds)}
+        group by "NPI" limit {limit}"""
+    return _rows(conn, sql, params)
+
+
+def _search_registry(conn, parts: list[str], city: Optional[str], state: Optional[str],
+                     limit: int) -> list[dict]:
+    """Tier 2: fuzzy match against the full NPPES registry (everyone with an NPI).
+
+    Catches misspellings and providers who don't bill Medicare. Last name is
+    weighted 0.7 vs first 0.3; stored last names are also compared with
+    spaces/hyphens stripped so "EL ATTRACHE" / "EL-ATTRACHE" / "ELATTRACHE"
+    all behave the same. Hits also present in DAC keep source="medicare".
+    """
+    first = parts[0] if len(parts) >= 2 else None
+    last = "".join(parts[1:]) if len(parts) >= 2 else parts[0]
+
+    scope_preds = ["n.entity_type = 1", "n.last_name is not null"]
+    scope_params: list = []
+    if state:
+        scope_preds.append("n.practice_state = ?")
+        scope_params.append(state.upper())
+    if city:
+        scope_preds.append("upper(n.practice_city) = ?")
+        scope_params.append(city.upper())
+
+    stripped_last = 'replace(replace(upper(n.last_name), \' \', \'\'), \'-\', \'\')'
+    if first:
+        # greatest() also scores the whole query as a compound surname, so
+        # "el attrache" (no first name) still finds EL ATTRACHE / ELATTRACHE.
+        score_expr = f"""
+            greatest(
+                0.7 * jaro_winkler_similarity({stripped_last}, ?)
+              + 0.3 * jaro_winkler_similarity(upper(coalesce(n.first_name, '')), ?),
+                jaro_winkler_similarity({stripped_last}, ?)
+            )"""
+        score_params = [last, first, "".join(parts)]
+        threshold = _FUZZY_THRESHOLD_FULL
+    else:
+        score_expr = f"jaro_winkler_similarity({stripped_last}, ?)"
+        score_params = [last]
+        threshold = _FUZZY_THRESHOLD_LAST
+
+    sql = f"""
+        with scored as (
+            select CAST(n.npi as varchar) npi,
+                   coalesce(n.first_name || ' ', '') || n.last_name as "name",
+                   n.credentials, n.practice_city city, n.practice_state state,
+                   n.taxonomy_1, ({score_expr}) score
+            from raw_nppes n
+            where {' and '.join(scope_preds)}
+            order by score desc
+            limit {limit}
+        )
+        select s.npi, s."name", s.credentials, s.city, s.state,
+               round(s.score, 3) match_score,
+               coalesce(
+                   any_value(d.pri_spec),
+                   any_value(t.classification
+                             || coalesce(' (' || nullif(t.specialization, '') || ')', ''))
+               ) specialty,
+               any_value(d."Facility Name") group_name,
+               count(d."NPI") > 0 in_dac
+        from scored s
+        left join nucc_taxonomy t on s.taxonomy_1 = t.taxonomy_code
+        left join raw_dac_national d on CAST(d."NPI" as varchar) = s.npi
+        where s.score >= {threshold}
+        group by s.npi, s."name", s.credentials, s.city, s.state, s.score
+        order by s.score desc"""
+    rows = _rows(conn, sql, score_params + scope_params)
+    for row in rows:
+        row["source"] = "medicare" if row.pop("in_dac", False) else "registry"
+    return rows
 
 
 def get_profiles_router(get_conn):
@@ -81,35 +188,22 @@ def get_profiles_router(get_conn):
     @router.get("/search", response_model=list[SearchHit])
     async def search(q: str, city: Optional[str] = None, state: Optional[str] = None,
                      limit: int = 15):
-        """Find doctors by name (last or 'first last'), optional city/state."""
+        """Find doctors by name (last or 'first last'), optional city/state.
+
+        Tiered: exact-prefix Medicare (DAC) match first; when it comes up
+        empty, fuzzy NPPES-registry fallback (typo-tolerant, includes
+        providers who never bill Medicare).
+        """
         limit = max(1, min(limit, 30))
         parts = q.strip().upper().split()
+        if not parts:
+            return []
         conn = get_conn()
-        preds = []
-        params: list = []
-        if len(parts) >= 2:
-            preds.append('(upper("Provider First Name") like ? and upper("Provider Last Name") like ?)')
-            params += [parts[0] + "%", parts[-1] + "%"]
-        else:
-            preds.append('upper("Provider Last Name") like ?')
-            params.append(parts[0] + "%" if parts else "%")
-        if city:
-            preds.append('upper("City/Town") = ?')
-            params.append(city.upper())
-        if state:
-            preds.append('"State" = ?')
-            params.append(state.upper())
-        sql = f"""
-            select CAST("NPI" as varchar) npi,
-                   any_value("Provider First Name") || ' ' || any_value("Provider Last Name") as "name",
-                   any_value({CRED}) credentials, any_value(pri_spec) specialty,
-                   any_value("City/Town") city, any_value("State") state,
-                   any_value("Facility Name") group_name
-            from raw_dac_national
-            where {' and '.join(preds)}
-            group by "NPI" limit {limit}"""
+        rows = _search_dac(conn, parts, city, state, limit)
+        if not rows:
+            rows = _search_registry(conn, parts, city, state, limit)
         return [SearchHit(**{**r, "credentials": (r.get("credentials") or "").strip() or None})
-                for r in _rows(conn, sql, params)]
+                for r in rows]
 
     @router.get("/{npi}")
     async def profile(npi: str):
