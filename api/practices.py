@@ -81,6 +81,13 @@ class PracticeResult(BaseModel):
     specialties: list[str] = []
     distance_miles: Optional[float] = None
     billing_artifact: bool = False
+    # Roster billing power: national per-NPI totals summed over the matching
+    # clinicians at this site (not door-level billing — CMS has no site grain).
+    partb_payments: Optional[float] = None
+    partd_drug_cost: Optional[float] = None
+    # For SOLO sites (no org affiliation in DAC) the practice has no legal
+    # name — surface the clinician's name so the UI can say "Dr. X (independent)".
+    solo_provider_name: Optional[str] = None
 
 
 class PracticeSearchResponse(BaseModel):
@@ -113,6 +120,52 @@ class ProviderRosterResponse(BaseModel):
     org_pac_id: Optional[str] = None
     total: int
     providers: list[ProviderResult]
+
+
+class ProcedureRollup(BaseModel):
+    hcpcs: str
+    description: Optional[str] = None
+    est_payments: Optional[float] = None
+    services: Optional[float] = None
+    beneficiaries: Optional[int] = None
+
+
+class DrugRollup(BaseModel):
+    brand: str
+    generic: Optional[str] = None
+    drug_cost: Optional[float] = None
+    claims: Optional[int] = None
+
+
+class ManufacturerRollup(BaseModel):
+    name: str
+    total: float
+
+
+class SiteProfileResponse(BaseModel):
+    """Medicare deep-dive rollup for one practice site (address × group).
+
+    All figures are national per-NPI CMS totals summed over the site's roster —
+    roster billing power, not door-level billing (CMS publishes no site grain).
+    Part D by-drug rows under 11 claims are suppressed upstream, so top-drug
+    figures are a floor.
+    """
+
+    practice_name: Optional[str] = None
+    org_pac_id: Optional[str] = None
+    address: Optional[str] = None
+    roster_size: int = 0
+    partb_payments: Optional[float] = None
+    partb_services: Optional[float] = None
+    partb_beneficiaries: Optional[int] = None
+    partd_drug_cost: Optional[float] = None
+    partd_claims: Optional[int] = None
+    open_payments_total: Optional[float] = None
+    open_payments_count: int = 0
+    open_payments_recipients: int = 0
+    top_procedures: list[ProcedureRollup] = []
+    top_drugs: list[DrugRollup] = []
+    top_manufacturers: list[ManufacturerRollup] = []
 
 
 def get_practices_router(get_conn):
@@ -179,12 +232,26 @@ def get_practices_router(get_conn):
                    any_value(d."City/Town") city,
                    any_value(d."State") state,
                    any_value(CAST(d."Telephone Number" AS VARCHAR)) phone,
-                   any_value(d.pri_spec) spec
+                   any_value(d.pri_spec) spec,
+                   any_value(d."Provider First Name") fn,
+                   any_value(d."Provider Last Name") ln
             from raw_dac_national d
             left join address_geocode ge
               on (upper(trim(d.adr_ln_1)) || '|' || left(CAST(d."ZIP Code" AS VARCHAR), 5)) = ge.addr_key
             where ({spec_pred}) and ({' and '.join(loc_clauses)})
             group by d."NPI", upper(trim(d.adr_ln_1)), left(CAST(d."ZIP Code" AS VARCHAR), 5)
+        ),
+        util as (
+            select CAST("Rndrng_NPI" AS VARCHAR) npi, sum("Tot_Mdcr_Pymt_Amt") pay
+            from raw_physician_by_provider
+            where CAST("Rndrng_NPI" AS VARCHAR) in (select CAST(npi AS VARCHAR) from clin)
+            group by 1
+        ),
+        rx as (
+            select CAST("PRSCRBR_NPI" AS VARCHAR) npi, sum("Tot_Drug_Cst") cst
+            from raw_part_d_by_provider
+            where CAST("PRSCRBR_NPI" AS VARCHAR) in (select CAST(npi AS VARCHAR) from clin)
+            group by 1
         ),
         sites as (
             select addr_norm || '|' || zip5 addr_key,
@@ -193,14 +260,21 @@ def get_practices_router(get_conn):
                    any_value(cast(opac as varchar)) org_pac_id,
                    any_value(addr) address, any_value(city) city, any_value(state) state,
                    any_value(zip5) zip5, any_value(phone) phone, max(gsize) group_size_national,
-                   count(distinct npi) providers_here,
-                   list(distinct spec) specialties
-            from clin
+                   count(distinct c.npi) providers_here,
+                   list(distinct spec) specialties,
+                   sum(u.pay) partb_payments,
+                   sum(x.cst) partd_drug_cost,
+                   min(case when opac is null
+                            then trim(coalesce(fn, '') || ' ' || coalesce(ln, '')) end) solo_name
+            from clin c
+            left join util u on CAST(c.npi AS VARCHAR) = u.npi
+            left join rx x on CAST(c.npi AS VARCHAR) = x.npi
             group by addr_norm || '|' || zip5, coalesce(cast(opac as varchar), 'SOLO')
         )
         select s.practice_name, s.org_pac_id, s.address, s.city, s.state, s.zip5, s.phone,
                ge.lat, ge.lng, s.group_size_national, s.providers_here, s.specialties,
-               {dist_expr} dist
+               {dist_expr} dist,
+               s.partb_payments, s.partd_drug_cost, s.solo_name
         from sites s
         left join address_geocode ge on s.addr_key = ge.addr_key
         order by {order}
@@ -223,6 +297,8 @@ def get_practices_router(get_conn):
                     providers_here=providers_here, specialties=[s for s in (r[11] or []) if s],
                     distance_miles=round(r[12], 2) if r[12] is not None else None,
                     billing_artifact=billing,
+                    partb_payments=r[13], partd_drug_cost=r[14],
+                    solo_provider_name=(r[15] or "").strip() or None,
                 )
             )
 
@@ -321,6 +397,148 @@ def get_practices_router(get_conn):
             org_pac_id=org or None,
             total=len(people),
             providers=people,
+        )
+
+    @router.get("/site-profile", response_model=SiteProfileResponse)
+    async def site_profile(
+        street: str,
+        zip: str,
+        org_pac_id: Optional[str] = None,
+        specialty: Optional[str] = None,
+    ):
+        """Medicare deep-dive for one practice location (address × group).
+
+        Rolls Part B utilization, Part D prescribing, and Open Payments up over
+        the site's roster: totals plus top procedures (by estimated payment),
+        top drugs (by drug cost), and top paying manufacturers.
+        """
+        params: list = [zip[:5], street]
+
+        org = (org_pac_id or "").strip()
+        if org and org.upper() != "SOLO":
+            org_pred = "CAST(d.org_pac_id AS VARCHAR) = ?"
+            params.append(org)
+        else:
+            org_pred = "d.org_pac_id IS NULL"
+
+        spec_pred = "1=1"
+        if specialty:
+            patterns = specialty_patterns(specialty)
+            spec_pred = " OR ".join(["d.pri_spec ILIKE ?"] * len(patterns))
+            params.extend(patterns)
+
+        conn = get_conn()
+        roster_rows = conn.execute(
+            f"""
+            select CAST(d."NPI" AS VARCHAR) npi, any_value(d."Facility Name") practice_name
+            from raw_dac_national d
+            where left(CAST(d."ZIP Code" AS VARCHAR), 5) = ?
+              and upper(trim(d.adr_ln_1)) = upper(trim(?))
+              and {org_pred}
+              and ({spec_pred})
+            group by 1
+            """,
+            params,
+        ).fetchall()
+        npis = [r[0] for r in roster_rows]
+        if not npis:
+            return SiteProfileResponse(address=street, org_pac_id=org or None)
+        practice_name = next((r[1] for r in roster_rows if r[1]), None)
+
+        ph = ", ".join(["?"] * len(npis))
+
+        partb = conn.execute(
+            f"""
+            select sum("Tot_Mdcr_Pymt_Amt"), sum("Tot_Srvcs"), sum("Tot_Benes")
+            from raw_physician_by_provider
+            where CAST("Rndrng_NPI" AS VARCHAR) in ({ph})
+            """,
+            npis,
+        ).fetchone()
+
+        partd = conn.execute(
+            f"""
+            select sum("Tot_Drug_Cst"), sum("Tot_Clms")
+            from raw_part_d_by_provider
+            where CAST("PRSCRBR_NPI" AS VARCHAR) in ({ph})
+            """,
+            npis,
+        ).fetchone()
+
+        procs = conn.execute(
+            f"""
+            select "HCPCS_Cd", any_value("HCPCS_Desc"),
+                   sum("Tot_Srvcs" * "Avg_Mdcr_Pymt_Amt") est_pay,
+                   sum("Tot_Srvcs"), sum("Tot_Benes")
+            from raw_physician_by_provider_and_service
+            where CAST("Rndrng_NPI" AS VARCHAR) in ({ph})
+            group by 1 order by est_pay desc nulls last limit 6
+            """,
+            npis,
+        ).fetchall()
+
+        drugs = conn.execute(
+            f"""
+            select "Brnd_Name", any_value("Gnrc_Name"),
+                   sum("Tot_Drug_Cst") cst, sum("Tot_Clms")
+            from raw_part_d_by_provider_and_drug
+            where CAST("PRSCRBR_NPI" AS VARCHAR) in ({ph})
+            group by 1 order by cst desc nulls last limit 6
+            """,
+            npis,
+        ).fetchall()
+
+        op = conn.execute(
+            f"""
+            select sum("Total_Amount_of_Payment_USDollars"), count(*),
+                   count(distinct CAST("Covered_Recipient_NPI" AS VARCHAR))
+            from raw_open_payments_general
+            where CAST("Covered_Recipient_NPI" AS VARCHAR) in ({ph})
+            """,
+            npis,
+        ).fetchone()
+
+        mfrs = conn.execute(
+            f"""
+            select "Applicable_Manufacturer_or_Applicable_GPO_Making_Payment_Name",
+                   sum("Total_Amount_of_Payment_USDollars") total
+            from raw_open_payments_general
+            where CAST("Covered_Recipient_NPI" AS VARCHAR) in ({ph})
+            group by 1 order by total desc limit 5
+            """,
+            npis,
+        ).fetchall()
+
+        return SiteProfileResponse(
+            practice_name=practice_name,
+            org_pac_id=org or None,
+            address=street,
+            roster_size=len(npis),
+            partb_payments=partb[0],
+            partb_services=partb[1],
+            partb_beneficiaries=int(partb[2]) if partb[2] is not None else None,
+            partd_drug_cost=partd[0],
+            partd_claims=int(partd[1]) if partd[1] is not None else None,
+            open_payments_total=op[0],
+            open_payments_count=op[1] or 0,
+            open_payments_recipients=op[2] or 0,
+            top_procedures=[
+                ProcedureRollup(
+                    hcpcs=str(r[0]), description=r[1], est_payments=r[2],
+                    services=r[3], beneficiaries=int(r[4]) if r[4] is not None else None,
+                )
+                for r in procs
+                if r[0] is not None
+            ],
+            top_drugs=[
+                DrugRollup(brand=str(r[0]), generic=r[1], drug_cost=r[2],
+                           claims=int(r[3]) if r[3] is not None else None)
+                for r in drugs
+                if r[0] is not None
+            ],
+            top_manufacturers=[
+                ManufacturerRollup(name=str(r[0]), total=r[1]) for r in mfrs if r[0] is not None
+            ],
         )
 
     return router
