@@ -253,14 +253,14 @@ def get_profiles_router(get_conn):
                 when Nature_of_Payment_or_Transfer_of_Value in ('Education','Gift','Entertainment','Charitable Contribution') then 'Education/Gifts'
                 when Nature_of_Payment_or_Transfer_of_Value in ('Royalty or License','Acquisitions') then 'Royalties/IP'
                 else 'Other' end nature_group,
-                count(*) payments, round(sum(Total_Amount_of_Payment_USDollars)) usd
+                count(*) n_payments, round(sum(Total_Amount_of_Payment_USDollars)) usd
             from raw_open_payments_general
             where CAST(Covered_Recipient_NPI as varchar) = ?
             group by 1 order by usd desc
         """, [npi])
         out["industry_manufacturers"] = _rows(conn, """
             select Applicable_Manufacturer_or_Applicable_GPO_Making_Payment_Name manufacturer,
-                   round(sum(Total_Amount_of_Payment_USDollars)) usd, count(*) payments,
+                   round(sum(Total_Amount_of_Payment_USDollars)) usd, count(*) n_payments,
                    string_agg(distinct Name_of_Drug_or_Biological_or_Device_or_Medical_Supply_1, ', ') products
             from raw_open_payments_general
             where CAST(Covered_Recipient_NPI as varchar) = ?
