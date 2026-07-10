@@ -310,6 +310,12 @@ def get_profiles_router(get_conn):
             left join address_geocode g on g.addr_key = d.addr_key
             order by coalesce(r.roster_size, 0) asc
         """, [npi])
+        home_state = (out["header"] or {}).get("state")
+        out["locations"].sort(key=lambda l: (
+            0 if l.get("state") == home_state else 1,
+            l.get("roster_size") if l.get("roster_size") is not None else 10**9,
+        ))
+
         out["groups"] = _rows(conn, """
             select org_pac_id group_id, any_value("Facility Name") group_name,
                    any_value(num_org_mem) group_size,
