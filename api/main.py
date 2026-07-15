@@ -82,6 +82,9 @@ app.include_router(get_explorer_router(get_conn), dependencies=_secured)
 from profiles import get_profiles_router
 app.include_router(get_profiles_router(get_conn), dependencies=_secured)
 
+from industry import get_industry_router
+app.include_router(get_industry_router(get_conn), dependencies=_secured)
+
 from research import get_research_router
 app.include_router(get_research_router(get_conn), dependencies=_secured)
 
