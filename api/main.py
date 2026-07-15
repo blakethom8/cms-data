@@ -88,6 +88,9 @@ app.include_router(get_industry_router(get_conn), dependencies=_secured)
 from research import get_research_router
 app.include_router(get_research_router(get_conn), dependencies=_secured)
 
+from clinical_trials import get_clinical_trials_router
+app.include_router(get_clinical_trials_router(), dependencies=_secured)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Tighten in production
