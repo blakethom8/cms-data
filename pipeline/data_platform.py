@@ -30,6 +30,13 @@ from .discovery import (
     utc_now,
 )
 from .manifests import ManifestDocument, ManifestStore
+from .releases import (
+    STAGING_ENVIRONMENT,
+    ReleaseError,
+    build_warehouse_release,
+    promote_staging_release,
+    rollback_staging_release,
+)
 from .source_registry import SOURCE_REGISTRY, SourceSpec
 
 DEFAULT_MANIFEST_PATH = Path(__file__).resolve().parent.parent / "data" / "manifests.json"
@@ -39,6 +46,7 @@ EXIT_HEALTHY = 0
 EXIT_STALE_OR_UNKNOWN = 1
 EXIT_DISCOVERY_FAILURE = 2
 EXIT_ACQUISITION_FAILURE = 3
+EXIT_RELEASE_FAILURE = 4
 
 
 class FreshnessStatus(str, Enum):
@@ -307,6 +315,42 @@ def _parser() -> argparse.ArgumentParser:
         default=DEFAULT_MAX_DOWNLOAD_BYTES,
         help="Hard transfer limit; defaults to 100 MiB",
     )
+    build = subparsers.add_parser(
+        "build-release",
+        help="Build and validate a versioned DuckDB candidate in staging",
+    )
+    build.add_argument("--source-run-id", required=True)
+    build.add_argument("--backup-manifest", required=True, type=Path)
+    build.add_argument(
+        "--data-root", type=Path, default=DEFAULT_MANIFEST_PATH.parent
+    )
+    build.add_argument(
+        "--environment", choices=[STAGING_ENVIRONMENT], required=True
+    )
+    build.add_argument("--json", action="store_true")
+    promote = subparsers.add_parser(
+        "promote",
+        help="Atomically activate a validated release in staging only",
+    )
+    promote.add_argument("--warehouse-release-id", required=True)
+    promote.add_argument(
+        "--data-root", type=Path, default=DEFAULT_MANIFEST_PATH.parent
+    )
+    promote.add_argument(
+        "--environment", choices=[STAGING_ENVIRONMENT], required=True
+    )
+    promote.add_argument("--json", action="store_true")
+    rollback = subparsers.add_parser(
+        "rollback",
+        help="Roll back the isolated staging warehouse pointer",
+    )
+    rollback.add_argument(
+        "--data-root", type=Path, default=DEFAULT_MANIFEST_PATH.parent
+    )
+    rollback.add_argument(
+        "--environment", choices=[STAGING_ENVIRONMENT], required=True
+    )
+    rollback.add_argument("--json", action="store_true")
     return parser
 
 
@@ -349,6 +393,41 @@ def _render_acquisition(payload: dict, *, dry_run: bool) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
+    if args.command in {"build-release", "promote", "rollback"}:
+        try:
+            if args.command == "build-release":
+                payload = build_warehouse_release(
+                    data_root=args.data_root,
+                    source_run_id=args.source_run_id,
+                    backup_manifest_path=args.backup_manifest,
+                ).to_dict()
+                heading = "Staging warehouse release built"
+            elif args.command == "promote":
+                payload = promote_staging_release(
+                    args.data_root, args.warehouse_release_id
+                )
+                heading = "Staging warehouse release promoted"
+            else:
+                payload = rollback_staging_release(args.data_root)
+                heading = "Staging warehouse release rolled back"
+        except (OSError, ValueError, ReleaseError) as error:
+            payload = {
+                "environment": STAGING_ENVIRONMENT,
+                "command": args.command,
+                "error": safe_error(error),
+            }
+            if args.json:
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                print(f"Release operation failed: {payload['error']}", file=sys.stderr)
+            return EXIT_RELEASE_FAILURE
+        if args.json:
+            print(json.dumps(payload, indent=2, sort_keys=True))
+        else:
+            print(heading)
+            print(json.dumps(payload, indent=2, sort_keys=True))
+        return EXIT_HEALTHY
+
     if args.command == "acquire":
         if args.fixtures is not None and not args.dry_run:
             message = "Fixture metadata is allowed only with --dry-run"
