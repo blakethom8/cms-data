@@ -135,6 +135,25 @@ be traceable to a Git commit; copying an unversioned working directory is not an
 state. Do not add Airflow or another orchestration platform until systemd can no longer provide the
 required scheduling, locking, retry, and observability.
 
+The first non-production Hetzner layout is now established under `/srv/cms-data-platform/`:
+
+```text
+code/<full-git-commit>/    detached, clean, immutable code checkouts
+staging/code-current      atomic symlink used only by staging commands
+data/runs/<source>/<run>/ immutable acquired artifacts and per-run manifests
+data/manifests.json       staging manifest store
+backups/<backup-id>/      verified warehouse baselines and backup metadata
+locks/                    advisory locks for one-at-a-time staging operations
+rehearsal/                pointers and evidence used only for rollback drills
+```
+
+The first staged Hospital Enrollments run was executed from a full-commit checkout, validated, and
+left `not_promoted`. A separate baseline copy of the active warehouse was checksum-matched and
+opened read-only, and isolated staging pointers completed atomic switch/rollback rehearsals. No
+production service references this staging root, and no production database pointer or service was
+changed. The repository still lacks a versioned DuckDB builder and a production promotion command;
+those must be implemented and tested before this layout can become the serving path.
+
 ## Data-Use Guardrails
 
 CMS public-use data and FOIA-disclosable NPPES data generally do not require a business agreement,
