@@ -23,10 +23,9 @@ logger = logging.getLogger(__name__)
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
-NPPES_DOWNLOAD_URL = os.getenv(
-    "NPPES_URL",
-    "https://download.cms.gov/nppes/NPPES_Data_Dissemination_January_2026.zip",
-)
+# Optional operator override. Without one, the official download index is resolved
+# at execution time so a dated archive URL never becomes pipeline configuration.
+NPPES_DOWNLOAD_URL = os.getenv("NPPES_URL")
 
 NPPES_ZIP_PATH = RAW_DIR / "nppes.zip"
 NPPES_RAW_DIR = RAW_DIR / "nppes"
@@ -80,13 +79,25 @@ def download_nppes(overwrite: bool = False) -> Path:
         logger.info("NPPES ZIP already exists: %s (%.1f GB, skipping)", NPPES_ZIP_PATH, size_gb)
         return NPPES_ZIP_PATH
 
-    logger.info("Downloading NPPES from %s (~9GB, this will take 20-30 min)...", NPPES_DOWNLOAD_URL)
+    source_url = NPPES_DOWNLOAD_URL
+    if not source_url:
+        from .discovery import discover_source
+
+        discovery = discover_source("nppes_monthly_v2")
+        if discovery.release is None:
+            raise RuntimeError(
+                "Could not resolve the current NPPES monthly V2 archive: "
+                f"{discovery.error_summary or discovery.state.value}"
+            )
+        source_url = discovery.release.source_url
+
+    logger.info("Downloading NPPES from %s (~9GB, this will take 20-30 min)...", source_url)
 
     # Check for partial download to support resume
     partial_path = NPPES_ZIP_PATH.with_suffix(".zip.partial")
     start_byte = partial_path.stat().st_size if partial_path.exists() else 0
 
-    req = urllib.request.Request(NPPES_DOWNLOAD_URL)
+    req = urllib.request.Request(source_url)
     if start_byte > 0:
         req.add_header("Range", f"bytes={start_byte}-")
         logger.info("Resuming download from byte %d (%.1f GB)", start_byte, start_byte / (1024**3))
