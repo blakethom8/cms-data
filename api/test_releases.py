@@ -22,8 +22,10 @@ from pipeline.manifests import (
 from pipeline.releases import (
     HOSPITAL_COLUMN_MAP,
     ReleaseError,
+    WAREHOUSE_RELEASE_SCHEMA_VERSION,
     WarehouseReleaseStore,
     build_warehouse_release,
+    compare_warehouse_release,
     promote_staging_release,
     rollback_staging_release,
     sha256_file,
@@ -35,29 +37,34 @@ SOURCE_RELEASE_ID = "cms_hospital_enrollments-fixture"
 CODE_COMMIT = "a" * 40
 
 
-def _hospital_csv(*, header: tuple[str, ...] | None = None) -> bytes:
+def _hospital_csv(
+    *,
+    header: tuple[str, ...] | None = None,
+    rows: tuple[dict[str, str], ...] | None = None,
+) -> bytes:
     columns = header or tuple(source for source, _ in HOSPITAL_COLUMN_MAP)
-    values = {column: "" for column in columns}
-    values.update(
-        {
-            "ENROLLMENT ID": "E100",
-            "ENROLLMENT STATE": "CA",
-            "PROVIDER TYPE CODE": "00-09",
-            "PROVIDER TYPE TEXT": "PART A PROVIDER - HOSPITAL",
-            "NPI": "1234567890",
-            "MULTIPLE NPI FLAG": "N",
-            "CCN": "050001",
-            "ASSOCIATE ID": "A100",
-            "ORGANIZATION NAME": "Example Hospital",
-            "STATE": "CA",
-            "ZIP CODE": "90001",
-            "SUBGROUP - GENERAL": "Y",
-        }
-    )
+    default = {
+        "ENROLLMENT ID": "E100",
+        "ENROLLMENT STATE": "CA",
+        "PROVIDER TYPE CODE": "00-09",
+        "PROVIDER TYPE TEXT": "PART A PROVIDER - HOSPITAL",
+        "NPI": "1234567890",
+        "MULTIPLE NPI FLAG": "N",
+        "CCN": "050001",
+        "ASSOCIATE ID": "A100",
+        "ORGANIZATION NAME": "Example Hospital",
+        "STATE": "CA",
+        "ZIP CODE": "90001",
+        "SUBGROUP - GENERAL": "Y",
+    }
     stream = io.StringIO(newline="")
     writer = csv.writer(stream, lineterminator="\n")
     writer.writerow(columns)
-    writer.writerow([values[column] for column in columns])
+    for override in rows or ({},):
+        values = {column: "" for column in columns}
+        values.update(default)
+        values.update(override)
+        writer.writerow([values[column] for column in columns])
     return stream.getvalue().encode("utf-8")
 
 
@@ -98,13 +105,57 @@ def _stage_source(data_root: Path, payload: bytes | None = None) -> RunManifest:
     return manifest
 
 
-def _verified_backup(tmp_path: Path) -> tuple[Path, Path, str]:
+def _verified_backup(
+    tmp_path: Path,
+    *,
+    practices: tuple[tuple[str, str, str, str], ...] | None = None,
+) -> tuple[Path, Path, str]:
     backup = tmp_path / "backup" / "provider_searcher.duckdb"
     backup.parent.mkdir(parents=True)
     connection = duckdb.connect(str(backup))
     try:
+        practice_rows = practices or (
+            ("9999999999", "PAC100", "Example Hospital", "CA"),
+        )
         connection.execute("CREATE TABLE core_providers (npi VARCHAR PRIMARY KEY)")
-        connection.execute("INSERT INTO core_providers VALUES ('9999999999')")
+        connection.executemany(
+            "INSERT INTO core_providers VALUES (?)",
+            [(row[0],) for row in practice_rows],
+        )
+        connection.execute(
+            """
+            CREATE TABLE practice_locations (
+                npi VARCHAR,
+                group_pac_id VARCHAR,
+                group_legal_name VARCHAR,
+                group_state VARCHAR,
+                state VARCHAR
+            )
+            """
+        )
+        connection.executemany(
+            "INSERT INTO practice_locations VALUES (?, ?, ?, ?, ?)",
+            [(npi, pac, name, state, state) for npi, pac, name, state in practice_rows],
+        )
+        connection.execute(
+            """
+            CREATE TABLE hospital_affiliations (
+                npi VARCHAR NOT NULL,
+                hospital_npi VARCHAR NOT NULL,
+                hospital_ccn VARCHAR,
+                hospital_name VARCHAR,
+                hospital_city VARCHAR,
+                hospital_state VARCHAR,
+                hospital_zip VARCHAR,
+                hospital_subgroup VARCHAR,
+                affiliation_source VARCHAR NOT NULL,
+                confidence_level VARCHAR,
+                group_pac_id VARCHAR,
+                data_year INTEGER NOT NULL,
+                PRIMARY KEY (npi, hospital_npi)
+            )
+            """
+        )
         connection.execute("CREATE TABLE baseline_marker (value VARCHAR)")
         connection.execute("INSERT INTO baseline_marker VALUES ('preserved')")
         connection.execute(
@@ -163,8 +214,15 @@ def test_build_release_copies_baseline_loads_source_and_records_provenance(
     assert result.release.validation_state == ValidationState.PASSED
     assert result.release.promotion_state == PromotionState.NOT_PROMOTED
     assert result.release.pipeline_code_commit == CODE_COMMIT
+    assert result.release.duckdb_version == duckdb.__version__
     assert result.release.table_counts["raw_hospital_enrollments"] == 1
     assert result.release.table_counts["core_providers"] == 1
+    assert result.release.table_counts["hospital_affiliations"] == 1
+    assert result.release.table_counts["ambiguous_hospital_name_state_keys"] == 0
+    assert (
+        result.release.validation_details["affiliation_match_policy"]
+        == "normalized_name_and_state_unique_hospital_npi_v1"
+    )
     assert result.release.sha256 == sha256_file(result.database_path)
 
     connection = duckdb.connect(str(result.database_path), read_only=True)
@@ -176,6 +234,13 @@ def test_build_release_copies_baseline_loads_source_and_records_provenance(
             """
         ).fetchone()
         marker = connection.execute("SELECT value FROM baseline_marker").fetchone()[0]
+        affiliation = connection.execute(
+            """
+            SELECT npi, hospital_npi, hospital_name, affiliation_source,
+                   confidence_level, data_year
+            FROM hospital_affiliations
+            """
+        ).fetchone()
     finally:
         connection.close()
     assert row == (
@@ -185,10 +250,19 @@ def test_build_release_copies_baseline_loads_source_and_records_provenance(
         "2099-07-01/2099-07-31",
     )
     assert marker == "preserved"
+    assert affiliation == (
+        "9999999999",
+        "1234567890",
+        "Example Hospital",
+        "cms_reassignment_legal_name_state",
+        "medium",
+        2099,
+    )
 
     stored = WarehouseReleaseStore(data_root / "warehouse-releases.json").load()
     assert stored.releases[0].to_dict() == result.release.to_dict()
     per_release = json.loads(result.release_manifest_path.read_text())
+    assert per_release["schema_version"] == WAREHOUSE_RELEASE_SCHEMA_VERSION
     assert per_release["release"] == result.release.to_dict()
 
 
@@ -212,6 +286,121 @@ def test_schema_ddl_matches_canonical_raw_hospital_loader() -> None:
         "source_data_period",
         "ingested_at",
     ]
+
+
+def test_affiliation_transform_excludes_ambiguous_names_and_labels_dba_matches(
+    tmp_path: Path,
+) -> None:
+    data_root = tmp_path / "data"
+    _stage_source(
+        data_root,
+        _hospital_csv(
+            rows=(
+                {
+                    "ENROLLMENT ID": "E101",
+                    "NPI": "1111111111",
+                    "CCN": "050101",
+                    "ORGANIZATION NAME": "Shared Health System",
+                },
+                {
+                    "ENROLLMENT ID": "E102",
+                    "NPI": "2222222222",
+                    "CCN": "050102",
+                    "ORGANIZATION NAME": "Shared Health System",
+                },
+                {
+                    "ENROLLMENT ID": "E103",
+                    "NPI": "3333333333",
+                    "CCN": "050103",
+                    "ORGANIZATION NAME": "Unique Legal Hospital",
+                    "DOING BUSINESS AS NAME": "Community DBA Hospital",
+                },
+            )
+        ),
+    )
+    _, backup_manifest, _ = _verified_backup(
+        tmp_path,
+        practices=(
+            ("9000000001", "PAC101", "Shared Health System", "CA"),
+            ("9000000002", "PAC102", "Community DBA Hospital", "CA"),
+        ),
+    )
+
+    result = build_warehouse_release(
+        data_root=data_root,
+        source_run_id=SOURCE_RUN_ID,
+        backup_manifest_path=backup_manifest,
+        code_commit=CODE_COMMIT,
+    )
+
+    connection = duckdb.connect(str(result.database_path), read_only=True)
+    try:
+        rows = connection.execute(
+            """
+            SELECT npi, hospital_npi, affiliation_source, confidence_level
+            FROM hospital_affiliations
+            ORDER BY npi
+            """
+        ).fetchall()
+    finally:
+        connection.close()
+    assert rows == [
+        (
+            "9000000002",
+            "3333333333",
+            "cms_reassignment_dba_name_state",
+            "low",
+        )
+    ]
+    assert result.release.table_counts["ambiguous_hospital_name_state_keys"] == 1
+    assert result.release.table_counts["unambiguous_hospital_name_state_keys"] == 2
+
+
+def test_warehouse_release_store_upgrades_schema_version_one(tmp_path: Path) -> None:
+    data_root, _, _, result = _build(tmp_path)
+    legacy_release = result.release.to_dict()
+    legacy_release.pop("duckdb_version")
+    legacy_release.pop("validation_details")
+    store_path = data_root / "legacy-releases.json"
+    store_path.write_text(
+        json.dumps({"schema_version": 1, "releases": [legacy_release]})
+    )
+
+    loaded = WarehouseReleaseStore(store_path).load()
+
+    assert loaded.schema_version == WAREHOUSE_RELEASE_SCHEMA_VERSION
+    assert loaded.releases[0].duckdb_version is None
+    assert loaded.releases[0].validation_details == {}
+
+
+def test_release_comparison_is_read_only_and_records_evidence(tmp_path: Path) -> None:
+    data_root, backup, _, result = _build(tmp_path)
+    backup_manifest = backup.parent / "backup-manifest.json"
+    before = {
+        backup: (backup.stat().st_size, backup.stat().st_mtime_ns, sha256_file(backup)),
+        result.database_path: (
+            result.database_path.stat().st_size,
+            result.database_path.stat().st_mtime_ns,
+            sha256_file(result.database_path),
+        ),
+    }
+
+    comparison = compare_warehouse_release(
+        data_root=data_root,
+        warehouse_release_id=result.release.warehouse_release_id,
+        backup_manifest_path=backup_manifest,
+    )
+
+    assert comparison["state"] == "passed"
+    assert comparison["unexpected_differences"] == []
+    assert comparison["changed_tables"]["hospital_affiliations"] == {
+        "baseline_rows": 0,
+        "candidate_rows": 1,
+    }
+    assert comparison["representative_affiliations"][0]["npi"] == "9999999999"
+    assert Path(comparison["comparison_path"]).is_file()
+    for path, identity in before.items():
+        assert (path.stat().st_size, path.stat().st_mtime_ns, sha256_file(path)) == identity
 
 
 def test_build_release_fails_closed_on_publisher_header_change(tmp_path: Path) -> None:
@@ -363,6 +552,24 @@ def test_release_cli_json_and_exit_codes(
     built = json.loads(capsys.readouterr().out)
     release_id = built["release"]["warehouse_release_id"]
     assert build_code == EXIT_HEALTHY
+
+    compare_code = main(
+        [
+            "compare-release",
+            "--environment",
+            "staging",
+            "--warehouse-release-id",
+            release_id,
+            "--backup-manifest",
+            str(backup_manifest),
+            "--data-root",
+            str(data_root),
+            "--json",
+        ]
+    )
+    compared = json.loads(capsys.readouterr().out)
+    assert compare_code == EXIT_HEALTHY
+    assert compared["state"] == "passed"
 
     promote_code = main(
         [

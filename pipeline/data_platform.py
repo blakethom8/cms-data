@@ -34,6 +34,7 @@ from .releases import (
     STAGING_ENVIRONMENT,
     ReleaseError,
     build_warehouse_release,
+    compare_warehouse_release,
     promote_staging_release,
     rollback_staging_release,
 )
@@ -328,6 +329,19 @@ def _parser() -> argparse.ArgumentParser:
         "--environment", choices=[STAGING_ENVIRONMENT], required=True
     )
     build.add_argument("--json", action="store_true")
+    compare = subparsers.add_parser(
+        "compare-release",
+        help="Compare a validated staging candidate with its immutable baseline",
+    )
+    compare.add_argument("--warehouse-release-id", required=True)
+    compare.add_argument("--backup-manifest", required=True, type=Path)
+    compare.add_argument(
+        "--data-root", type=Path, default=DEFAULT_MANIFEST_PATH.parent
+    )
+    compare.add_argument(
+        "--environment", choices=[STAGING_ENVIRONMENT], required=True
+    )
+    compare.add_argument("--json", action="store_true")
     promote = subparsers.add_parser(
         "promote",
         help="Atomically activate a validated release in staging only",
@@ -393,7 +407,7 @@ def _render_acquisition(payload: dict, *, dry_run: bool) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
-    if args.command in {"build-release", "promote", "rollback"}:
+    if args.command in {"build-release", "compare-release", "promote", "rollback"}:
         try:
             if args.command == "build-release":
                 payload = build_warehouse_release(
@@ -402,6 +416,13 @@ def main(argv: list[str] | None = None) -> int:
                     backup_manifest_path=args.backup_manifest,
                 ).to_dict()
                 heading = "Staging warehouse release built"
+            elif args.command == "compare-release":
+                payload = compare_warehouse_release(
+                    data_root=args.data_root,
+                    warehouse_release_id=args.warehouse_release_id,
+                    backup_manifest_path=args.backup_manifest,
+                )
+                heading = "Staging warehouse release comparison passed"
             elif args.command == "promote":
                 payload = promote_staging_release(
                     args.data_root, args.warehouse_release_id

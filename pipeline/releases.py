@@ -33,11 +33,17 @@ from .manifests import (
     ValidationState,
 )
 
-WAREHOUSE_RELEASE_SCHEMA_VERSION = 1
+WAREHOUSE_RELEASE_SCHEMA_VERSION = 2
+SUPPORTED_WAREHOUSE_RELEASE_SCHEMA_VERSIONS = frozenset({1, 2})
 PROMOTION_JOURNAL_SCHEMA_VERSION = 1
+COMPARISON_SCHEMA_VERSION = 1
 COPY_CHUNK_BYTES = 8 * 1024 * 1024
 STAGING_ENVIRONMENT = "staging"
 HOSPITAL_SOURCE_ID = "cms_hospital_enrollments"
+AFFILIATION_MATCH_POLICY = "normalized_name_and_state_unique_hospital_npi_v1"
+AFFILIATION_CHANGED_TABLES = frozenset(
+    {"raw_hospital_enrollments", "hospital_affiliations"}
+)
 
 HOSPITAL_COLUMN_MAP: tuple[tuple[str, str], ...] = (
     ("ENROLLMENT ID", "enrollment_id"),
@@ -95,9 +101,11 @@ class WarehouseRelease:
     baseline_path: str
     baseline_sha256: str
     database_path: str
+    duckdb_version: str | None = None
     byte_size: int | None = None
     sha256: str | None = None
     table_counts: dict[str, int] = field(default_factory=dict)
+    validation_details: dict[str, object] = field(default_factory=dict)
     validation_state: ValidationState = ValidationState.NOT_RUN
     validation_timestamp: str | None = None
     promotion_state: PromotionState = PromotionState.NOT_PROMOTED
@@ -121,6 +129,8 @@ class WarehouseRelease:
             raise ValueError("byte_size cannot be negative")
         if any(not isinstance(value, int) or value < 0 for value in self.table_counts.values()):
             raise ValueError("table_counts values must be non-negative integers")
+        if not isinstance(self.validation_details, dict):
+            raise ValueError("validation_details must be an object")
         if self.error_summary is not None:
             self.error_summary = safe_error(self.error_summary)
 
@@ -133,9 +143,11 @@ class WarehouseRelease:
             "baseline_path": self.baseline_path,
             "baseline_sha256": self.baseline_sha256,
             "database_path": self.database_path,
+            "duckdb_version": self.duckdb_version,
             "byte_size": self.byte_size,
             "sha256": self.sha256,
             "table_counts": dict(sorted(self.table_counts.items())),
+            "validation_details": self.validation_details,
             "validation_state": self.validation_state.value,
             "validation_timestamp": self.validation_timestamp,
             "promotion_state": self.promotion_state.value,
@@ -157,9 +169,11 @@ class WarehouseRelease:
                 baseline_path=value["baseline_path"],
                 baseline_sha256=value["baseline_sha256"],
                 database_path=value["database_path"],
+                duckdb_version=value.get("duckdb_version"),
                 byte_size=value.get("byte_size"),
                 sha256=value.get("sha256"),
                 table_counts=value.get("table_counts") or {},
+                validation_details=value.get("validation_details") or {},
                 validation_state=ValidationState(
                     value.get("validation_state", ValidationState.NOT_RUN.value)
                 ),
@@ -183,7 +197,7 @@ class WarehouseReleaseDocument:
     schema_version: int = WAREHOUSE_RELEASE_SCHEMA_VERSION
 
     def __post_init__(self) -> None:
-        if self.schema_version != WAREHOUSE_RELEASE_SCHEMA_VERSION:
+        if self.schema_version not in SUPPORTED_WAREHOUSE_RELEASE_SCHEMA_VERSIONS:
             raise ValueError(
                 f"Unsupported warehouse release schema_version {self.schema_version}"
             )
@@ -198,7 +212,7 @@ class WarehouseReleaseDocument:
     def from_dict(cls, value: dict) -> WarehouseReleaseDocument:
         if not isinstance(value, dict):
             raise ValueError("warehouse release document must be an object")
-        if value.get("schema_version") != WAREHOUSE_RELEASE_SCHEMA_VERSION:
+        if value.get("schema_version") not in SUPPORTED_WAREHOUSE_RELEASE_SCHEMA_VERSIONS:
             raise ValueError(
                 "Unsupported warehouse release schema_version "
                 f"{value.get('schema_version')!r}"
@@ -208,7 +222,7 @@ class WarehouseReleaseDocument:
             raise ValueError("warehouse release document is missing releases")
         return cls(
             releases=[WarehouseRelease.from_dict(row) for row in rows],
-            schema_version=value["schema_version"],
+            schema_version=WAREHOUSE_RELEASE_SCHEMA_VERSION,
         )
 
 
@@ -473,10 +487,236 @@ def _load_hospital_rows(
     return inserted
 
 
+def _require_table_columns(
+    connection: duckdb.DuckDBPyConnection,
+    table: str,
+    required: set[str],
+) -> None:
+    rows = connection.execute(
+        """
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'main' AND table_name = ?
+        """,
+        [table],
+    ).fetchall()
+    present = {row[0] for row in rows}
+    missing = sorted(required - present)
+    if missing:
+        raise ReleaseError(
+            f"Candidate table {table} is missing required columns: {', '.join(missing)}"
+        )
+
+
+def _hospital_data_year(source_data_period: str) -> int:
+    year = source_data_period[:4]
+    if len(source_data_period) < 4 or not year.isdigit():
+        raise ReleaseError(
+            "Hospital source_data_period does not begin with a four-digit year"
+        )
+    return int(year)
+
+
+def _rebuild_hospital_affiliations(
+    connection: duckdb.DuckDBPyConnection,
+    *,
+    data_year: int,
+) -> dict[str, int]:
+    """Replace affiliations using only unambiguous normalized name/state keys.
+
+    Practice locations currently lack usable city and ZIP provenance. A normalized
+    name/state key is therefore accepted only when it identifies exactly one
+    hospital NPI in the publisher snapshot. Ambiguous health-system names are
+    excluded rather than fanned out across every hospital in the system.
+    """
+    _require_table_columns(
+        connection,
+        "practice_locations",
+        {"npi", "group_pac_id", "group_legal_name", "group_state", "state"},
+    )
+    _require_table_columns(
+        connection,
+        "hospital_affiliations",
+        {
+            "npi",
+            "hospital_npi",
+            "hospital_ccn",
+            "hospital_name",
+            "hospital_city",
+            "hospital_state",
+            "hospital_zip",
+            "hospital_subgroup",
+            "affiliation_source",
+            "confidence_level",
+            "group_pac_id",
+            "data_year",
+        },
+    )
+    baseline_count = connection.execute(
+        "SELECT count(*) FROM hospital_affiliations"
+    ).fetchone()[0]
+
+    connection.execute(
+        """
+        CREATE OR REPLACE TEMP TABLE hospital_affiliation_hospitals AS
+        SELECT * EXCLUDE (preferred)
+        FROM (
+            SELECT *,
+                row_number() OVER (
+                    PARTITION BY npi
+                    ORDER BY
+                        CASE
+                            WHEN upper(trim(coalesce(practice_location_type, '')))
+                                IN ('MAIN', 'PRIMARY', 'PRIMARY PRACTICE LOCATION')
+                            THEN 0 ELSE 1
+                        END,
+                        CASE WHEN nullif(trim(ccn), '') IS NOT NULL THEN 0 ELSE 1 END,
+                        ccn NULLS LAST,
+                        enrollment_id NULLS LAST,
+                        address_line_1 NULLS LAST
+                ) AS preferred
+            FROM raw_hospital_enrollments
+        )
+        WHERE preferred = 1
+        """
+    )
+    connection.execute(
+        """
+        CREATE OR REPLACE TEMP TABLE hospital_affiliation_match_keys AS
+        WITH names AS (
+            SELECT
+                npi AS hospital_npi,
+                regexp_replace(upper(trim(organization_name)), '[^A-Z0-9]', '', 'g')
+                    AS match_name,
+                upper(trim(state)) AS match_state,
+                1 AS match_priority
+            FROM hospital_affiliation_hospitals
+            WHERE nullif(trim(organization_name), '') IS NOT NULL
+              AND nullif(trim(state), '') IS NOT NULL
+
+            UNION ALL
+
+            SELECT
+                npi,
+                regexp_replace(
+                    upper(trim(doing_business_as_name)), '[^A-Z0-9]', '', 'g'
+                ),
+                upper(trim(state)),
+                2
+            FROM hospital_affiliation_hospitals
+            WHERE nullif(trim(doing_business_as_name), '') IS NOT NULL
+              AND nullif(trim(state), '') IS NOT NULL
+        ),
+        collapsed AS (
+            SELECT hospital_npi, match_name, match_state, min(match_priority) match_priority
+            FROM names
+            WHERE match_name <> ''
+            GROUP BY hospital_npi, match_name, match_state
+        )
+        SELECT
+            match_name,
+            match_state,
+            min(hospital_npi) AS hospital_npi,
+            min(match_priority) AS match_priority,
+            count(DISTINCT hospital_npi) AS hospital_count
+        FROM collapsed
+        GROUP BY match_name, match_state
+        """
+    )
+
+    connection.execute("DELETE FROM hospital_affiliations")
+    connection.execute(
+        """
+        INSERT INTO hospital_affiliations (
+            npi, hospital_npi, hospital_ccn, hospital_name,
+            hospital_city, hospital_state, hospital_zip, hospital_subgroup,
+            affiliation_source, confidence_level, group_pac_id, data_year
+        )
+        WITH practices AS (
+            SELECT DISTINCT
+                p.npi AS provider_npi,
+                p.group_pac_id,
+                regexp_replace(
+                    upper(trim(p.group_legal_name)), '[^A-Z0-9]', '', 'g'
+                ) AS match_name,
+                upper(trim(coalesce(
+                    nullif(trim(p.group_state), ''),
+                    nullif(trim(p.state), '')
+                ))) AS match_state
+            FROM practice_locations p
+            INNER JOIN core_providers c ON c.npi = p.npi
+            WHERE nullif(trim(p.group_legal_name), '') IS NOT NULL
+              AND coalesce(
+                    nullif(trim(p.group_state), ''),
+                    nullif(trim(p.state), '')
+                  ) IS NOT NULL
+        ),
+        candidates AS (
+            SELECT
+                p.provider_npi,
+                p.group_pac_id,
+                k.hospital_npi,
+                k.match_priority,
+                row_number() OVER (
+                    PARTITION BY p.provider_npi, k.hospital_npi
+                    ORDER BY k.match_priority, p.group_pac_id NULLS LAST
+                ) AS preferred_match
+            FROM practices p
+            INNER JOIN hospital_affiliation_match_keys k
+                USING (match_name, match_state)
+            WHERE k.hospital_count = 1
+        )
+        SELECT
+            c.provider_npi,
+            c.hospital_npi,
+            nullif(trim(h.ccn), ''),
+            h.organization_name,
+            h.city,
+            h.state,
+            h.zip_code,
+            CASE
+                WHEN upper(h.subgroup_acute_care) = 'Y' THEN 'acute_care'
+                WHEN upper(h.subgroup_psychiatric) = 'Y' THEN 'psychiatric'
+                WHEN upper(h.subgroup_rehabilitation) = 'Y' THEN 'rehabilitation'
+                WHEN upper(h.subgroup_long_term) = 'Y' THEN 'long_term'
+                WHEN upper(h.subgroup_childrens) = 'Y' THEN 'childrens'
+                WHEN upper(h.subgroup_specialty_hospital) = 'Y' THEN 'specialty'
+                ELSE 'general'
+            END,
+            CASE c.match_priority
+                WHEN 1 THEN 'cms_reassignment_legal_name_state'
+                ELSE 'cms_reassignment_dba_name_state'
+            END,
+            CASE c.match_priority WHEN 1 THEN 'medium' ELSE 'low' END,
+            c.group_pac_id,
+            ?
+        FROM candidates c
+        INNER JOIN hospital_affiliation_hospitals h ON h.npi = c.hospital_npi
+        WHERE c.preferred_match = 1
+        """,
+        [data_year],
+    )
+
+    stats = connection.execute(
+        """
+        SELECT
+            count(*) FILTER (WHERE hospital_count = 1),
+            count(*) FILTER (WHERE hospital_count > 1)
+        FROM hospital_affiliation_match_keys
+        """
+    ).fetchone()
+    return {
+        "baseline_hospital_affiliations": int(baseline_count),
+        "unambiguous_hospital_name_state_keys": int(stats[0]),
+        "ambiguous_hospital_name_state_keys": int(stats[1]),
+    }
+
+
 def _validate_candidate(
     connection: duckdb.DuckDBPyConnection,
     expected_source_rows: int,
-) -> dict[str, int]:
+    transform_counts: dict[str, int],
+) -> tuple[dict[str, int], dict[str, object]]:
     core_providers = connection.execute("SELECT count(*) FROM core_providers").fetchone()[0]
     source_rows = connection.execute(
         "SELECT count(*) FROM raw_hospital_enrollments"
@@ -498,6 +738,74 @@ def _validate_candidate(
     distinct_hospital_npis = connection.execute(
         "SELECT count(DISTINCT npi) FROM raw_hospital_enrollments"
     ).fetchone()[0]
+    affiliation_rows = connection.execute(
+        "SELECT count(*) FROM hospital_affiliations"
+    ).fetchone()[0]
+    affiliated_providers = connection.execute(
+        "SELECT count(DISTINCT npi) FROM hospital_affiliations"
+    ).fetchone()[0]
+    affiliated_hospitals = connection.execute(
+        "SELECT count(DISTINCT hospital_npi) FROM hospital_affiliations"
+    ).fetchone()[0]
+    duplicate_affiliations = connection.execute(
+        """
+        SELECT count(*) FROM (
+            SELECT npi, hospital_npi
+            FROM hospital_affiliations
+            GROUP BY npi, hospital_npi
+            HAVING count(*) > 1
+        )
+        """
+    ).fetchone()[0]
+    missing_providers = connection.execute(
+        """
+        SELECT count(*)
+        FROM hospital_affiliations a
+        LEFT JOIN core_providers p ON p.npi = a.npi
+        WHERE p.npi IS NULL
+        """
+    ).fetchone()[0]
+    missing_hospitals = connection.execute(
+        """
+        SELECT count(*)
+        FROM hospital_affiliations a
+        LEFT JOIN raw_hospital_enrollments h ON h.npi = a.hospital_npi
+        WHERE h.npi IS NULL
+        """
+    ).fetchone()[0]
+    invalid_affiliation_values = connection.execute(
+        """
+        SELECT count(*)
+        FROM hospital_affiliations
+        WHERE NOT regexp_full_match(npi, '[0-9]{10}')
+           OR NOT regexp_full_match(hospital_npi, '[0-9]{10}')
+           OR (affiliation_source = 'cms_reassignment_legal_name_state'
+               AND confidence_level <> 'medium')
+           OR (affiliation_source = 'cms_reassignment_dba_name_state'
+               AND confidence_level <> 'low')
+           OR affiliation_source NOT IN (
+               'cms_reassignment_legal_name_state',
+               'cms_reassignment_dba_name_state'
+           )
+        """
+    ).fetchone()[0]
+    source_breakdown = connection.execute(
+        """
+        SELECT affiliation_source, count(*)
+        FROM hospital_affiliations
+        GROUP BY affiliation_source
+        ORDER BY affiliation_source
+        """
+    ).fetchall()
+    representatives = connection.execute(
+        """
+        SELECT npi, hospital_npi, hospital_name, hospital_state,
+               affiliation_source, confidence_level
+        FROM hospital_affiliations
+        ORDER BY npi, hospital_npi
+        LIMIT 5
+        """
+    ).fetchall()
     table_count = connection.execute(
         "SELECT count(*) FROM information_schema.tables WHERE table_schema = ?",
         ["main"],
@@ -517,12 +825,59 @@ def _validate_candidate(
         )
     if distinct_hospital_npis <= 0:
         raise ReleaseError("Candidate warehouse has no distinct hospital NPIs")
-    return {
+    if affiliation_rows <= 0:
+        raise ReleaseError("Candidate warehouse has no validated hospital affiliations")
+    if duplicate_affiliations:
+        raise ReleaseError(
+            f"Candidate warehouse contains {duplicate_affiliations} duplicate affiliations"
+        )
+    if missing_providers:
+        raise ReleaseError(
+            f"Candidate warehouse contains {missing_providers} affiliations without providers"
+        )
+    if missing_hospitals:
+        raise ReleaseError(
+            f"Candidate warehouse contains {missing_hospitals} affiliations without hospitals"
+        )
+    if invalid_affiliation_values:
+        raise ReleaseError(
+            "Candidate warehouse contains "
+            f"{invalid_affiliation_values} invalid affiliation values"
+        )
+    counts = {
         "core_providers": int(core_providers),
         "raw_hospital_enrollments": int(source_rows),
         "distinct_hospital_npis": int(distinct_hospital_npis),
+        "hospital_affiliations": int(affiliation_rows),
+        "affiliated_providers": int(affiliated_providers),
+        "affiliated_hospitals": int(affiliated_hospitals),
         "database_tables": int(table_count),
+        **transform_counts,
     }
+    details: dict[str, object] = {
+        "affiliation_match_policy": AFFILIATION_MATCH_POLICY,
+        "affiliation_source_counts": {
+            str(source): int(count) for source, count in source_breakdown
+        },
+        "integrity": {
+            "duplicate_provider_hospital_pairs": int(duplicate_affiliations),
+            "missing_core_providers": int(missing_providers),
+            "missing_raw_hospitals": int(missing_hospitals),
+            "invalid_affiliation_values": int(invalid_affiliation_values),
+        },
+        "representative_affiliations": [
+            {
+                "npi": row[0],
+                "hospital_npi": row[1],
+                "hospital_name": row[2],
+                "hospital_state": row[3],
+                "affiliation_source": row[4],
+                "confidence_level": row[5],
+            }
+            for row in representatives
+        ],
+    }
+    return counts, details
 
 
 def build_warehouse_release(
@@ -557,6 +912,7 @@ def build_warehouse_release(
             baseline_path=str(baseline),
             baseline_sha256=baseline_sha,
             database_path=relative_database_path,
+            duckdb_version=duckdb.__version__,
         )
         document.releases.append(release)
         _save_release_document(data_root, document)
@@ -577,7 +933,13 @@ def build_warehouse_release(
                         f"Loaded {inserted} hospital rows; expected "
                         f"{manifest.row_counts['source_rows']}"
                     )
-                table_counts = _validate_candidate(connection, inserted)
+                transform_counts = _rebuild_hospital_affiliations(
+                    connection,
+                    data_year=_hospital_data_year(manifest.source_data_period),
+                )
+                table_counts, validation_details = _validate_candidate(
+                    connection, inserted, transform_counts
+                )
                 connection.execute("COMMIT")
                 connection.execute("CHECKPOINT")
             except Exception:
@@ -592,6 +954,7 @@ def build_warehouse_release(
             release.byte_size = partial_path.stat().st_size
             release.sha256 = sha256_file(partial_path)
             release.table_counts = table_counts
+            release.validation_details = validation_details
             release.validation_state = ValidationState.PASSED
             release.validation_timestamp = utc_now()
             os.replace(partial_path, database_path)
@@ -609,6 +972,159 @@ def build_warehouse_release(
         release_manifest_path=_release_manifest_path(data_root, warehouse_release_id),
         release_store_path=release_store_path,
     )
+
+
+def _database_table_counts(
+    connection: duckdb.DuckDBPyConnection,
+) -> dict[str, int]:
+    tables = [
+        row[0]
+        for row in connection.execute(
+            """
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = 'main' AND table_type = 'BASE TABLE'
+            ORDER BY table_name
+            """
+        ).fetchall()
+    ]
+    counts: dict[str, int] = {}
+    for table in tables:
+        quoted = table.replace('"', '""')
+        counts[table] = int(
+            connection.execute(f'SELECT count(*) FROM "{quoted}"').fetchone()[0]
+        )
+    return counts
+
+
+def compare_warehouse_release(
+    *,
+    data_root: Path,
+    warehouse_release_id: str,
+    backup_manifest_path: Path,
+) -> dict:
+    """Compare a validated candidate with its immutable baseline, read-only."""
+    with _exclusive_lock(data_root / "locks" / "comparison.lock"):
+        document = WarehouseReleaseStore(_release_store_path(data_root)).load()
+        release = _find_release(document, warehouse_release_id)
+        candidate = _verify_promotable(data_root, release)
+        baseline, baseline_sha, baseline_bytes = _load_backup_manifest(
+            backup_manifest_path
+        )
+        if baseline.resolve() != Path(release.baseline_path).resolve():
+            raise ReleaseError("Comparison backup path does not match the release baseline")
+        if baseline_sha != release.baseline_sha256:
+            raise ReleaseError("Comparison backup SHA-256 does not match the release baseline")
+        if baseline_bytes is not None and baseline.stat().st_size != baseline_bytes:
+            raise ReleaseError("Comparison backup byte size no longer matches its manifest")
+        if sha256_file(baseline) != baseline_sha:
+            raise ReleaseError("Comparison backup no longer matches its SHA-256")
+
+        baseline_identity = (baseline.stat().st_size, baseline.stat().st_mtime_ns)
+        candidate_identity = (candidate.stat().st_size, candidate.stat().st_mtime_ns)
+        baseline_connection = duckdb.connect(str(baseline), read_only=True)
+        candidate_connection = duckdb.connect(str(candidate), read_only=True)
+        try:
+            baseline_counts = _database_table_counts(baseline_connection)
+            candidate_counts = _database_table_counts(candidate_connection)
+            representatives = candidate_connection.execute(
+                """
+                SELECT npi, hospital_npi, hospital_name, hospital_state,
+                       affiliation_source, confidence_level
+                FROM hospital_affiliations
+                ORDER BY npi, hospital_npi
+                LIMIT 10
+                """
+            ).fetchall()
+        finally:
+            candidate_connection.close()
+            baseline_connection.close()
+
+        if baseline_identity != (baseline.stat().st_size, baseline.stat().st_mtime_ns):
+            raise ReleaseError("Comparison baseline changed during its read-only inspection")
+        if candidate_identity != (candidate.stat().st_size, candidate.stat().st_mtime_ns):
+            raise ReleaseError("Comparison candidate changed during its read-only inspection")
+
+        table_names = set(baseline_counts) | set(candidate_counts)
+        invariant_tables = sorted(table_names - AFFILIATION_CHANGED_TABLES)
+        unexpected_differences = [
+            {
+                "table": table,
+                "baseline_rows": baseline_counts.get(table),
+                "candidate_rows": candidate_counts.get(table),
+            }
+            for table in invariant_tables
+            if baseline_counts.get(table) != candidate_counts.get(table)
+        ]
+        changed_tables = {
+            table: {
+                "baseline_rows": baseline_counts.get(table),
+                "candidate_rows": candidate_counts.get(table),
+            }
+            for table in sorted(AFFILIATION_CHANGED_TABLES)
+        }
+        required_counts = {
+            "core_providers": candidate_counts.get("core_providers", 0),
+            "practice_locations": candidate_counts.get("practice_locations", 0),
+            "hospital_affiliations": candidate_counts.get("hospital_affiliations", 0),
+            "raw_hospital_enrollments": candidate_counts.get(
+                "raw_hospital_enrollments", 0
+            ),
+        }
+        failed_requirements = [
+            table for table, count in required_counts.items() if count <= 0
+        ]
+        state = (
+            "passed"
+            if not unexpected_differences and not failed_requirements
+            else "failed"
+        )
+        payload = {
+            "schema_version": COMPARISON_SCHEMA_VERSION,
+            "generated_at": utc_now(),
+            "state": state,
+            "warehouse_release_id": warehouse_release_id,
+            "pipeline_code_commit": release.pipeline_code_commit,
+            "duckdb_version": release.duckdb_version,
+            "baseline": {
+                "database_path": str(baseline),
+                "sha256": baseline_sha,
+                "byte_size": baseline.stat().st_size,
+            },
+            "candidate": {
+                "database_path": str(candidate),
+                "sha256": release.sha256,
+                "byte_size": candidate.stat().st_size,
+            },
+            "unchanged_table_count": len(invariant_tables),
+            "changed_tables": changed_tables,
+            "required_candidate_counts": required_counts,
+            "unexpected_differences": unexpected_differences,
+            "failed_requirements": failed_requirements,
+            "representative_affiliations": [
+                {
+                    "npi": row[0],
+                    "hospital_npi": row[1],
+                    "hospital_name": row[2],
+                    "hospital_state": row[3],
+                    "affiliation_source": row[4],
+                    "confidence_level": row[5],
+                }
+                for row in representatives
+            ],
+        }
+        comparison_path = (
+            data_root / "releases" / warehouse_release_id / "comparison.json"
+        )
+        _atomic_write_json(comparison_path, payload)
+        payload["comparison_path"] = str(comparison_path)
+        if state != "passed":
+            raise ReleaseError(
+                "Candidate comparison failed: "
+                f"unexpected_differences={len(unexpected_differences)}, "
+                f"failed_requirements={','.join(failed_requirements) or 'none'}"
+            )
+        return payload
 
 
 def _release_database(data_root: Path, release: WarehouseRelease) -> Path:
