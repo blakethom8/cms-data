@@ -61,11 +61,39 @@ fingerprint, row count, source period, and code commit. The resulting manifest r
   --data-root data --json
 ```
 
+### Versioned staging warehouses
+
+A validated source run can be loaded into a complete candidate copied from a checksum-verified
+warehouse backup. The environment flag is intentionally restricted to `staging`:
+
+```bash
+.venv/bin/python -m pipeline.data_platform build-release \
+  --environment staging \
+  --source-run-id <validated-run-id> \
+  --backup-manifest <verified-backup-manifest.json> \
+  --data-root data --json
+
+.venv/bin/python -m pipeline.data_platform promote \
+  --environment staging \
+  --warehouse-release-id <warehouse-release-id> \
+  --data-root data --json
+
+.venv/bin/python -m pipeline.data_platform rollback \
+  --environment staging \
+  --data-root data --json
+```
+
+The builder never opens `DUCKDB_PATH`. It copies the verified backup to a new partial candidate,
+loads `raw_hospital_enrollments`, runs row/schema/NPI/API-baseline checks, computes the completed
+database checksum, and then atomically renames it. Promotion changes only the staging symlink and
+records a recoverable journal. There is no production promotion option.
+
 Focused data-platform tests run from the API test directory so they are included in the repository's
 complete suite:
 
 ```bash
-cd api && ../.venv/bin/python -m pytest test_data_platform.py test_acquisition.py -q
+cd api && ../.venv/bin/python -m pytest \
+  test_data_platform.py test_acquisition.py test_releases.py -q
 cd api && ../.venv/bin/python -m pytest -q
 ```
 

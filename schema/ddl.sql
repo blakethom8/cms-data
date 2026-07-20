@@ -163,6 +163,60 @@ CREATE INDEX IF NOT EXISTS idx_hospital_aff_state ON hospital_affiliations(hospi
 
 
 ------------------------------------------------------------
+-- Staged raw source: CMS Hospital Enrollments
+-- One row per publisher record with immutable run provenance.
+------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS raw_hospital_enrollments (
+    enrollment_id                   VARCHAR,
+    enrollment_state                VARCHAR,
+    provider_type_code              VARCHAR,
+    provider_type_text              VARCHAR,
+    npi                             VARCHAR,
+    multiple_npi_flag               VARCHAR,
+    ccn                             VARCHAR,
+    associate_id                    VARCHAR,
+    organization_name               VARCHAR,
+    doing_business_as_name          VARCHAR,
+    incorporation_date              VARCHAR,
+    incorporation_state             VARCHAR,
+    organization_type_structure     VARCHAR,
+    organization_other_type_text    VARCHAR,
+    proprietary_nonprofit           VARCHAR,
+    address_line_1                  VARCHAR,
+    address_line_2                  VARCHAR,
+    city                            VARCHAR,
+    state                           VARCHAR,
+    zip_code                        VARCHAR,
+    practice_location_type          VARCHAR,
+    location_other_type_text        VARCHAR,
+    subgroup_general                VARCHAR,
+    subgroup_acute_care             VARCHAR,
+    subgroup_alcohol_drug           VARCHAR,
+    subgroup_childrens              VARCHAR,
+    subgroup_long_term              VARCHAR,
+    subgroup_psychiatric            VARCHAR,
+    subgroup_rehabilitation         VARCHAR,
+    subgroup_short_term             VARCHAR,
+    subgroup_swing_bed_approved     VARCHAR,
+    subgroup_psychiatric_unit       VARCHAR,
+    subgroup_rehabilitation_unit    VARCHAR,
+    subgroup_specialty_hospital     VARCHAR,
+    subgroup_other                  VARCHAR,
+    subgroup_other_text             VARCHAR,
+    reh_conversion_flag             VARCHAR,
+    reh_conversion_date             VARCHAR,
+    cah_or_hospital_ccn             VARCHAR,
+    source_run_id                   VARCHAR NOT NULL,
+    source_release_id               VARCHAR NOT NULL,
+    source_data_period              VARCHAR NOT NULL,
+    ingested_at                     TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_raw_hospital_enrollments_npi
+    ON raw_hospital_enrollments(npi);
+
+
+------------------------------------------------------------
 -- Supplementary Table: provider_service_detail
 -- Source: by_provider_and_service (NPI + HCPCS)
 ------------------------------------------------------------

@@ -147,12 +147,34 @@ locks/                    advisory locks for one-at-a-time staging operations
 rehearsal/                pointers and evidence used only for rollback drills
 ```
 
-The first staged Hospital Enrollments run was executed from a full-commit checkout, validated, and
-left `not_promoted`. A separate baseline copy of the active warehouse was checksum-matched and
-opened read-only, and isolated staging pointers completed atomic switch/rollback rehearsals. No
-production service references this staging root, and no production database pointer or service was
-changed. The repository still lacks a versioned DuckDB builder and a production promotion command;
-those must be implemented and tested before this layout can become the serving path.
+The first staged Hospital Enrollments run was executed from a full-commit checkout and validated. A
+separate baseline copy of the active warehouse was checksum-matched and opened read-only, and
+isolated staging pointers completed atomic switch/rollback rehearsals. No production service
+references this staging root, and no production database pointer or service was changed.
+
+`pipeline/releases.py` now implements the versioned staging warehouse path:
+
+- `build-release --environment staging` requires a validated source run and a backup manifest that
+  proves the baseline path, byte size, SHA-256, and successful read-only open;
+- the baseline is streamed into a new `warehouse.duckdb.partial` while its checksum and stable file
+  identity are revalidated, so the active `DUCKDB_PATH` is never opened;
+- the candidate transactionally replaces `raw_hospital_enrollments`, retaining the complete
+  baseline warehouse needed by the API and adding source run, source release, source period, and
+  ingestion metadata to every raw row;
+- the Hospital Enrollments header must exactly match the 39-column canonical mapping. A missing,
+  extra, or reordered publisher column fails the release instead of being guessed;
+- validation checks baseline providers, source row parity, NPI shape, hospital names, distinct NPIs,
+  and table counts before checkpointing and hashing the completed candidate;
+- `promote --environment staging` verifies the candidate checksum and atomically changes only
+  `data/staging/warehouse-current`; and
+- `rollback --environment staging` restores the journaled prior staging pointer and source/release
+  states. A failed metadata write restores both pointer and manifests, while an interrupted pending
+  journal blocks further transitions for operator review.
+
+Warehouse release records live in `data/warehouse-releases.json`, per-release evidence lives beside
+each immutable database, and transition evidence lives in `data/promotion-journal.json`. Production
+is not an accepted CLI environment. A production promotion command, systemd integration, and active
+service change remain a separate approval-gated milestone.
 
 ## Data-Use Guardrails
 
