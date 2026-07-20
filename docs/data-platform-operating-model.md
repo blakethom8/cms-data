@@ -114,8 +114,8 @@ passed, promotion state is active, retrieval is recorded, and `release_id` equal
 - accepts only HTTPS artifacts on `data.cms.gov` and rejects cross-host redirects;
 - enforces a 100 MiB default transfer ceiling while streaming to `source.csv.partial`;
 - atomically renames the artifact only after the response completes and the file is flushed;
-- validates a non-empty UTF-8 CSV, unique column names, required enrollment/NPI/organization fields,
-  exact row widths, and ten-digit NPIs;
+- validates a non-empty UTF-8 or Windows-1252 CSV, records the detected encoding, and checks unique
+  column names, required enrollment/NPI/organization fields, exact row widths, and ten-digit NPIs;
 - records actual bytes, SHA-256, an ordered-header schema fingerprint, source row count, discovery and
   retrieval timestamps, source period, publisher release/version, and Git commit; and
 - writes a per-run manifest plus the local versioned manifest store with validation state `passed`

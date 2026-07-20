@@ -44,6 +44,7 @@ class RunManifest:
     byte_size: int | None = None
     sha256: str | None = None
     schema_fingerprint: str | None = None
+    source_encoding: str | None = None
     row_counts: dict[str, int] = field(default_factory=dict)
     pipeline_code_commit: str | None = None
     validation_state: ValidationState = ValidationState.NOT_RUN
@@ -100,6 +101,7 @@ class RunManifest:
             "byte_size": self.byte_size,
             "sha256": self.sha256,
             "schema_fingerprint": self.schema_fingerprint,
+            "source_encoding": self.source_encoding,
             "row_counts": dict(sorted(self.row_counts.items())),
             "pipeline_code_commit": self.pipeline_code_commit,
             "validation_state": self.validation_state.value,
@@ -132,6 +134,7 @@ class RunManifest:
                 byte_size=value.get("byte_size"),
                 sha256=value.get("sha256"),
                 schema_fingerprint=value.get("schema_fingerprint"),
+                source_encoding=value.get("source_encoding"),
                 row_counts=value.get("row_counts") or {},
                 pipeline_code_commit=value.get("pipeline_code_commit"),
                 validation_state=ValidationState(

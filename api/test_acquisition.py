@@ -86,6 +86,7 @@ def test_hospital_acquisition_is_atomic_hashed_validated_and_manifested(
     assert result.manifest.byte_size == len(VALID_CSV)
     assert result.manifest.sha256 == hashlib.sha256(VALID_CSV).hexdigest()
     assert result.manifest.schema_fingerprint.startswith("sha256:")
+    assert result.manifest.source_encoding == "utf-8-sig"
     assert result.manifest.row_counts == {"source_rows": 2}
     assert result.manifest.validation_state == ValidationState.PASSED
     assert result.manifest.promotion_state == PromotionState.NOT_PROMOTED
@@ -151,6 +152,19 @@ def test_hospital_validator_rejects_bad_npi(tmp_path: Path) -> None:
 
     with pytest.raises(AcquisitionError, match="row 2 has an invalid NPI"):
         inspect_hospital_enrollments(artifact)
+
+
+def test_hospital_validator_accepts_and_records_windows_1252(tmp_path: Path) -> None:
+    artifact = tmp_path / "hospital.csv"
+    artifact.write_bytes(
+        b"ENROLLMENT ID,NPI,CCN,ORGANIZATION NAME,STATE\n"
+        b"E1,1234567890,123456,MERCY HEALTH \xbf DILLER,CA\n"
+    )
+
+    inspection = inspect_hospital_enrollments(artifact)
+
+    assert inspection.row_count == 1
+    assert inspection.source_encoding == "cp1252"
 
 
 def test_acquire_dry_run_uses_fixtures_and_writes_nothing(

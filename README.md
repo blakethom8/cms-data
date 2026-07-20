@@ -52,9 +52,9 @@ publisher discovery but does not download or write anything:
 
 An actual acquisition writes only below the selected staging data root. It caps the download at
 100 MiB by default, streams to `source.csv.partial`, atomically renames the completed artifact,
-validates required columns and NPIs, and records byte count, SHA-256, schema fingerprint, row count,
-source period, and code commit. The resulting manifest remains `not_promoted`; this command never
-opens DuckDB or changes an active release pointer.
+validates required columns and NPIs, and records byte count, SHA-256, source encoding, schema
+fingerprint, row count, source period, and code commit. The resulting manifest remains
+`not_promoted`; this command never opens DuckDB or changes an active release pointer.
 
 ```bash
 .venv/bin/python -m pipeline.data_platform acquire cms_hospital_enrollments \
