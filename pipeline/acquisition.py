@@ -70,6 +70,7 @@ class ArtifactInspection:
     byte_size: int
     sha256: str
     schema_fingerprint: str
+    source_encoding: str
     row_count: int
 
 
@@ -198,8 +199,23 @@ def inspect_hospital_enrollments(path: Path) -> ArtifactInspection:
             byte_size += len(chunk)
             digest.update(chunk)
 
+    source_encoding: str | None = None
+    for candidate in ("utf-8-sig", "cp1252"):
+        try:
+            with path.open("r", encoding=candidate, newline="") as handle:
+                while handle.read(DOWNLOAD_CHUNK_BYTES):
+                    pass
+        except UnicodeDecodeError:
+            continue
+        source_encoding = candidate
+        break
+    if source_encoding is None:
+        raise AcquisitionError(
+            "Hospital Enrollments CSV is neither valid UTF-8 nor Windows-1252"
+        )
+
     try:
-        with path.open("r", encoding="utf-8-sig", newline="") as handle:
+        with path.open("r", encoding=source_encoding, newline="") as handle:
             reader = csv.reader(handle)
             header = next(reader, None)
             if not header:
@@ -228,8 +244,6 @@ def inspect_hospital_enrollments(path: Path) -> ArtifactInspection:
                         f"Hospital Enrollments CSV row {line_number} has an invalid NPI"
                     )
                 row_count += 1
-    except UnicodeDecodeError as error:
-        raise AcquisitionError("Hospital Enrollments CSV is not valid UTF-8") from error
     except csv.Error as error:
         raise AcquisitionError(f"Hospital Enrollments CSV is malformed: {safe_error(error)}") from error
 
@@ -243,6 +257,7 @@ def inspect_hospital_enrollments(path: Path) -> ArtifactInspection:
         byte_size=byte_size,
         sha256=digest.hexdigest(),
         schema_fingerprint=schema_fingerprint,
+        source_encoding=source_encoding,
         row_count=row_count,
     )
 
@@ -306,6 +321,7 @@ def acquire_release(
         if inspection.byte_size != downloaded_size or inspection.sha256 != downloaded_sha:
             raise AcquisitionError("Artifact changed between retrieval and validation")
         manifest.schema_fingerprint = inspection.schema_fingerprint
+        manifest.source_encoding = inspection.source_encoding
         manifest.row_counts = {"source_rows": inspection.row_count}
         manifest.validation_state = ValidationState.PASSED
         manifest.validation_timestamp = utc_now()
