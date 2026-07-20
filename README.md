@@ -41,11 +41,31 @@ publisher version matches live discovery. Missing or ambiguous provenance remain
 Exit codes are `0` for all current, `1` for any stale or unknown source, and `2` for publisher
 unavailability or a discovery-contract error.
 
+### Immutable staged acquisition
+
+Hospital Enrollments is the first source supported by the acquisition path. A dry run performs live
+publisher discovery but does not download or write anything:
+
+```bash
+.venv/bin/python -m pipeline.data_platform acquire cms_hospital_enrollments --dry-run
+```
+
+An actual acquisition writes only below the selected staging data root. It caps the download at
+100 MiB by default, streams to `source.csv.partial`, atomically renames the completed artifact,
+validates required columns and NPIs, and records byte count, SHA-256, schema fingerprint, row count,
+source period, and code commit. The resulting manifest remains `not_promoted`; this command never
+opens DuckDB or changes an active release pointer.
+
+```bash
+.venv/bin/python -m pipeline.data_platform acquire cms_hospital_enrollments \
+  --data-root data --json
+```
+
 Focused data-platform tests run from the API test directory so they are included in the repository's
 complete suite:
 
 ```bash
-cd api && ../.venv/bin/python -m pytest test_data_platform.py -q
+cd api && ../.venv/bin/python -m pytest test_data_platform.py test_acquisition.py -q
 cd api && ../.venv/bin/python -m pytest -q
 ```
 
