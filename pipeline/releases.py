@@ -807,7 +807,11 @@ def _validate_candidate(
         """
     ).fetchall()
     table_count = connection.execute(
-        "SELECT count(*) FROM information_schema.tables WHERE table_schema = ?",
+        """
+        SELECT count(*)
+        FROM information_schema.tables
+        WHERE table_schema = ? AND table_type = 'BASE TABLE'
+        """,
         ["main"],
     ).fetchone()[0]
     if core_providers <= 0:
