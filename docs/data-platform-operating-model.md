@@ -105,6 +105,28 @@ The status command only reads this file. A manifest proves an installed version 
 passed, promotion state is active, retrieval is recorded, and `release_id` equals
 `active_release_id`; file modification time is never provenance.
 
+## First Immutable Acquisition
+
+`pipeline/acquisition.py` makes lifecycle steps 2 and 3 concrete for CMS Hospital Enrollments. The
+`pipeline.data_platform acquire cms_hospital_enrollments` command:
+
+- resolves the current CSV through live `data.json` discovery instead of a dated URL in code;
+- accepts only HTTPS artifacts on `data.cms.gov` and rejects cross-host redirects;
+- enforces a 100 MiB default transfer ceiling while streaming to `source.csv.partial`;
+- atomically renames the artifact only after the response completes and the file is flushed;
+- validates a non-empty UTF-8 CSV, unique column names, required enrollment/NPI/organization fields,
+  exact row widths, and ten-digit NPIs;
+- records actual bytes, SHA-256, an ordered-header schema fingerprint, source row count, discovery and
+  retrieval timestamps, source period, publisher release/version, and Git commit; and
+- writes a per-run manifest plus the local versioned manifest store with validation state `passed`
+  and promotion state `not_promoted`.
+
+Run directories use `data/runs/<source-id>/<UTC timestamp>-<random suffix>/` and are never reused or
+overwritten. Failed retrieval or validation runs retain a safe failed manifest and leave the active
+warehouse unchanged. `--dry-run` performs discovery and path planning without creating the data
+root. Fixture metadata is deliberately accepted only with `--dry-run`, so fixture-derived publisher
+versions cannot be acquired as promotion candidates.
+
 ## Production Model
 
 Use versioned releases on the Hetzner data server and systemd oneshot services plus timers. The API

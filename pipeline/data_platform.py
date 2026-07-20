@@ -1,6 +1,7 @@
-"""Read-only data-platform status command.
+"""Public healthcare data-platform status and staged acquisition commands.
 
-Usage: ``python -m pipeline.data_platform status``
+Status is strictly read-only. Acquisition writes only immutable run artifacts and
+manifests under the selected data root; it never opens or promotes a DuckDB file.
 """
 
 from __future__ import annotations
@@ -12,7 +13,22 @@ from dataclasses import asdict, dataclass
 from enum import Enum
 from pathlib import Path
 
-from .discovery import DiscoveryResult, DiscoveryState, discover_all, safe_error, utc_now
+from .acquisition import (
+    DEFAULT_MAX_DOWNLOAD_BYTES,
+    SUPPORTED_ACQUISITION_SOURCES,
+    AcquisitionError,
+    acquire_release,
+    make_run_id,
+    release_id,
+)
+from .discovery import (
+    DiscoveryResult,
+    DiscoveryState,
+    discover_all,
+    discover_source,
+    safe_error,
+    utc_now,
+)
 from .manifests import ManifestDocument, ManifestStore
 from .source_registry import SOURCE_REGISTRY, SourceSpec
 
@@ -22,6 +38,7 @@ DEFAULT_FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "publisher_
 EXIT_HEALTHY = 0
 EXIT_STALE_OR_UNKNOWN = 1
 EXIT_DISCOVERY_FAILURE = 2
+EXIT_ACQUISITION_FAILURE = 3
 
 
 class FreshnessStatus(str, Enum):
@@ -254,13 +271,165 @@ def _parser() -> argparse.ArgumentParser:
     status.add_argument(
         "--timeout", type=float, default=30.0, help="Per-metadata-request timeout in seconds"
     )
+    acquire = subparsers.add_parser(
+        "acquire",
+        help="Discover and immutably acquire a supported source into staging",
+    )
+    acquire.add_argument("source_id", choices=sorted(SUPPORTED_ACQUISITION_SOURCES))
+    acquire.add_argument(
+        "--data-root",
+        type=Path,
+        default=DEFAULT_MANIFEST_PATH.parent,
+        help="Staging data root; run artifacts are written below runs/<source>/<run-id>",
+    )
+    acquire.add_argument(
+        "--manifest",
+        type=Path,
+        help="Manifest store path (defaults to <data-root>/manifests.json)",
+    )
+    acquire.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
+    acquire.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Discover and show the proposed run without downloading or writing files",
+    )
+    acquire.add_argument(
+        "--fixtures",
+        type=Path,
+        help="Use checked-in-style publisher metadata fixtures; intended for dry-run tests",
+    )
+    acquire.add_argument(
+        "--timeout", type=float, default=60.0, help="Publisher request timeout in seconds"
+    )
+    acquire.add_argument(
+        "--max-bytes",
+        type=int,
+        default=DEFAULT_MAX_DOWNLOAD_BYTES,
+        help="Hard transfer limit; defaults to 100 MiB",
+    )
     return parser
+
+
+def _discover_for_acquisition(
+    source_id: str, *, fixture_dir: Path | None, timeout: float
+) -> DiscoveryResult:
+    if fixture_dir is not None:
+        return discover_all(fixture_dir=fixture_dir, timeout=timeout)[source_id]
+    return discover_source(source_id, timeout=timeout)
+
+
+def _render_acquisition(payload: dict, *, dry_run: bool) -> str:
+    if dry_run:
+        return "\n".join(
+            [
+                "Immutable acquisition dry run",
+                f"Source: {payload['source_id']}",
+                f"Publisher version: {payload['publisher_version']}",
+                f"Source period: {payload['source_data_period']}",
+                f"Source URL: {payload['source_url']}",
+                f"Proposed run: {payload['proposed_run_directory']}",
+                "No files were downloaded or written.",
+            ]
+        )
+    manifest = payload["manifest"]
+    return "\n".join(
+        [
+            "Immutable acquisition completed",
+            f"Source: {manifest['source_id']}",
+            f"Publisher version: {manifest['publisher_version']}",
+            f"Source period: {manifest['source_data_period']}",
+            f"Rows: {manifest['row_counts'].get('source_rows', 0)}",
+            f"Bytes: {manifest['byte_size']}",
+            f"SHA-256: {manifest['sha256']}",
+            f"Run directory: {payload['run_directory']}",
+            "Promotion state: not_promoted",
+        ]
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
-    if args.command != "status":
-        return EXIT_DISCOVERY_FAILURE
+    if args.command == "acquire":
+        if args.fixtures is not None and not args.dry_run:
+            message = "Fixture metadata is allowed only with --dry-run"
+            if args.json:
+                print(json.dumps({"error": message}, indent=2, sort_keys=True))
+            else:
+                print(f"Acquisition failed: {message}", file=sys.stderr)
+            return EXIT_ACQUISITION_FAILURE
+        try:
+            discovery = _discover_for_acquisition(
+                args.source_id,
+                fixture_dir=args.fixtures,
+                timeout=args.timeout,
+            )
+        except (OSError, ValueError) as error:
+            discovery = DiscoveryResult(
+                source_id=args.source_id,
+                state=DiscoveryState.ERROR,
+                discovered_at=utc_now(),
+                error_summary=safe_error(error),
+            )
+        if discovery.state != DiscoveryState.AVAILABLE or discovery.release is None:
+            payload = {
+                "source_id": args.source_id,
+                "discovery_state": discovery.state.value,
+                "error": discovery.error_summary
+                or "Publisher discovery returned no usable release.",
+            }
+            if args.json:
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                print(f"Acquisition unavailable: {payload['error']}", file=sys.stderr)
+            return EXIT_DISCOVERY_FAILURE
+
+        release = discovery.release
+        manifest_path = args.manifest or args.data_root / "manifests.json"
+        if args.dry_run:
+            proposed_run_id = make_run_id()
+            payload = {
+                "dry_run": True,
+                "source_id": release.source_id,
+                "publisher_version": release.publisher_version,
+                "release_id": release_id(release.source_id, release.publisher_version),
+                "source_data_period": release.source_data_period,
+                "publisher_release_timestamp": release.publisher_release_timestamp,
+                "source_url": release.source_url,
+                "manifest_path": str(manifest_path),
+                "proposed_run_directory": str(
+                    args.data_root / "runs" / release.source_id / proposed_run_id
+                ),
+                "wrote_files": False,
+            }
+            if args.json:
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                print(_render_acquisition(payload, dry_run=True))
+            return EXIT_HEALTHY
+
+        try:
+            result = acquire_release(
+                release,
+                discovery_timestamp=discovery.discovered_at,
+                data_root=args.data_root,
+                manifest_path=manifest_path,
+                max_bytes=args.max_bytes,
+                timeout=args.timeout,
+            )
+        except (AcquisitionError, OSError, ValueError) as error:
+            payload = {"source_id": args.source_id, "error": safe_error(error)}
+            if args.json:
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                print(f"Acquisition failed: {payload['error']}", file=sys.stderr)
+            return EXIT_ACQUISITION_FAILURE
+        payload = result.to_dict()
+        if args.json:
+            print(json.dumps(payload, indent=2, sort_keys=True))
+        else:
+            print(_render_acquisition(payload, dry_run=False))
+        return EXIT_HEALTHY
+
     fixture_dir = DEFAULT_FIXTURE_DIR if args.offline else args.fixtures
     discovery_mode = f"fixtures:{fixture_dir}" if fixture_dir else "live"
     try:
