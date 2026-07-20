@@ -161,10 +161,21 @@ references this staging root, and no production database pointer or service was 
 - the candidate transactionally replaces `raw_hospital_enrollments`, retaining the complete
   baseline warehouse needed by the API and adding source run, source release, source period, and
   ingestion metadata to every raw row;
+- the candidate replaces `hospital_affiliations` from `practice_locations` and the current hospital
+  snapshot. Names are normalized to uppercase ASCII alphanumerics and joined with state, but a key
+  is accepted only when it identifies exactly one hospital NPI. Legal-name matches are `medium`
+  confidence, DBA-name matches are `low`, and ambiguous health-system names are excluded rather
+  than expanded to every hospital in that system;
 - the Hospital Enrollments header must exactly match the 39-column canonical mapping. A missing,
   extra, or reordered publisher column fails the release instead of being guessed;
 - validation checks baseline providers, source row parity, NPI shape, hospital names, distinct NPIs,
-  and table counts before checkpointing and hashing the completed candidate;
+  affiliation uniqueness and referential integrity, allowed confidence/source pairs, ambiguity
+  counts, and representative affiliations before checkpointing and hashing the completed candidate;
+- warehouse-release schema version 2 records the DuckDB runtime version and structured validation
+  evidence while reading existing schema-version-1 records compatibly;
+- `compare-release --environment staging` verifies both candidate and immutable-baseline checksums,
+  opens both databases read-only, requires every table outside the two intended hospital tables to
+  retain its row count, checks required API tables, and writes `comparison.json` beside the release;
 - `promote --environment staging` verifies the candidate checksum and atomically changes only
   `data/staging/warehouse-current`; and
 - `rollback --environment staging` restores the journaled prior staging pointer and source/release
@@ -175,6 +186,16 @@ Warehouse release records live in `data/warehouse-releases.json`, per-release ev
 each immutable database, and transition evidence lives in `data/promotion-journal.json`. Production
 is not an accepted CLI environment. A production promotion command, systemd integration, and active
 service change remain a separate approval-gated milestone.
+
+The name/state affiliation rule is intentionally incomplete. The current `practice_locations`
+snapshot has no populated city or ZIP values, so it cannot safely disambiguate a health system with
+multiple hospital NPIs in one state. Those keys remain excluded until a higher-quality linkage key
+is acquired and separately validated. The API and downstream product must present these rows as
+inferred affiliations with their confidence level, not as publisher-asserted clinician privileges.
+
+DuckDB is pinned to `1.4.4`, matching the runtime already used by the Hetzner API and the staging
+release rehearsal. Candidate builds record that version so runtime drift is visible in release
+evidence.
 
 ## Data-Use Guardrails
 
