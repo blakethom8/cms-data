@@ -3,6 +3,8 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .source_registry import SOURCE_REGISTRY
+
 # ── Paths ─────────────────────────────────────────────────────────────────────
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
@@ -43,70 +45,70 @@ DATASETS: dict[str, DatasetConfig] = {
     # ── #1  Physician by Provider (foundational) ──────────────────────────────
     "physician_by_provider": DatasetConfig(
         name="physician_by_provider",
-        uuid="8889d81e-2ee7-448f-8713-f071038289b5",
+        uuid=SOURCE_REGISTRY["cms_physician_by_provider"].discovery_key,
         acquisition="csv",
         description="NPI + name + address + specialty + utilization + chronic conditions",
     ),
     # ── #2  Physician by Provider and Service ─────────────────────────────────
     "physician_by_provider_and_service": DatasetConfig(
         name="physician_by_provider_and_service",
-        uuid="92396110-2aed-4d63-a6a2-5d6207d46a29",
+        uuid=SOURCE_REGISTRY["cms_physician_by_provider_and_service"].discovery_key,
         acquisition="csv",
         description="NPI + HCPCS drill-down for procedure-level targeting",
     ),
     # ── #3  Part D Prescribers by Provider ────────────────────────────────────
     "part_d_by_provider": DatasetConfig(
         name="part_d_by_provider",
-        uuid="14d8e8a9-7e9b-4370-a044-bf97c46b4b44",
+        uuid=SOURCE_REGISTRY["cms_part_d_by_provider"].discovery_key,
         acquisition="csv",
         description="NPI-level prescribing: total claims, drug cost, brand/generic split",
     ),
     # ── #4  Part D Prescribers by Provider and Drug ───────────────────────────
     "part_d_by_provider_and_drug": DatasetConfig(
         name="part_d_by_provider_and_drug",
-        uuid="9552739e-3d05-4c1b-8eff-ecabf391e2e5",
+        uuid=SOURCE_REGISTRY["cms_part_d_by_provider_and_drug"].discovery_key,
         acquisition="csv",
         description="NPI + specific drug name and volume",
     ),
     # ── #5  Reassignment (Individual -> Group Practice) ───────────────────────
     "reassignment": DatasetConfig(
         name="reassignment",
-        uuid="e1f1fa9a-d6b4-417e-948a-c72dead8a41c",
+        uuid=SOURCE_REGISTRY["cms_revalidation_group_reassignment"].discovery_key,
         acquisition="csv",
         description="Maps individual NPI -> group practice (PAC ID, size, state)",
     ),
     # ── #6  Quality Payment Program Experience ────────────────────────────────
     "qpp_experience": DatasetConfig(
         name="qpp_experience",
-        uuid="7adb8b1b-b85c-4ed3-b314-064776e50180",
+        uuid=SOURCE_REGISTRY["cms_qpp_experience"].discovery_key,
         acquisition="csv",
         description="MIPS scores, payment adjustments, rural/HPSA status",
     ),
     # ── #7  PECOS Enrollment ──────────────────────────────────────────────────
     "pecos_enrollment": DatasetConfig(
         name="pecos_enrollment",
-        uuid="2457ea29-fc82-48b0-86ec-3b0755de7515",
+        uuid=SOURCE_REGISTRY["cms_pecos_public_provider_enrollment"].discovery_key,
         acquisition="csv",
         description="Authoritative enrollment validation, multiple_npi_flag",
     ),
     # ── #8  DME by Referring Provider ─────────────────────────────────────────
     "dme_by_referring_provider": DatasetConfig(
         name="dme_by_referring_provider",
-        uuid="f8603e5b-9c47-4c52-9b47-a4ef92dfada4",
+        uuid=SOURCE_REGISTRY["cms_dme_by_referring_provider"].discovery_key,
         acquisition="csv",
         description="NPI-level DME referral volume for device sales targeting",
     ),
     # ── #9  Order and Referring ────────────────────────────────────────────────
     "order_and_referring": DatasetConfig(
         name="order_and_referring",
-        uuid="c99b5865-1119-4436-bb80-c5af2773ea1f",
+        uuid=SOURCE_REGISTRY["cms_order_and_referring"].discovery_key,
         acquisition="csv",
         description="Eligibility flags: Part B / DME / HHA / Hospice ordering",
     ),
     # ── #10 Hospital Enrollments ──────────────────────────────────────────────
     "hospital_enrollments": DatasetConfig(
         name="hospital_enrollments",
-        uuid="f6f6505c-e8b0-4d57-b258-e2b94133aaf2",
+        uuid=SOURCE_REGISTRY["cms_hospital_enrollments"].discovery_key,
         acquisition="api",
         description="Hospital NPI, CCN, address, subgroup type (~8K rows)",
     ),

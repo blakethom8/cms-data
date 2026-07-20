@@ -14,6 +14,41 @@ This pipeline consolidates fragmented CMS public datasets into a unified data wa
 - Entity resolution across disparate data sources
 - API access for downstream applications
 
+For the current repository boundaries, refresh policies, promotion model, and implementation order,
+see [`docs/data-platform-operating-model.md`](docs/data-platform-operating-model.md). Some older
+examples below describe planned directories or commands; verify operational behavior against the
+current `pipeline/`, `schema/`, and `api/` code.
+
+### Read-only source status
+
+The data-platform status command discovers publisher releases without downloading bulk files or
+opening DuckDB:
+
+```bash
+# Live publisher metadata
+.venv/bin/python -m pipeline.data_platform status
+
+# Machine-readable output
+.venv/bin/python -m pipeline.data_platform status --json
+
+# Checked-in metadata fixtures; no network access
+.venv/bin/python -m pipeline.data_platform status --offline --json
+```
+
+By default the command reads `data/manifests.json` if it exists, but it never creates or updates the
+file. A source is `current` only when a validated, actively promoted manifest proves that its
+publisher version matches live discovery. Missing or ambiguous provenance remains `unknown`.
+Exit codes are `0` for all current, `1` for any stale or unknown source, and `2` for publisher
+unavailability or a discovery-contract error.
+
+Focused data-platform tests run from the API test directory so they are included in the repository's
+complete suite:
+
+```bash
+cd api && ../.venv/bin/python -m pytest test_data_platform.py -q
+cd api && ../.venv/bin/python -m pytest -q
+```
+
 **Total data:** 90M+ rows across 30+ tables (~5.5GB)
 
 ---

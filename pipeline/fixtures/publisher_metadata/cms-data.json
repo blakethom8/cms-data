@@ -1,0 +1,55 @@
+{
+  "@context": "https://project-open-data.cio.gov/v1.1/schema/catalog.jsonld",
+  "dataset": [
+    {
+      "title": "Medicare Physician & Other Practitioners - by Provider",
+      "identifier": "https://data.cms.gov/data-api/v1/dataset/8889d81e-2ee7-448f-8713-f071038289b5/data-viewer",
+      "distribution": [{"format": "CSV", "downloadURL": "https://data.cms.gov/sites/default/files/2099-05/physician-provider.csv", "resourcesAPI": "https://data.cms.gov/data-api/v1/dataset-resources/10000000-0000-4000-8000-000000000001", "modified": "2099-05-21", "temporal": "2097-01-01/2097-12-31"}]
+    },
+    {
+      "title": "Medicare Physician & Other Practitioners - by Provider and Service",
+      "identifier": "https://data.cms.gov/data-api/v1/dataset/92396110-2aed-4d63-a6a2-5d6207d46a29/data-viewer",
+      "distribution": [{"format": "CSV", "downloadURL": "https://data.cms.gov/sites/default/files/2099-05/physician-service.csv", "resourcesAPI": "https://data.cms.gov/data-api/v1/dataset-resources/10000000-0000-4000-8000-000000000002", "modified": "2099-05-21", "temporal": "2097-01-01/2097-12-31"}]
+    },
+    {
+      "title": "Medicare Part D Prescribers - by Provider",
+      "identifier": "https://data.cms.gov/data-api/v1/dataset/14d8e8a9-7e9b-4370-a044-bf97c46b4b44/data-viewer",
+      "distribution": [{"format": "CSV", "downloadURL": "https://data.cms.gov/sites/default/files/2099-05/part-d-provider.csv", "resourcesAPI": "https://data.cms.gov/data-api/v1/dataset-resources/10000000-0000-4000-8000-000000000003", "modified": "2099-05-21", "temporal": "2097-01-01/2097-12-31"}]
+    },
+    {
+      "title": "Medicare Part D Prescribers - by Provider and Drug",
+      "identifier": "https://data.cms.gov/data-api/v1/dataset/9552739e-3d05-4c1b-8eff-ecabf391e2e5/data-viewer",
+      "distribution": [{"format": "CSV", "downloadURL": "https://data.cms.gov/sites/default/files/2099-05/part-d-drug.csv", "resourcesAPI": "https://data.cms.gov/data-api/v1/dataset-resources/10000000-0000-4000-8000-000000000004", "modified": "2099-05-21", "temporal": "2097-01-01/2097-12-31"}]
+    },
+    {
+      "title": "Medicare Durable Medical Equipment, Devices & Supplies - by Referring Provider",
+      "identifier": "https://data.cms.gov/data-api/v1/dataset/f8603e5b-9c47-4c52-9b47-a4ef92dfada4/data-viewer",
+      "distribution": [{"format": "CSV", "downloadURL": "https://data.cms.gov/sites/default/files/2099-05/dme-referring.csv", "resourcesAPI": "https://data.cms.gov/data-api/v1/dataset-resources/10000000-0000-4000-8000-000000000005", "modified": "2099-05-20", "temporal": "2097-01-01/2097-12-31"}]
+    },
+    {
+      "title": "Quality Payment Program Experience",
+      "identifier": "https://data.cms.gov/data-api/v1/dataset/7adb8b1b-b85c-4ed3-b314-064776e50180/data-viewer",
+      "distribution": [{"format": "CSV", "downloadURL": "https://data.cms.gov/sites/default/files/2099-05/qpp.csv", "resourcesAPI": "https://data.cms.gov/data-api/v1/dataset-resources/10000000-0000-4000-8000-000000000006", "modified": "2099-05-19", "temporal": "2097-01-01/2097-12-31"}]
+    },
+    {
+      "title": "Medicare Fee-For-Service Public Provider Enrollment",
+      "identifier": "https://data.cms.gov/data-api/v1/dataset/2457ea29-fc82-48b0-86ec-3b0755de7515/data-viewer",
+      "distribution": [{"format": "CSV", "downloadURL": "https://data.cms.gov/sites/default/files/2099-07/pecos.csv", "resourcesAPI": "https://data.cms.gov/data-api/v1/dataset-resources/10000000-0000-4000-8000-000000000007", "modified": "2099-07-01", "temporal": "2099-04-01/2099-06-30"}]
+    },
+    {
+      "title": "Order and Referring",
+      "identifier": "https://data.cms.gov/data-api/v1/dataset/c99b5865-1119-4436-bb80-c5af2773ea1f/data-viewer",
+      "distribution": [{"format": "CSV", "downloadURL": "https://data.cms.gov/sites/default/files/2099-07/order-referring.csv", "resourcesAPI": "https://data.cms.gov/data-api/v1/dataset-resources/10000000-0000-4000-8000-000000000008", "modified": "2099-07-17", "temporal": "2099-07-05/2099-07-11"}]
+    },
+    {
+      "title": "Hospital Enrollments",
+      "identifier": "https://data.cms.gov/data-api/v1/dataset/f6f6505c-e8b0-4d57-b258-e2b94133aaf2/data-viewer",
+      "distribution": [{"format": "CSV", "downloadURL": "https://data.cms.gov/sites/default/files/2099-07/hospital-enrollments.csv", "resourcesAPI": "https://data.cms.gov/data-api/v1/dataset-resources/10000000-0000-4000-8000-000000000009", "modified": "2099-07-14", "temporal": "2099-07-01/2099-07-31"}]
+    },
+    {
+      "title": "Revalidation Clinic Group Practice Reassignment",
+      "identifier": "https://data.cms.gov/data-api/v1/dataset/e1f1fa9a-d6b4-417e-948a-c72dead8a41c/data-viewer",
+      "distribution": [{"format": "CSV", "downloadURL": "https://data.cms.gov/sites/default/files/2099-07/reassignment.csv", "resourcesAPI": "https://data.cms.gov/data-api/v1/dataset-resources/10000000-0000-4000-8000-000000000010", "modified": "2099-07-14", "temporal": "2099-07-01/2099-07-31"}]
+    }
+  ]
+}

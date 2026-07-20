@@ -15,7 +15,6 @@ Key fields:
 """
 
 import logging
-import os
 import re
 import zipfile
 from pathlib import Path
@@ -29,11 +28,6 @@ logger = logging.getLogger(__name__)
 # ── Configuration ─────────────────────────────────────────────────────────────
 
 OPEN_PAYMENTS_RAW_DIR = RAW_DIR / "open_payments"
-
-# CMS Open Payments download base URL
-# Files are named: OP_DTL_GNRL_PGYR{year}_P{publish_date}.csv
-# The publish date changes annually; we'll discover it from the ZIP contents.
-OPEN_PAYMENTS_DOWNLOAD_BASE = "https://download.cms.gov/openpayments"
 
 # Default years to download (most recent 3)
 DEFAULT_YEARS = [2022, 2023, 2024]
@@ -79,41 +73,32 @@ def download_open_payments_year(year: int, overwrite: bool = False) -> Path:
         logger.info("Open Payments %d ZIP exists: %.0f MB (skipping)", year, size_mb)
         return zip_path
 
-    # Try common URL patterns (publish date varies by year)
-    url_patterns = [
-        f"{OPEN_PAYMENTS_DOWNLOAD_BASE}/PGYR{year}_P01202026.ZIP",
-        f"{OPEN_PAYMENTS_DOWNLOAD_BASE}/PGYR{year}_P06302025.ZIP",
-        f"{OPEN_PAYMENTS_DOWNLOAD_BASE}/PGYR{year}_P01172025.ZIP",
-        f"{OPEN_PAYMENTS_DOWNLOAD_BASE}/PGYR{year}_P06302026.ZIP",
-    ]
+    from .discovery import discover_open_payments_archive
 
-    for url in url_patterns:
-        logger.info("Trying Open Payments %d: %s", year, url)
-        try:
-            req = urllib.request.Request(url)
-            with urllib.request.urlopen(req, timeout=1800) as resp:
-                total = int(resp.headers.get("content-length", 0))
-                logger.info("Downloading Open Payments %d (%.0f MB)...", year, total / (1024**2))
+    archive = discover_open_payments_archive(year)
+    logger.info("Downloading Open Payments %d from %s", year, archive.source_url)
+    req = urllib.request.Request(archive.source_url)
+    with urllib.request.urlopen(req, timeout=1800) as resp:
+        total = int(resp.headers.get("content-length", 0))
+        logger.info("Downloading Open Payments %d (%.0f MB)...", year, total / (1024**2))
 
-                with open(zip_path, "wb") as f:
-                    downloaded = 0
-                    while True:
-                        chunk = resp.read(1024 * 1024)
-                        if not chunk:
-                            break
-                        f.write(chunk)
-                        downloaded += len(chunk)
-                        if total > 0 and downloaded % (50 * 1024 * 1024) < 1024 * 1024:
-                            logger.info("  %.0f%% (%.0f MB)", (downloaded / total) * 100, downloaded / (1024**2))
+        with open(zip_path, "wb") as f:
+            downloaded = 0
+            while True:
+                chunk = resp.read(1024 * 1024)
+                if not chunk:
+                    break
+                f.write(chunk)
+                downloaded += len(chunk)
+                if total > 0 and downloaded % (50 * 1024 * 1024) < 1024 * 1024:
+                    logger.info(
+                        "  %.0f%% (%.0f MB)",
+                        (downloaded / total) * 100,
+                        downloaded / (1024**2),
+                    )
 
-            logger.info("Downloaded Open Payments %d: %s", year, zip_path)
-            return zip_path
-
-        except Exception as e:
-            logger.warning("URL failed: %s (%s)", url, e)
-            continue
-
-    raise RuntimeError(f"Could not download Open Payments for {year}. Tried: {url_patterns}")
+    logger.info("Downloaded Open Payments %d: %s", year, zip_path)
+    return zip_path
 
 
 def download_all_years(years: list[int] | None = None, overwrite: bool = False) -> dict[int, Path]:
