@@ -149,6 +149,34 @@ def test_cp1252_source_is_transcoded_for_strict_candidate_load(tmp_path: Path) -
     assert list((data_root / "staging" / "transcodes").glob("*.partial")) == []
 
 
+def test_cms_loader_handles_quoted_field_after_dialect_sample(tmp_path: Path) -> None:
+    data_root = tmp_path / "data"
+    header = b"NPI,LAST_NAME,FIRST_NAME,PARTB,DME,HHA,PMD,HOSPICE\n"
+    ordinary = b"1234567890,Last,First,Y,Y,Y,Y,Y\n" * 3000
+    late_quoted = b'2222222222,"Last, Jr.",Second,Y,Y,Y,Y,Y\n'
+    manifest = _stage(
+        data_root,
+        source_id="cms_order_and_referring",
+        run_id="20990720T050000Z-order-quotes",
+        payload=header + ordinary + late_quoted,
+    )
+    connection = duckdb.connect(":memory:")
+    try:
+        counts = load_cms_raw_tables(
+            connection,
+            data_root=data_root,
+            run_ids=[manifest.run_id],
+        )
+        last_name = connection.execute(
+            "SELECT LAST_NAME FROM raw_order_and_referring WHERE NPI = '2222222222'"
+        ).fetchone()[0]
+    finally:
+        connection.close()
+
+    assert counts == {"raw_order_and_referring": 3001}
+    assert last_name == "Last, Jr."
+
+
 def test_failed_multi_table_load_rolls_back_every_replacement(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

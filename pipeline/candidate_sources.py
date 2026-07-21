@@ -185,7 +185,13 @@ def load_cms_raw_tables(
                         ?,
                         header = true,
                         all_varchar = true,
-                        strict_mode = true,
+                        -- Acquisition already validates every RFC-4180 row and
+                        -- exact width with Python's CSV parser. CMS sometimes
+                        -- introduces a quoted field only after DuckDB's dialect
+                        -- sample, so fix the dialect and allow that late quote.
+                        quote = chr(34),
+                        escape = chr(34),
+                        strict_mode = false,
                         ignore_errors = false,
                         encoding = 'utf-8'
                     )
