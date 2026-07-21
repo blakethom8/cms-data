@@ -130,6 +130,21 @@ commands are approval-gated operational steps documented in
 [`docs/production-promotion-runbook.md`](docs/production-promotion-runbook.md). Production promotion
 switches the one bundle pointer; it never overwrites the active or rollback database file in place.
 
+The production freshness monitor is deliberately separate from refresh execution. Its daily systemd
+timer performs only primary-publisher metadata discovery and resolves installed provenance from the
+manifest snapshot belonging to the selected deployment:
+
+```bash
+/srv/cms-data-platform/production/release-current/runtime/bin/python \
+  -m pipeline.production_status_monitor \
+  --production-root /srv/cms-data-platform/production --json
+```
+
+See [`deploy/systemd/README.md`](deploy/systemd/README.md) for installation and journal commands, and
+the [operating model](docs/data-platform-operating-model.md#operational-refresh-gates) for the monthly
+NPPES reconciliation, weekly incremental chain, daily targeted Registry API verification, and
+source-specific promotion gates. The monitor never downloads a dataset or opens DuckDB.
+
 **Total data:** 90M+ rows across 30+ tables (~5.5GB)
 
 ---

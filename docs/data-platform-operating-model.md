@@ -44,6 +44,44 @@ Calendar timers are polling opportunities, not proof that a new file exists.
 Official discovery should use `https://data.cms.gov/data.json`, the NPPES download index, the Open
 Payments dataset-download index, and the AACT downloads page. Do not hard-code dated archive URLs.
 
+### Operational refresh gates
+
+A timer may discover metadata, but it must never start a refresh merely because a calendar boundary
+was reached. Every source must pass these common gates before it can enter a production candidate:
+
+1. **Version gate:** primary-publisher discovery returns a parseable version different from the
+   deployment-scoped production manifest. `unknown`, `unavailable`, and `discovery_error` require
+   operator review and never authorize acquisition.
+2. **Acquisition gate:** the immutable source run records its publisher URL and version, source
+   period, retrieval time, byte size, SHA-256, schema fingerprint, code commit, and row counts.
+3. **Validation gate:** required columns, period semantics, row bounds, identifiers, uniqueness,
+   referential integrity, and source-specific invariants pass against the staged artifact.
+4. **Comparison gate:** a complete candidate DuckDB is compared with the selected production
+   baseline. Only intended tables may change, and the Provider Search API contract suite must pass.
+5. **Promotion gate:** the candidate has immutable code, runtime, DuckDB, and source-manifest
+   evidence; a verified predecessor remains available; selection changes only `release-current`;
+   and the bounded smoke/automatic rollback path is ready.
+
+Source-specific gates add to, and never replace, those common gates:
+
+| Source family | Required source-specific gate before candidate build |
+| --- | --- |
+| CMS annual utilization, Part D, DME, and QPP | Stable CMS dataset UUID resolves to a new complete CSV resource; calendar-year/performance-year semantics parse; required tables retain schema and bounded row-count deltas. HCPCS Level I content remains blocked unless the licensing gate is satisfied. |
+| CMS Order and Referring | Snapshot interval advances; NPI shape and eligibility-domain checks pass; removal/addition deltas are reviewed because absence affects ordering/referring eligibility. |
+| CMS Hospital Enrollments | Month-end period advances; the exact canonical header, source parity, hospital NPI/name rules, ambiguity exclusions, and affiliation comparison pass. |
+| CMS Revalidation Group Reassignment | Month-end period advances; practitioner/group NPI shape, reassignment uniqueness, and practice/affiliation deltas pass without treating reassignment as asserted hospital privileges. |
+| CMS PECOS Public Provider Enrollment | Quarter-end period advances; enrollment identifiers and provider-type distributions pass bounded-delta review. |
+| NPPES monthly V2 | A newer full V2 publisher release is present; load into a fresh staging candidate; reconcile all NPIs and prior weekly events; validate NPI uniqueness, entity/taxonomy/location coverage, deletions/deactivations, and representative API/Radar queries before it becomes the new baseline. |
+| NPPES weekly incremental V2 | The inclusive filename period follows the installed monthly/weekly watermark without an unexplained gap or overlap; apply idempotently to a fresh copy of the monthly baseline; validate changed NPIs and event counts. A weekly file never substitutes for the next monthly full reconciliation. |
+| NPPES Registry API | Use only for daily targeted verification of already selected NPIs and confidence labeling. It is not a bulk source, does not advance the installed monthly/weekly version, and must not trigger a production warehouse promotion by itself. |
+| Open Payments general, research, and ownership | Official index exposes a newer program-year/correction release; category and program year parse explicitly; duplicate/payment/provider identifiers and category row deltas pass. Preserve the three category versions independently while validating their shared publication cycle. |
+| AACT / ClinicalTrials.gov | Export date advances monotonically; restore succeeds in isolated staging; required AACT tables, study identifiers, source date, counts, research endpoints, and clinical-trials version checks pass. |
+
+NPPES therefore operates as weekly change detection plus monthly authoritative reconciliation, with
+daily Registry API verification only for targeted product evidence. Weekly increments should be
+processed in publisher-period order; a missing interval blocks the incremental chain until it is
+resolved or the next full monthly snapshot establishes a new baseline.
+
 The first discovery implementation lives in `pipeline/source_registry.py`,
 `pipeline/discovery.py`, and `pipeline/data_platform.py`. It makes these concrete choices:
 
@@ -207,6 +245,21 @@ and rollback histories. This establishes reproducible serving and promotion; it 
 all source families have automated refresh jobs. Hospital Enrollments remains the first complete
 immutable acquisition/build vertical slice, and future timers must still build and validate in
 staging before an explicitly approved production promotion.
+
+`deploy/systemd/cms-data-status.timer` schedules live publisher-metadata discovery daily at 06:15
+UTC with a randomized delay. Its oneshot validates the production control plane first, runs from the
+immutable operations package with the selected runtime, and reads provenance only from
+`production/evidence/<selected-deployment-id>/source-manifests.json`. The selected deployment ID is
+derived from `release-current`; there is no second production selector. If that immutable snapshot
+is absent, installed provenance remains `unknown`. Output and semantic exit status are retained by
+the systemd journal: `0` is current, `1` is stale/unknown, and `2` is discovery or control-plane
+failure. This monitor downloads no dataset, opens no DuckDB file, and never launches a refresh.
+
+Before activating every future candidate, write a root-owned `0440` source-manifest snapshot into
+that candidate's deployment evidence directory. It must contain only validated active source
+versions actually present in the candidate warehouse. Copying the mutable staging manifest without
+reconciling it to the candidate is prohibited. Rollback automatically selects the predecessor's
+deployment-scoped snapshot because it restores the complete bundle pointer.
 
 The name/state affiliation rule is intentionally incomplete. The current `practice_locations`
 snapshot has no populated city or ZIP values, so it cannot safely disambiguate a health system with

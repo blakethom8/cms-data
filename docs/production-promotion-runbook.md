@@ -226,3 +226,37 @@ exists. Inspect state first, then rehearse recovery:
 Actual recovery restores the complete recorded predecessor ledger and the one bundle pointer. After
 recovery, restart and smoke the selected predecessor. Never edit the ledger, journal, or symlink by
 hand and never copy a database over an existing artifact.
+
+## Recurring staging-to-production promotion
+
+After the initial cutover, every refresh uses the same release mechanism; there is no in-place
+"update production" path:
+
+1. Run publisher discovery. Proceed only for an explicit newer version and only after the
+   source-specific gate in the operating model passes.
+2. Acquire into a new immutable staging run, record the complete source manifest, and build a new
+   DuckDB candidate from a checksum-verified production baseline copy.
+3. Run source validation, complete-warehouse comparison, API contract tests, and the full temporary
+   loopback smoke suite. Do not reuse evidence from another deployment.
+4. Create separate immutable production code, runtime, and warehouse artifacts. Prepare a new
+   deployment bundle while the live bundle remains selected.
+5. Reconcile the candidate's source manifests to the contents of that exact warehouse. Write the
+   resulting document as root-owned mode `0440` at
+   `production/evidence/<candidate-deployment-id>/source-manifests.json`. Validate it with fixture
+   status and, when publisher metadata is reachable, live status. Missing provenance stays unknown.
+6. Reconfirm the selected release, hashes, journal, transition sentinel, rollback artifact, and disk
+   headroom immediately before cutover.
+7. Run `pipeline.production_cutover` once. It atomically selects the complete candidate bundle,
+   restarts, creates fresh smoke evidence, and verifies. Any required failure selects, restarts, and
+   smoke-tests the complete predecessor.
+8. Retain the selected release and at least two prior validated releases. Prune only an explicitly
+   identified superseded artifact after its hashes and rollback retention requirements are reviewed.
+
+The daily `cms-data-status.timer` is advisory discovery monitoring. A stale result opens an operator
+workflow; it does not authorize acquisition, candidate construction, restart, or promotion. Inspect
+the latest structured result with:
+
+```bash
+systemctl show cms-data-status.service -p Result -p ExecMainStatus
+journalctl -u cms-data-status.service -n 200 --no-pager
+```

@@ -1,0 +1,17 @@
+[Unit]
+Description=CMS public-data publisher freshness monitor
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=dataops
+Group=dataops
+WorkingDirectory=/srv/cms-data-platform/production-ops/current
+ExecStartPre=+/usr/bin/python3 /srv/cms-data-platform/production-ops/current/pipeline/production_manager.py startup-check --production-root /srv/cms-data-platform/production
+ExecStart=/srv/cms-data-platform/production/release-current/runtime/bin/python -m pipeline.production_status_monitor --production-root /srv/cms-data-platform/production --json --timeout 30
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
