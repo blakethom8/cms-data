@@ -260,3 +260,26 @@ the latest structured result with:
 systemctl show cms-data-status.service -p Result -p ExecMainStatus
 journalctl -u cms-data-status.service -n 200 --no-pager
 ```
+
+### Retrospective source provenance
+
+Use retrospective backfill only for retained legacy source artifacts that predate manifests. Keep
+the evidence and outputs outside the selected deployment, use the canonical immutable warehouse
+artifact rather than `release-current`, and load the AACT reader environment without printing it:
+
+```bash
+set -a
+. /etc/aact/reader.env
+set +a
+python -m pipeline.provenance_backfill \
+  --evidence /srv/cms-data-platform/audits/<audit-id>/evidence.json \
+  --warehouse /srv/cms-data-platform/production-artifacts/warehouses/<release-id>/warehouse.duckdb \
+  --existing-manifest /srv/cms-data-platform/production/evidence/<deployment-id>/source-manifests.json \
+  --manifest-output /srv/cms-data-platform/audits/<audit-id>/source-manifests.candidate.json \
+  --audit-output /srv/cms-data-platform/audits/<audit-id>/audit.json
+```
+
+Review `audit.json` and run fixture plus live status against the candidate manifest. Do not copy it
+over the selected deployment's evidence. It may enter production only as sealed evidence belonging
+to a newly prepared deployment whose exact warehouse hash matches the audit, followed by the normal
+atomic cutover and rollback procedure.

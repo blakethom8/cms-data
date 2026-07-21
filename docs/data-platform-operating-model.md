@@ -143,6 +143,15 @@ The status command only reads this file. A manifest proves an installed version 
 passed, promotion state is active, retrieval is recorded, and `release_id` equals
 `active_release_id`; file modification time is never provenance.
 
+Legacy files that predate this manifest contract may be assessed with
+`python -m pipeline.provenance_backfill`. A retrospective record is generated only when an explicit
+evidence document identifies the exact publisher version and URL, retained artifact size and
+SHA-256, immutable target-warehouse SHA-256, and exact read-only table counts. AACT additionally
+requires a read-only PostgreSQL connection. The evidence document plus any existing selected
+manifest must account for every registry source; sources that cannot be proved are recorded as
+`unresolved` or `not_installed` and do not receive an active manifest. The command writes candidate
+evidence only and never changes a warehouse, deployment pointer, or selected deployment evidence.
+
 ## First Immutable Acquisition
 
 `pipeline/acquisition.py` makes lifecycle steps 2 and 3 concrete for CMS Hospital Enrollments. The
