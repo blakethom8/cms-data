@@ -118,6 +118,7 @@ serves its original paths.
   --expected-hospital-affiliations ROLLBACK_AFFILIATION_COUNT \
   --expected-affiliated-providers ROLLBACK_AFFILIATED_PROVIDER_COUNT \
   --expected-raw-hospital-enrollments ROLLBACK_RAW_HOSPITAL_COUNT \
+  --expected-table-counts ROLLBACK_RELEASE_JSON \
   --expected-industry-detail-status ROLLBACK_INDUSTRY_DETAIL_STATUS \
   --output /srv/cms-data-platform/production/evidence/ROLLBACK_DEPLOYMENT_ID/smoke.json
 
@@ -201,10 +202,12 @@ PYTHONPATH=/srv/cms-data-platform/production-ops/current \
   --candidate-hospital-affiliations CANDIDATE_AFFILIATION_COUNT \
   --candidate-affiliated-providers CANDIDATE_AFFILIATED_PROVIDER_COUNT \
   --candidate-raw-hospital-enrollments CANDIDATE_RAW_HOSPITAL_COUNT \
+  --candidate-table-counts CANDIDATE_RELEASE_JSON \
   --rollback-core-providers ROLLBACK_CORE_COUNT \
   --rollback-hospital-affiliations ROLLBACK_AFFILIATION_COUNT \
   --rollback-affiliated-providers ROLLBACK_AFFILIATED_PROVIDER_COUNT \
   --rollback-raw-hospital-enrollments ROLLBACK_RAW_HOSPITAL_COUNT \
+  --rollback-table-counts ROLLBACK_RELEASE_JSON \
   --rollback-industry-detail-status ROLLBACK_INDUSTRY_DETAIL_STATUS \
   --json
 ```
@@ -212,6 +215,16 @@ PYTHONPATH=/srv/cms-data-platform/production-ops/current \
 Do not declare success from `systemctl is-active` alone. Record the final selected deployment,
 service PID, resolved code/runtime/database identity, smoke evidence path/hash, journal state, and
 availability of the untouched other release.
+
+When the candidate also includes a new AACT PostgreSQL snapshot, restore and validate it first with
+`pipeline.data_platform stage-aact-database`; never point a rehearsal process at the active `aact`
+database by accident. The temporary API must receive a candidate-only `AACT_DATABASE_URL` and pass
+the same clinical-trials smoke check. A combined cutover must stop the API before renaming the
+PostgreSQL databases, select the DuckDB bundle while the API is stopped, and start the API only after
+both selectors are coherent. If smoke fails, stop the API, restore both the previous PostgreSQL
+database name and previous DuckDB bundle, then start and smoke the rollback. PostgreSQL rename and
+rollback commands remain approval-gated server operations; `stage-aact-database` intentionally has
+no rename or drop capability.
 
 ## Interrupted transition recovery
 

@@ -1078,7 +1078,9 @@ def _load_full_cms_content(
     from .candidate_sources import load_cms_raw_tables
     from .transform import clear_refresh_targets, transform_all
 
-    hospital_manifest = by_source_id[HOSPITAL_SOURCE_ID]
+    hospital_manifest = _source_manifest(
+        data_root, by_source_id[HOSPITAL_SOURCE_ID].run_id
+    )
     hospital_artifact = _verified_source_artifact(data_root, hospital_manifest)
     non_hospital_run_ids = tuple(
         manifest.run_id
@@ -1151,29 +1153,12 @@ def build_full_cms_warehouse_release(
     code_commit: str | None = None,
 ) -> BuildResult:
     """Build all ten CMS sources into a new immutable warehouse candidate."""
-    from .candidate_sources import verified_cms_runs
-
     by_source_id = _resolve_exact_source_set(
         data_root,
         source_run_ids,
         FULL_CMS_SOURCE_IDS,
         label="Full CMS build",
     )
-    manifests = tuple(by_source_id.values())
-
-    hospital_manifest = by_source_id[HOSPITAL_SOURCE_ID]
-    if hospital_manifest.run_id != _source_manifest(
-        data_root, hospital_manifest.run_id
-    ).run_id:
-        raise ReleaseError("Hospital source manifest verification failed")
-    hospital_artifact = _verified_source_artifact(data_root, hospital_manifest)
-    non_hospital_run_ids = tuple(
-        manifest.run_id
-        for manifest in manifests
-        if manifest.source_id != HOSPITAL_SOURCE_ID
-    )
-    verified_cms_runs(data_root, non_hospital_run_ids)
-
     baseline, baseline_sha, baseline_bytes = _load_backup_manifest(backup_manifest_path)
     commit = code_commit or pipeline_commit()
     if commit is None:
@@ -1260,26 +1245,12 @@ def build_full_platform_warehouse_release(
     not a DuckDB source. Its run ID must therefore not be passed to this builder.
     """
     from .archive_sources import load_nppes_sources, load_open_payments_sources
-    from .candidate_sources import verified_cms_runs
-
     by_source_id = _resolve_exact_source_set(
         data_root,
         source_run_ids,
         FULL_PLATFORM_WAREHOUSE_SOURCE_IDS,
         label="Full platform warehouse build",
     )
-    hospital_manifest = by_source_id[HOSPITAL_SOURCE_ID]
-    _source_manifest(data_root, hospital_manifest.run_id)
-    _verified_source_artifact(data_root, hospital_manifest)
-    verified_cms_runs(
-        data_root,
-        tuple(
-            manifest.run_id
-            for source_id, manifest in by_source_id.items()
-            if source_id in FULL_CMS_SOURCE_IDS and source_id != HOSPITAL_SOURCE_ID
-        ),
-    )
-
     baseline, baseline_sha, baseline_bytes = _load_backup_manifest(backup_manifest_path)
     commit = code_commit or pipeline_commit()
     if commit is None:
