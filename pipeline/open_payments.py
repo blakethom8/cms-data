@@ -184,6 +184,7 @@ def load_year_raw(con: duckdb.DuckDBPyConnection, year: int, csv_path: Path, ove
         CREATE TABLE {table_name} AS
         SELECT
             "Covered_Recipient_NPI"::VARCHAR                    AS npi,
+            "Covered_Recipient_Profile_ID"::VARCHAR             AS open_payments_profile_id,
             "Covered_Recipient_First_Name"                      AS recipient_first_name,
             "Covered_Recipient_Last_Name"                       AS recipient_last_name,
             "Covered_Recipient_Type"                             AS recipient_type,

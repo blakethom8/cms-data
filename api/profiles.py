@@ -18,6 +18,8 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from open_payments_profile import industry_summary
+
 router = APIRouter(prefix="/profiles", tags=["Doctor Profiles"])
 
 CRED = '"Cred\t\t\t\t"'
@@ -83,7 +85,13 @@ _FUZZY_THRESHOLD_LAST = 0.88   # last name only
 
 def _search_dac(conn, parts: list[str], city: Optional[str], state: Optional[str],
                 limit: int) -> list[dict]:
-    """Tier 1: strict prefix match against Medicare Doctors & Clinicians."""
+    """Tier 1: strict prefix match against Medicare Doctors & Clinicians.
+
+    City ranks but never filters: the CMS mailing city is often a suburb or
+    billing address (e.g. Tarzana for an "LA" clinician), so an exact name
+    match one town over must still surface — city matches just sort first.
+    State remains a hard filter (clean two-letter values, rarely ambiguous).
+    """
     preds = []
     params: list = []
     if len(parts) >= 2:
@@ -92,12 +100,13 @@ def _search_dac(conn, parts: list[str], city: Optional[str], state: Optional[str
     else:
         preds.append('upper("Provider Last Name") like ?')
         params.append(parts[0] + "%" if parts else "%")
-    if city:
-        preds.append('upper("City/Town") = ?')
-        params.append(city.upper())
     if state:
         preds.append('"State" = ?')
         params.append(state.upper())
+    order_sql = ""
+    if city:
+        order_sql = 'order by (any_value(upper("City/Town")) = ?) desc'
+        # bound after the where-clause params (positional binding follows SQL order)
     sql = f"""
         select CAST("NPI" as varchar) npi,
                any_value("Provider First Name") || ' ' || any_value("Provider Last Name") as "name",
@@ -106,7 +115,9 @@ def _search_dac(conn, parts: list[str], city: Optional[str], state: Optional[str
                any_value("Facility Name") group_name
         from raw_dac_national
         where {' and '.join(preds)}
-        group by "NPI" limit {limit}"""
+        group by "NPI" {order_sql} limit {limit}"""
+    if city:
+        params.append(city.upper())
     return _rows(conn, sql, params)
 
 
@@ -118,6 +129,11 @@ def _search_registry(conn, parts: list[str], city: Optional[str], state: Optiona
     weighted 0.7 vs first 0.3; stored last names are also compared with
     spaces/hyphens stripped so "EL ATTRACHE" / "EL-ATTRACHE" / "ELATTRACHE"
     all behave the same. Hits also present in DAC keep source="medicare".
+
+    City ranks but never filters (same doctrine as the DAC tier): practice
+    city is a mailing-address value, so a better name match in a neighboring
+    town must not be hidden by a metro-name query. City acts as a tiebreaker
+    below the name score; state stays a hard scope.
     """
     first = parts[0] if len(parts) >= 2 else None
     last = "".join(parts[1:]) if len(parts) >= 2 else parts[0]
@@ -127,9 +143,6 @@ def _search_registry(conn, parts: list[str], city: Optional[str], state: Optiona
     if state:
         scope_preds.append("n.practice_state = ?")
         scope_params.append(state.upper())
-    if city:
-        scope_preds.append("upper(n.practice_city) = ?")
-        scope_params.append(city.upper())
 
     stripped_last = 'replace(replace(upper(n.last_name), \' \', \'\'), \'-\', \'\')'
     if first:
@@ -148,15 +161,23 @@ def _search_registry(conn, parts: list[str], city: Optional[str], state: Optiona
         score_params = [last]
         threshold = _FUZZY_THRESHOLD_LAST
 
+    if city:
+        city_match_expr = "(upper(coalesce(n.practice_city, '')) = ?)"
+        city_params: list = [city.upper()]
+    else:
+        city_match_expr = "false"
+        city_params = []
+
     sql = f"""
         with scored as (
             select CAST(n.npi as varchar) npi,
                    coalesce(n.first_name || ' ', '') || n.last_name as "name",
                    n.credentials, n.practice_city city, n.practice_state state,
-                   n.taxonomy_1, ({score_expr}) score
+                   n.taxonomy_1, ({score_expr}) score,
+                   {city_match_expr} city_match
             from raw_nppes n
             where {' and '.join(scope_preds)}
-            order by score desc
+            order by score desc, city_match desc
             limit {limit}
         )
         select s.npi, s."name", s.credentials, s.city, s.state,
@@ -172,9 +193,9 @@ def _search_registry(conn, parts: list[str], city: Optional[str], state: Optiona
         left join nucc_taxonomy t on s.taxonomy_1 = t.taxonomy_code
         left join raw_dac_national d on CAST(d."NPI" as varchar) = s.npi
         where s.score >= {threshold}
-        group by s.npi, s."name", s.credentials, s.city, s.state, s.score
-        order by s.score desc"""
-    rows = _rows(conn, sql, score_params + scope_params)
+        group by s.npi, s."name", s.credentials, s.city, s.state, s.score, s.city_match
+        order by s.score desc, s.city_match desc"""
+    rows = _rows(conn, sql, score_params + city_params + scope_params)
     for row in rows:
         row["source"] = "medicare" if row.pop("in_dac", False) else "registry"
     return rows
@@ -193,6 +214,10 @@ def get_profiles_router(get_conn):
         Tiered: exact-prefix Medicare (DAC) match first; when it comes up
         empty, fuzzy NPPES-registry fallback (typo-tolerant, includes
         providers who never bill Medicare).
+
+        State is a hard scope; city only boosts ranking. CMS/NPPES city is a
+        mailing-address value, so metro queries ("Los Angeles") must not hide
+        exact name matches recorded in a neighboring suburb ("Tarzana").
         """
         limit = max(1, min(limit, 30))
         parts = q.strip().upper().split()
@@ -312,32 +337,8 @@ def get_profiles_router(get_conn):
             from rx r cross join tot t order by r.drug_cost desc limit 10
         """, [npi])
 
-        # ------ 4. industry (Open Payments, PY2023) ------
-        summary = _row(conn, """
-            select count(*) payment_count,
-                   round(sum(Total_Amount_of_Payment_USDollars)) total_usd,
-                   round(sum(case when Nature_of_Payment_or_Transfer_of_Value <> 'Food and Beverage'
-                             then Total_Amount_of_Payment_USDollars else 0 end)) nonfood_usd,
-                   round(sum(case when Nature_of_Payment_or_Transfer_of_Value in ('Consulting Fee','Honoraria')
-                               or Nature_of_Payment_or_Transfer_of_Value like 'Compensation for serv%'
-                             then Total_Amount_of_Payment_USDollars else 0 end)) consulting_speaking_usd,
-                   count(distinct Applicable_Manufacturer_or_Applicable_GPO_Making_Payment_Name) n_manufacturers
-            from raw_open_payments_general
-            where CAST(Covered_Recipient_NPI as varchar) = ?
-        """, [npi]) or {}
-        cs = (summary.get("consulting_speaking_usd") or 0)
-        nonfood = (summary.get("nonfood_usd") or 0)
-        if not summary.get("payment_count"):
-            tier, tier_label = 0, "No industry contact (2023)"
-        elif nonfood == 0:
-            tier, tier_label = 1, "Lunch-only"
-        elif cs < 5000:
-            tier, tier_label = 2, "Engaged"
-        elif cs < 25000:
-            tier, tier_label = 3, "Paid speaker/advisor"
-        else:
-            tier, tier_label = 4, "KOL"
-        out["industry"] = {**summary, "tier": tier, "tier_label": tier_label}
+        # ------ 4. industry (Open Payments) ------
+        out["industry"] = industry_summary(conn, npi)
         out["industry_by_nature"] = _rows(conn, """
             select case
                 when Nature_of_Payment_or_Transfer_of_Value = 'Food and Beverage' then 'Meals'

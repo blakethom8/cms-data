@@ -5,8 +5,10 @@ from fastapi.testclient import TestClient
 
 from clinical_trials import (
     _build_study_payloads,
+    _expand_spelling_variants,
     _facility_tokens,
     _parse_geo_filter,
+    _search_predicate,
     get_clinical_trials_router,
 )
 
@@ -19,6 +21,24 @@ def test_geo_and_facility_inputs_are_normalized() -> None:
     )
     assert _facility_tokens("City of Hope Medical Center") == ["city", "of", "hope"]
 
+
+def test_spelling_variants_cover_us_uk_orthopedic_forms() -> None:
+    assert _expand_spelling_variants("Orthopedics") == [
+        "orthopaedics",
+        "orthopedics",
+    ]
+    assert _expand_spelling_variants("orthopaedic") == [
+        "orthopaedic",
+        "orthopedic",
+    ]
+    clause, params = _search_predicate("term", "Orthopedics")
+    assert "or" in clause
+    assert "orthopedics" in params
+    assert "orthopaedics" in params
+    condition_clause, condition_params = _search_predicate("condition", "pediatric cancer")
+    assert "paediatric cancer" in condition_params
+    assert "pediatric cancer" in condition_params
+    assert "exists (select 1 from ctgov.conditions" in condition_clause
 
 def test_aact_rows_build_the_app_compatible_study_shape() -> None:
     payload = _build_study_payloads(

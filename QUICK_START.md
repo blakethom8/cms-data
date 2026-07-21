@@ -23,13 +23,16 @@ Get key: https://platform.openai.com/api-keys
 
 ## API Examples
 ```bash
+export CMS_API_BASE_URL="${CMS_API_BASE_URL:-http://127.0.0.1:8080}"
+: "${CMS_API_KEY:?Set CMS_API_KEY before calling secured endpoints}"
+
 # Provider search
-curl "http://5.78.148.70:8080/search/places?specialty=cardiologist&location=Beverly%20Hills,%20CA" \
-  -H "X-API-Key: 1bb250cdd582258595a5d2bebd9493f2c74a7999"
+curl "${CMS_API_BASE_URL}/search/places?specialty=cardiologist&location=Beverly%20Hills,%20CA" \
+  -H "X-API-Key: ${CMS_API_KEY}"
 
 # Direct match
-curl "http://5.78.148.70:8080/match/search?name=John%20Smith&address=Los%20Angeles,%20CA" \
-  -H "X-API-Key: 1bb250cdd582258595a5d2bebd9493f2c74a7999"
+curl "${CMS_API_BASE_URL}/match/search?name=John%20Smith&address=Los%20Angeles,%20CA" \
+  -H "X-API-Key: ${CMS_API_KEY}"
 ```
 
 ## Badge Meanings

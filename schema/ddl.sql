@@ -313,3 +313,89 @@ CREATE TABLE IF NOT EXISTS order_referring_eligibility (
     pmd        VARCHAR(1),
     hospice    VARCHAR(1)
 );
+
+
+------------------------------------------------------------
+-- NPPES New Provider Radar
+-- Current Type 1 provider state plus immutable change events.
+-- Weekly incrementals update this state; monthly files reconcile it.
+------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS nppes_radar_provider_state (
+    npi                         VARCHAR(10) PRIMARY KEY,
+    first_name                  VARCHAR(100),
+    last_name                   VARCHAR(255),
+    credentials                 VARCHAR(100),
+    enumeration_date            DATE,
+    source_last_updated_date    DATE,
+    deactivation_date           DATE,
+    reactivation_date           DATE,
+    primary_taxonomy_code       VARCHAR(15),
+    taxonomy_codes              VARCHAR[],
+    practice_address_1          VARCHAR(255),
+    practice_address_2          VARCHAR(255),
+    practice_city               VARCHAR(100),
+    practice_state              VARCHAR(2),
+    practice_zip5               VARCHAR(5),
+    practice_phone              VARCHAR(30),
+    record_fingerprint          VARCHAR(64) NOT NULL,
+    source_release_id           VARCHAR NOT NULL,
+    source_data_period          VARCHAR NOT NULL,
+    first_seen_at               TIMESTAMPTZ NOT NULL,
+    last_seen_at                TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_nppes_radar_provider_state_zip
+    ON nppes_radar_provider_state(practice_zip5);
+CREATE INDEX IF NOT EXISTS idx_nppes_radar_provider_state_taxonomy
+    ON nppes_radar_provider_state(primary_taxonomy_code);
+
+
+CREATE TABLE IF NOT EXISTS nppes_radar_events (
+    event_id                    VARCHAR(64) PRIMARY KEY,
+    npi                         VARCHAR(10) NOT NULL,
+    event_type                  VARCHAR NOT NULL CHECK (event_type IN (
+                                    'newly_enumerated',
+                                    'practice_location_changed',
+                                    'primary_taxonomy_changed',
+                                    'reactivated',
+                                    'deactivated'
+                                )),
+    effective_date              DATE NOT NULL,
+    detected_at                 TIMESTAMPTZ NOT NULL,
+    source_release_id           VARCHAR NOT NULL,
+    source_data_period          VARCHAR NOT NULL,
+    old_zip5                    VARCHAR(5),
+    new_zip5                    VARCHAR(5),
+    old_primary_taxonomy_code   VARCHAR(15),
+    new_primary_taxonomy_code   VARCHAR(15),
+    source_last_updated_date    DATE,
+    deactivation_date           DATE,
+    reactivation_date           DATE
+);
+
+CREATE INDEX IF NOT EXISTS idx_nppes_radar_events_effective_date
+    ON nppes_radar_events(effective_date);
+CREATE INDEX IF NOT EXISTS idx_nppes_radar_events_new_zip
+    ON nppes_radar_events(new_zip5);
+CREATE INDEX IF NOT EXISTS idx_nppes_radar_events_npi
+    ON nppes_radar_events(npi);
+
+
+CREATE TABLE IF NOT EXISTS nppes_radar_releases (
+    source_release_id       VARCHAR PRIMARY KEY,
+    source_id               VARCHAR NOT NULL CHECK (source_id IN (
+                                'nppes_monthly_v2',
+                                'nppes_weekly_incremental_v2'
+                            )),
+    release_kind            VARCHAR NOT NULL CHECK (release_kind IN (
+                                'monthly_full',
+                                'weekly_incremental'
+                            )),
+    source_data_period      VARCHAR NOT NULL,
+    period_start            DATE NOT NULL,
+    period_end              DATE NOT NULL,
+    processed_at            TIMESTAMPTZ NOT NULL,
+    provider_row_count      BIGINT NOT NULL,
+    event_row_count         BIGINT NOT NULL,
+    is_baseline             BOOLEAN NOT NULL DEFAULT FALSE
+);

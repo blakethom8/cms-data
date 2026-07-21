@@ -19,6 +19,9 @@ see [`docs/data-platform-operating-model.md`](docs/data-platform-operating-model
 examples below describe planned directories or commands; verify operational behavior against the
 current `pipeline/`, `schema/`, and `api/` code.
 
+The product and data contract for weekly NPPES change detection is documented in
+[`docs/new-provider-radar.md`](docs/new-provider-radar.md).
+
 ### Read-only source status
 
 The data-platform status command discovers publisher releases without downloading bulk files or
