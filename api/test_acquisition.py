@@ -193,8 +193,9 @@ def test_generic_cms_acquisition_accepts_case_stable_schema_and_records_manifest
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     payload = (
-        b"Prscrbr_NPI,Tot_Clms,Tot_Drug_Cst,Opioid_Prscrbr_Rate\n"
-        b"1234567890,12,34.50,1.25\n"
+        b"Prscrbr_NPI,Tot_Clms,Tot_Drug_Cst,Brnd_Tot_Clms,Gnrc_Tot_Clms,"
+        b"Opioid_Prscrbr_Rate\n"
+        b"1234567890,12,34.50,4,8,1.25\n"
     )
     _install_response(monkeypatch, payload)
 
@@ -215,7 +216,10 @@ def test_generic_cms_validator_rejects_missing_transform_contract_column(
     tmp_path: Path,
 ) -> None:
     artifact = tmp_path / "part-d.csv"
-    artifact.write_bytes(b"Prscrbr_NPI,Tot_Clms,Tot_Drug_Cst\n1234567890,12,34.50\n")
+    artifact.write_bytes(
+        b"Prscrbr_NPI,Tot_Clms,Tot_Drug_Cst,Brnd_Tot_Clms,Gnrc_Tot_Clms\n"
+        b"1234567890,12,34.50,4,8\n"
+    )
 
     with pytest.raises(AcquisitionError, match="missing required columns: Opioid_Prscrbr_Rate"):
         inspect_cms_csv(
@@ -227,11 +231,11 @@ def test_generic_cms_validator_rejects_missing_transform_contract_column(
 def test_generic_cms_validator_rejects_row_width_change(tmp_path: Path) -> None:
     artifact = tmp_path / "order.csv"
     artifact.write_bytes(
-        b"NPI,LAST_NAME,FIRST_NAME,PARTB,DME,HHA,HOSPICE\n"
-        b"1234567890,Last,First,Y,Y,Y\n"
+        b"NPI,LAST_NAME,FIRST_NAME,PARTB,DME,HHA,PMD,HOSPICE\n"
+        b"1234567890,Last,First,Y,Y,Y,Y\n"
     )
 
-    with pytest.raises(AcquisitionError, match="row 2 has 6 fields; expected 7"):
+    with pytest.raises(AcquisitionError, match="row 2 has 7 fields; expected 8"):
         inspect_cms_csv(
             artifact,
             profile=CMS_CSV_PROFILES["cms_order_and_referring"],

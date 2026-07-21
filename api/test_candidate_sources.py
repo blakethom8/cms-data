@@ -27,8 +27,9 @@ def _stage(
     payload: bytes | None = None,
 ) -> RunManifest:
     content = payload or (
-        b"Prscrbr_NPI,Tot_Clms,Tot_Drug_Cst,Opioid_Prscrbr_Rate\n"
-        b"1234567890,10,25.50,2.5\n"
+        b"Prscrbr_NPI,Tot_Clms,Tot_Drug_Cst,Brnd_Tot_Clms,Gnrc_Tot_Clms,"
+        b"Opioid_Prscrbr_Rate\n"
+        b"1234567890,10,25.50,4,6,2.5\n"
     )
     artifact = data_root / "runs" / source_id / run_id / "source.csv"
     artifact.parent.mkdir(parents=True)
