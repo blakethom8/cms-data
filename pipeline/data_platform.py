@@ -20,6 +20,10 @@ from .acquisition import (
     make_run_id,
     release_id,
 )
+from .archive_acquisition import (
+    SUPPORTED_ARCHIVE_ACQUISITION_SOURCES,
+    acquire_archive_release,
+)
 from .discovery import (
     DiscoveryResult,
     DiscoveryState,
@@ -284,7 +288,12 @@ def _parser() -> argparse.ArgumentParser:
         "acquire",
         help="Discover and immutably acquire a supported source into staging",
     )
-    acquire.add_argument("source_id", choices=sorted(SUPPORTED_ACQUISITION_SOURCES))
+    acquire.add_argument(
+        "source_id",
+        choices=sorted(
+            SUPPORTED_ACQUISITION_SOURCES | SUPPORTED_ARCHIVE_ACQUISITION_SOURCES
+        ),
+    )
     acquire.add_argument(
         "--data-root",
         type=Path,
@@ -533,7 +542,12 @@ def main(argv: list[str] | None = None) -> int:
             return EXIT_HEALTHY
 
         try:
-            result = acquire_release(
+            acquire_function = (
+                acquire_archive_release
+                if release.source_id in SUPPORTED_ARCHIVE_ACQUISITION_SOURCES
+                else acquire_release
+            )
+            result = acquire_function(
                 release,
                 discovery_timestamp=discovery.discovered_at,
                 data_root=args.data_root,

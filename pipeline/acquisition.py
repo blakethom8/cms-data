@@ -293,13 +293,29 @@ def pipeline_commit(repository_root: Path | None = None) -> str | None:
     return None
 
 
-def _validate_source_url(url: str) -> str:
-    parsed = urlparse(url)
-    if parsed.scheme != "https" or parsed.hostname != "data.cms.gov":
-        raise AcquisitionError(
-            "CMS artifact must use HTTPS on data.cms.gov"
+def _allowed_source_hosts(source_id: str) -> frozenset[str]:
+    if source_id.startswith("cms_"):
+        return frozenset({"data.cms.gov"})
+    if source_id.startswith("nppes_") or source_id.startswith("open_payments_"):
+        return frozenset({"download.cms.gov"})
+    if source_id == "aact_clinical_trials_snapshot":
+        return frozenset(
+            {
+                "aact.ctti-clinicaltrials.org",
+                "ctti-aact.nyc3.digitaloceanspaces.com",
+            }
         )
-    return parsed.hostname
+    raise AcquisitionError(f"No publisher host policy exists for {source_id}")
+
+
+def _validate_source_url(source_id: str, url: str) -> frozenset[str]:
+    parsed = urlparse(url)
+    allowed = _allowed_source_hosts(source_id)
+    if parsed.scheme != "https" or parsed.hostname not in allowed:
+        raise AcquisitionError(
+            f"{source_id} artifact must use HTTPS on an approved publisher host"
+        )
+    return allowed
 
 
 def _response_length(headers: object) -> int | None:
@@ -325,7 +341,7 @@ def download_artifact(
     """Stream one publisher artifact to an atomic immutable destination."""
     if max_bytes <= 0:
         raise ValueError("max_bytes must be positive")
-    expected_host = _validate_source_url(release.source_url)
+    allowed_hosts = _validate_source_url(release.source_id, release.source_url)
     if destination.exists():
         raise AcquisitionError(f"Refusing to overwrite existing artifact: {destination}")
     partial = destination.with_name(destination.name + ".partial")
@@ -343,8 +359,8 @@ def download_artifact(
         with urllib.request.urlopen(request, timeout=timeout) as response:
             final_url = response.geturl()
             final_host = urlparse(final_url).hostname
-            if urlparse(final_url).scheme != "https" or final_host != expected_host:
-                raise AcquisitionError("Publisher redirected the artifact outside data.cms.gov")
+            if urlparse(final_url).scheme != "https" or final_host not in allowed_hosts:
+                raise AcquisitionError("Publisher redirected the artifact outside approved hosts")
             announced_size = _response_length(response.headers)
             if announced_size is not None and announced_size > max_bytes:
                 raise AcquisitionError(
