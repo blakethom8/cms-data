@@ -421,7 +421,6 @@ def _load_json(path: Path, label: str) -> dict:
 def _validate_warehouse_release(
     data_root: Path,
     warehouse_release_id: str,
-    code_commit: str,
     production_warehouse: Path,
     artifact_root: Path,
 ) -> tuple[Path, dict]:
@@ -445,8 +444,10 @@ def _validate_warehouse_release(
     if release.get("validation_state") != "passed":
         raise ProductionError("Warehouse release validation has not passed")
     pipeline_commit = release.get("pipeline_code_commit")
-    if pipeline_commit != code_commit:
-        raise ProductionError("Warehouse pipeline commit does not match the code target")
+    if not isinstance(pipeline_commit, str) or not re.fullmatch(
+        r"[0-9a-f]{40}", pipeline_commit
+    ):
+        raise ProductionError("Warehouse release has an invalid pipeline commit")
     canonical_relative = Path("releases") / warehouse_release_id / "warehouse.duckdb"
     if Path(str(release.get("database_path", ""))) != canonical_relative:
         raise ProductionError("Warehouse release database path is not canonical")
@@ -464,8 +465,8 @@ def _validate_warehouse_release(
         raise ProductionError("Unsupported release comparison schema version")
     if comparison.get("warehouse_release_id") != warehouse_release_id:
         raise ProductionError("Comparison release ID does not match")
-    if comparison.get("pipeline_code_commit") != code_commit:
-        raise ProductionError("Comparison pipeline commit does not match")
+    if comparison.get("pipeline_code_commit") != pipeline_commit:
+        raise ProductionError("Comparison pipeline commit does not match the warehouse release")
     if comparison.get("state") != "passed":
         raise ProductionError("Warehouse comparison has not passed")
     failed_requirements = comparison.get("failed_requirements")
@@ -568,8 +569,10 @@ def _validate_deployment(deployment: ProductionDeployment) -> None:
             raise ProductionError("Warehouse deployment has an invalid code commit")
         if not RELEASE_ID_PATTERN.fullmatch(deployment.warehouse_release_id or ""):
             raise ProductionError("Warehouse deployment has an invalid warehouse release ID")
-        if deployment.warehouse_pipeline_commit != deployment.code_commit:
-            raise ProductionError("Warehouse deployment pipeline commit does not match code")
+        if not re.fullmatch(
+            r"[0-9a-f]{40}", deployment.warehouse_pipeline_commit or ""
+        ):
+            raise ProductionError("Warehouse deployment has an invalid pipeline commit")
         if not deployment.previous_deployment_id:
             raise ProductionError("Warehouse deployment has no predecessor")
 
@@ -1074,7 +1077,6 @@ def _prepare_validation(
     warehouse_path, release = _validate_warehouse_release(
         data_root,
         warehouse_release_id,
-        code_commit,
         warehouse_path,
         artifact_root,
     )

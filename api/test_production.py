@@ -13,6 +13,7 @@ from pipeline import production_manager as production
 
 
 COMMIT = "8" * 40
+WAREHOUSE_COMMIT = "9" * 40
 RELEASE_ID = "warehouse-20260721T120000Z-abcdef"
 LEGACY_BYTES = b"legacy warehouse"
 CANDIDATE_BYTES = b"candidate warehouse"
@@ -90,7 +91,12 @@ def _stub_platform_security(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-def _write_release(paths: dict[str, Path], *, comparison_state: str = "passed") -> None:
+def _write_release(
+    paths: dict[str, Path],
+    *,
+    comparison_state: str = "passed",
+    pipeline_commit: str = COMMIT,
+) -> None:
     release_dir = paths["data"] / "releases" / RELEASE_ID
     staging_database = _write_immutable(
         release_dir / "warehouse.duckdb", CANDIDATE_BYTES
@@ -99,7 +105,7 @@ def _write_release(paths: dict[str, Path], *, comparison_state: str = "passed") 
         "schema_version": 2,
         "release": {
             "warehouse_release_id": RELEASE_ID,
-            "pipeline_code_commit": COMMIT,
+            "pipeline_code_commit": pipeline_commit,
             "database_path": f"releases/{RELEASE_ID}/warehouse.duckdb",
             "duckdb_version": "1.4.4",
             "byte_size": staging_database.stat().st_size,
@@ -110,7 +116,7 @@ def _write_release(paths: dict[str, Path], *, comparison_state: str = "passed") 
     comparison = {
         "schema_version": 1,
         "warehouse_release_id": RELEASE_ID,
-        "pipeline_code_commit": COMMIT,
+        "pipeline_code_commit": pipeline_commit,
         "state": comparison_state,
         "failed_requirements": [],
         "unexpected_differences": [],
@@ -357,6 +363,27 @@ def test_prepare_dry_run_does_not_change_control_state(
     }
     assert result.state == production.DeploymentState.PREPARED
     assert after == before
+
+
+def test_prepare_tracks_serving_and_warehouse_pipeline_commits_separately(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    paths, _ = _bootstrap_verified(tmp_path, monkeypatch)
+    _write_release(paths, pipeline_commit=WAREHOUSE_COMMIT)
+
+    deployment = production.prepare_release(
+        paths["production"],
+        paths["artifacts"],
+        paths["data"],
+        paths["candidate_code"],
+        paths["candidate_runtime"],
+        paths["candidate_db"],
+        RELEASE_ID,
+        dry_run=True,
+    )
+
+    assert deployment.code_commit == COMMIT
+    assert deployment.warehouse_pipeline_commit == WAREHOUSE_COMMIT
 
 
 def test_prepare_rejects_failed_release_comparison(

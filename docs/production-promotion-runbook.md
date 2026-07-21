@@ -81,6 +81,9 @@ install -d -o root -g dataops -m 0750 /srv/cms-data-platform/production-artifact
 5. Create candidate code and runtime artifacts in the same way. Copy the validated staging DuckDB to
    a distinct production inode, verify its byte size and release SHA-256, then seal it. Neither
    production database may be the active database, staging database, or a hard link to either.
+   Record the serving-code and warehouse-pipeline commits independently: the warehouse release and
+   comparison must agree on the pipeline commit, while the bounded API smoke suite proves that the
+   selected serving commit is compatible with that immutable warehouse.
 
 6. Bootstrap the rollback bundle. The production root must already exist and mutations run as root:
 
