@@ -182,7 +182,12 @@ SOURCE_REGISTRY: dict[str, SourceSpec] = {
             "monthly_v2",
             Cadence.MONTHLY_FULL,
             "Full NPPES V2 snapshot identified by its publisher release label.",
-            ("raw_nppes", "core_providers"),
+            (
+                "raw_nppes",
+                "core_providers",
+                "nppes_radar_provider_state",
+                "nppes_radar_events",
+            ),
             NPPES_ATTRIBUTION,
         ),
         SourceSpec(
@@ -193,7 +198,12 @@ SOURCE_REGISTRY: dict[str, SourceSpec] = {
             "weekly_v2",
             Cadence.WEEKLY_INCREMENTAL,
             "Inclusive start and end dates encoded in the official weekly V2 filename.",
-            ("raw_nppes", "core_providers"),
+            (
+                "raw_nppes",
+                "core_providers",
+                "nppes_radar_provider_state",
+                "nppes_radar_events",
+            ),
             NPPES_ATTRIBUTION,
         ),
         SourceSpec(

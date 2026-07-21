@@ -218,6 +218,16 @@ DuckDB is pinned to `1.4.4`, matching the runtime already used by the Hetzner AP
 release rehearsal. Candidate builds record that version so runtime drift is visible in release
 evidence.
 
+The name/state affiliation rule is intentionally incomplete. The current `practice_locations`
+snapshot has no populated city or ZIP values, so it cannot safely disambiguate a health system with
+multiple hospital NPIs in one state. Those keys remain excluded until a higher-quality linkage key
+is acquired and separately validated. The API and downstream product must present these rows as
+inferred affiliations with their confidence level, not as publisher-asserted clinician privileges.
+
+DuckDB is pinned to `1.4.4`, matching the runtime already used by the Hetzner API and the staging
+release rehearsal. Candidate builds record that version so runtime drift is visible in release
+evidence.
+
 ## Data-Use Guardrails
 
 CMS public-use data and FOIA-disclosable NPPES data generally do not require a business agreement,

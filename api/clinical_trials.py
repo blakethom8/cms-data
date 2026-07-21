@@ -93,30 +93,80 @@ def _facility_tokens(value: str) -> list[str]:
     return distinctive or [" ".join(value.lower().split())]
 
 
-def _search_predicate(search_type: str, query: str) -> tuple[str, list[str]]:
+# US/UK spelling pairs so substring search does not miss British registry text.
+SPELLING_VARIANT_PAIRS = (
+    ("orthopedic", "orthopaedic"),
+    ("orthopedics", "orthopaedics"),
+    ("pediatric", "paediatric"),
+    ("pediatrics", "paediatrics"),
+    ("anesthesia", "anaesthesia"),
+    ("anesthetic", "anaesthetic"),
+    ("hematology", "haematology"),
+    ("hematological", "haematological"),
+    ("estrogen", "oestrogen"),
+)
+
+
+def _expand_spelling_variants(query: str) -> list[str]:
+    """Return unique literal needles including common US/UK medical spelling variants."""
     needle = query.strip().lower()
+    if not needle:
+        return []
+    variants = {needle}
+    for us, uk in SPELLING_VARIANT_PAIRS:
+        if us in needle:
+            variants.add(needle.replace(us, uk))
+        if uk in needle:
+            variants.add(needle.replace(uk, us))
+    return sorted(variants)
+
+
+def _or_position(column_sql: str, needles: list[str]) -> tuple[str, list[str]]:
+    """Build an OR of position() checks for each needle against one SQL expression."""
+    clauses = [f"position(%s in {column_sql}) > 0" for _ in needles]
+    return f"({' or '.join(clauses)})", list(needles)
+
+
+def _search_predicate(search_type: str, query: str) -> tuple[str, list[str]]:
+    needles = _expand_spelling_variants(query)
+    if not needles:
+        raise HTTPException(status_code=422, detail="Search query must not be empty")
     if search_type == "condition":
+        clause, params = _or_position("q.downcase_name", needles)
         return (
-            "exists (select 1 from ctgov.conditions q where q.nct_id = s.nct_id "
-            "and position(%s in q.downcase_name) > 0)",
-            [needle],
+            f"exists (select 1 from ctgov.conditions q where q.nct_id = s.nct_id and {clause})",
+            params,
         )
     if search_type == "intervention":
+        clause, params = _or_position("lower(coalesce(q.name, ''))", needles)
         return (
-            "exists (select 1 from ctgov.interventions q where q.nct_id = s.nct_id "
-            "and position(%s in lower(coalesce(q.name, ''))) > 0)",
-            [needle],
+            f"exists (select 1 from ctgov.interventions q where q.nct_id = s.nct_id and {clause})",
+            params,
         )
+    title_clause, title_params = _or_position("lower(coalesce(s.brief_title, ''))", needles)
+    official_clause, official_params = _or_position(
+        "lower(coalesce(s.official_title, ''))", needles
+    )
+    condition_clause, condition_params = _or_position("q.downcase_name", needles)
+    intervention_clause, intervention_params = _or_position(
+        "lower(coalesce(q.name, ''))", needles
+    )
+    keyword_clause, keyword_params = _or_position("q.downcase_name", needles)
     return (
-        "(position(%s in lower(coalesce(s.brief_title, ''))) > 0 "
-        "or position(%s in lower(coalesce(s.official_title, ''))) > 0 "
-        "or exists (select 1 from ctgov.conditions q where q.nct_id = s.nct_id "
-        "and position(%s in q.downcase_name) > 0) "
-        "or exists (select 1 from ctgov.interventions q where q.nct_id = s.nct_id "
-        "and position(%s in lower(coalesce(q.name, ''))) > 0) "
-        "or exists (select 1 from ctgov.keywords q where q.nct_id = s.nct_id "
-        "and position(%s in q.downcase_name) > 0))",
-        [needle] * 5,
+        f"({title_clause} or {official_clause} "
+        f"or exists (select 1 from ctgov.conditions q where q.nct_id = s.nct_id "
+        f"and {condition_clause}) "
+        f"or exists (select 1 from ctgov.interventions q where q.nct_id = s.nct_id "
+        f"and {intervention_clause}) "
+        f"or exists (select 1 from ctgov.keywords q where q.nct_id = s.nct_id "
+        f"and {keyword_clause}))",
+        [
+            *title_params,
+            *official_params,
+            *condition_params,
+            *intervention_params,
+            *keyword_params,
+        ],
     )
 
 

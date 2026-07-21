@@ -76,6 +76,9 @@ app.include_router(get_unified_router(get_conn), dependencies=_secured)
 from practices import get_practices_router
 app.include_router(get_practices_router(get_conn), dependencies=_secured)
 
+from market_snapshot import get_market_snapshot_router
+app.include_router(get_market_snapshot_router(get_conn), dependencies=_secured)
+
 from explorer import get_explorer_router
 app.include_router(get_explorer_router(get_conn), dependencies=_secured)
 
@@ -90,6 +93,9 @@ app.include_router(get_research_router(get_conn), dependencies=_secured)
 
 from clinical_trials import get_clinical_trials_router
 app.include_router(get_clinical_trials_router(), dependencies=_secured)
+
+from radar import get_radar_router
+app.include_router(get_radar_router(get_conn), dependencies=_secured)
 
 app.add_middleware(
     CORSMiddleware,

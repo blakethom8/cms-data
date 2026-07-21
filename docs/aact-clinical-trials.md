@@ -27,6 +27,17 @@ The response intentionally mirrors only the ClinicalTrials.gov v2 fields consume
 Search. Extend the adapter deliberately when the application needs another field; do not turn it
 into an unrestricted SQL or database proxy.
 
+## Query matching
+
+`query.cond`, `query.intr`, and `query.term` use case-insensitive substring matching against AACT
+tables. Before matching, the adapter expands common US/UK medical spelling variants (for example
+`orthopedic` ↔ `orthopaedic`, `pediatric` ↔ `paediatric`) so American and British registry text
+both hit. This is literal OR expansion of needles — not ClinicalTrials.gov Essie synonym search
+and not a wild-card stemmer.
+
+Provider Search may further expand specialty-like topics into multiple condition queries before
+calling this adapter. That product interpretation lives in Provider Search, not here.
+
 ## Verification
 
 ```bash
