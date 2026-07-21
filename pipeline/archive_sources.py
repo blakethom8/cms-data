@@ -7,6 +7,7 @@ never extract an archive tree and never open the selected production warehouse.
 
 from __future__ import annotations
 
+import csv
 import os
 import re
 import shutil
@@ -84,6 +85,7 @@ NPPES_COLUMNS: tuple[tuple[str, str], ...] = (
     ("Healthcare Provider Primary Taxonomy Switch_2", "taxonomy_primary_2"),
     ("Healthcare Provider Primary Taxonomy Switch_3", "taxonomy_primary_3"),
 )
+NPPES_GENDER_COLUMNS = ("Provider Sex Code", "Provider Gender Code")
 
 OPEN_PAYMENTS_REQUIRED_COLUMNS = {
     "open_payments_general": frozenset(
@@ -266,9 +268,30 @@ def _load_nppes_raw_file(
     *,
     baseline: bool,
 ) -> int:
+    try:
+        with csv_path.open("r", encoding="utf-8-sig", newline="") as source:
+            header = next(csv.reader(source))
+    except (OSError, UnicodeError, StopIteration, csv.Error) as error:
+        raise ReleaseError(f"NPPES header is unreadable: {error}") from error
+    if len(header) != len(set(header)):
+        raise ReleaseError("NPPES header contains duplicate column names")
+    header_set = set(header)
+    gender_matches = [name for name in NPPES_GENDER_COLUMNS if name in header_set]
+    if len(gender_matches) != 1:
+        raise ReleaseError(
+            "NPPES must contain exactly one recognized sex/gender column; found "
+            f"{len(gender_matches)}"
+        )
+    selected_columns = tuple(
+        (gender_matches[0] if target == "gender" else source, target)
+        for source, target in NPPES_COLUMNS
+    )
+    missing = sorted(source for source, _ in selected_columns if source not in header_set)
+    if missing:
+        raise ReleaseError("NPPES is missing required columns: " + ", ".join(missing))
     source_columns = ",\n".join(
         f"NULLIF(TRIM({_quote(source)}), '') AS {_quote(target)}"
-        for source, target in NPPES_COLUMNS
+        for source, target in selected_columns
     )
     connection.execute("DROP TABLE IF EXISTS _raw_nppes_incoming")
     connection.execute(

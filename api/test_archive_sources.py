@@ -79,7 +79,11 @@ def _stage_archive(
     return manifest
 
 
-def _nppes_csv(rows: list[dict[str, str]]) -> bytes:
+def _nppes_csv(
+    rows: list[dict[str, str]],
+    *,
+    gender_column: str = "Provider Gender Code",
+) -> bytes:
     columns = [
         "NPI",
         "Entity Type Code",
@@ -89,7 +93,7 @@ def _nppes_csv(rows: list[dict[str, str]]) -> bytes:
         "Provider Name Prefix Text",
         "Provider Name Suffix Text",
         "Provider Credential Text",
-        "Provider Gender Code",
+        gender_column,
         "Provider Enumeration Date",
         "Last Update Date",
         "NPI Deactivation Date",
@@ -119,7 +123,7 @@ def _nppes_csv(rows: list[dict[str, str]]) -> bytes:
             {
                 "Entity Type Code": "1",
                 "Provider Credential Text": "MD",
-                "Provider Gender Code": "F",
+                gender_column: "F",
                 "Provider Enumeration Date": "07/01/2026",
                 "Last Update Date": "07/13/2026",
                 "Provider First Line Business Practice Location Address": "1 Main St",
@@ -135,8 +139,11 @@ def _nppes_csv(rows: list[dict[str, str]]) -> bytes:
     return stream.getvalue().encode()
 
 
+@pytest.mark.parametrize(
+    "gender_column", ("Provider Gender Code", "Provider Sex Code")
+)
 def test_nppes_monthly_baseline_and_weekly_overlay_are_synchronized(
-    tmp_path: Path,
+    tmp_path: Path, gender_column: str,
 ) -> None:
     data_root = tmp_path / "data"
     monthly = _stage_archive(
@@ -152,7 +159,8 @@ def test_nppes_monthly_baseline_and_weekly_overlay_are_synchronized(
                         "Provider First Name": "Ada",
                         "Provider Last Name (Legal Name)": "Lovelace",
                     }
-                ]
+                ],
+                gender_column=gender_column,
             )
         },
     )
@@ -178,7 +186,8 @@ def test_nppes_monthly_baseline_and_weekly_overlay_are_synchronized(
                         "Provider Enumeration Date": "07/15/2026",
                         "Last Update Date": "07/15/2026",
                     },
-                ]
+                ],
+                gender_column=gender_column,
             )
         },
     )
