@@ -781,7 +781,11 @@ def _rebuild_hospital_affiliations(
         FROM hospital_affiliation_match_keys
         """
     ).fetchone()
+    affiliation_count = connection.execute(
+        "SELECT count(*) FROM hospital_affiliations"
+    ).fetchone()[0]
     return {
+        "hospital_affiliations": int(affiliation_count),
         "baseline_hospital_affiliations": int(baseline_count),
         "unambiguous_hospital_name_state_keys": int(stats[0]),
         "ambiguous_hospital_name_state_keys": int(stats[1]),

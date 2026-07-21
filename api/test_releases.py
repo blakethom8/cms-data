@@ -26,6 +26,7 @@ from pipeline.releases import (
     ReleaseError,
     WAREHOUSE_RELEASE_SCHEMA_VERSION,
     WarehouseReleaseStore,
+    _rebuild_hospital_affiliations,
     build_full_cms_warehouse_release,
     build_warehouse_release,
     compare_warehouse_release,
@@ -268,6 +269,19 @@ def test_build_release_copies_baseline_loads_source_and_records_provenance(
     per_release = json.loads(result.release_manifest_path.read_text())
     assert per_release["schema_version"] == WAREHOUSE_RELEASE_SCHEMA_VERSION
     assert per_release["release"] == result.release.to_dict()
+
+
+def test_affiliation_rebuild_returns_the_final_table_count(tmp_path: Path) -> None:
+    _, _, _, result = _build(tmp_path)
+    result.database_path.chmod(0o640)
+    connection = duckdb.connect(str(result.database_path))
+    try:
+        counts = _rebuild_hospital_affiliations(connection, data_year=2099)
+    finally:
+        connection.close()
+        result.database_path.chmod(0o440)
+
+    assert counts["hospital_affiliations"] == 1
 
 
 def test_schema_ddl_matches_canonical_raw_hospital_loader() -> None:
