@@ -93,6 +93,7 @@ def _run_smoke_and_record(
     process_id: int,
     counts: ExpectedCounts,
     representative_npi: str,
+    expected_industry_detail_status: int,
 ) -> tuple[dict, Path]:
     evidence_path = production_root / "evidence" / deployment_id / "smoke.json"
     try:
@@ -104,6 +105,7 @@ def _run_smoke_and_record(
             expected_hospital_affiliations=counts.hospital_affiliations,
             expected_affiliated_providers=counts.affiliated_providers,
             expected_raw_hospital_enrollments=counts.raw_hospital_enrollments,
+            expected_industry_detail_status=expected_industry_detail_status,
             representative_npi=representative_npi,
             process_id=process_id,
             production_root=production_root,
@@ -124,6 +126,8 @@ def execute_cutover(
     candidate_counts: ExpectedCounts,
     rollback_counts: ExpectedCounts,
     representative_npi: str = "1003005257",
+    candidate_industry_detail_status: int = 200,
+    rollback_industry_detail_status: int = 200,
 ) -> dict:
     """Select and verify a candidate, or restore and verify its predecessor."""
     if os.geteuid() != 0:
@@ -142,6 +146,7 @@ def execute_cutover(
             process_id=process_id,
             counts=candidate_counts,
             representative_npi=representative_npi,
+            expected_industry_detail_status=candidate_industry_detail_status,
         )
         if evidence.get("state") != "passed":
             raise CutoverError(evidence.get("error_summary") or "Candidate smoke failed")
@@ -165,6 +170,7 @@ def execute_cutover(
                 process_id=rollback_pid,
                 counts=rollback_counts,
                 representative_npi=representative_npi,
+                expected_industry_detail_status=rollback_industry_detail_status,
             )
             if rollback_evidence.get("state") != "passed":
                 raise CutoverError(
@@ -204,6 +210,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--base-url", default="http://127.0.0.1:8080")
     parser.add_argument("--api-key-env", default="CMS_API_KEY")
     parser.add_argument("--representative-npi", default="1003005257")
+    parser.add_argument(
+        "--candidate-industry-detail-status", type=int, choices=(200, 404), default=200
+    )
+    parser.add_argument(
+        "--rollback-industry-detail-status", type=int, choices=(200, 404), default=200
+    )
     for prefix in ("candidate", "rollback"):
         parser.add_argument(f"--{prefix}-core-providers", type=int, required=True)
         parser.add_argument(f"--{prefix}-hospital-affiliations", type=int, required=True)
@@ -233,6 +245,8 @@ def main(argv: list[str] | None = None) -> int:
             candidate_counts=_counts("candidate", args),
             rollback_counts=_counts("rollback", args),
             representative_npi=args.representative_npi,
+            candidate_industry_detail_status=args.candidate_industry_detail_status,
+            rollback_industry_detail_status=args.rollback_industry_detail_status,
         )
     except Exception as error:
         if args.json:

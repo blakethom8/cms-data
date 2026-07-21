@@ -149,6 +149,7 @@ def run_smoke(
     expected_hospital_affiliations: int,
     expected_affiliated_providers: int,
     expected_raw_hospital_enrollments: int,
+    expected_industry_detail_status: int = 200,
     representative_npi: str,
     process_id: int,
     production_root: Path,
@@ -156,6 +157,8 @@ def run_smoke(
 ) -> dict:
     """Run bounded read-only checks and return evidence without response bodies."""
     _validate_loopback_url(base_url)
+    if expected_industry_detail_status not in {200, 404}:
+        raise ValueError("Expected industry detail status must be 200 or 404")
     checks: list[dict] = []
 
     status, health = _request(base_url, "GET", "/health", api_key)
@@ -351,21 +354,35 @@ def run_smoke(
         detail_status, detail = _request(
             base_url, "GET", f"/industry/{detail_npi}/detail", api_key
         )
-        detail_ok = (
-            detail_status == 200
-            and isinstance(detail, dict)
-            and str(detail.get("npi")) == detail_npi
-            and {
-                "payment_count",
-                "total_usd",
-                "nonfood_usd",
-                "consulting_speaking_usd",
-                "by_nature",
-                "manufacturers",
-                "products",
-            }.issubset(detail)
+        if expected_industry_detail_status == 200:
+            detail_ok = (
+                detail_status == 200
+                and isinstance(detail, dict)
+                and str(detail.get("npi")) == detail_npi
+                and {
+                    "payment_count",
+                    "total_usd",
+                    "nonfood_usd",
+                    "consulting_speaking_usd",
+                    "by_nature",
+                    "manufacturers",
+                    "products",
+                }.issubset(detail)
+            )
+        else:
+            detail_ok = (
+                detail_status == 404
+                and isinstance(detail, dict)
+                and detail.get("detail") == "Not Found"
+            )
+        checks.append(
+            _check(
+                "industry_detail",
+                detail_ok,
+                detail_status,
+                {"npi": detail_npi, "expected_status": expected_industry_detail_status},
+            )
         )
-        checks.append(_check("industry_detail", detail_ok, detail_status, {"npi": detail_npi}))
     else:
         checks.append(_check("industry_detail", False, None))
 
@@ -538,6 +555,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--expected-hospital-affiliations", type=int, required=True)
     parser.add_argument("--expected-affiliated-providers", type=int, required=True)
     parser.add_argument("--expected-raw-hospital-enrollments", type=int, required=True)
+    parser.add_argument(
+        "--expected-industry-detail-status", type=int, choices=(200, 404), default=200
+    )
     parser.add_argument("--representative-npi", default="1003005257")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--json", action="store_true")
@@ -559,6 +579,7 @@ def main(argv: list[str] | None = None) -> int:
             expected_hospital_affiliations=args.expected_hospital_affiliations,
             expected_affiliated_providers=args.expected_affiliated_providers,
             expected_raw_hospital_enrollments=args.expected_raw_hospital_enrollments,
+            expected_industry_detail_status=args.expected_industry_detail_status,
             representative_npi=args.representative_npi,
             process_id=args.process_id,
             production_root=args.production_root,

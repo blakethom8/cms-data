@@ -118,6 +118,7 @@ serves its original paths.
   --expected-hospital-affiliations ROLLBACK_AFFILIATION_COUNT \
   --expected-affiliated-providers ROLLBACK_AFFILIATED_PROVIDER_COUNT \
   --expected-raw-hospital-enrollments ROLLBACK_RAW_HOSPITAL_COUNT \
+  --expected-industry-detail-status ROLLBACK_INDUSTRY_DETAIL_STATUS \
   --output /srv/cms-data-platform/production/evidence/ROLLBACK_DEPLOYMENT_ID/smoke.json
 
 /usr/bin/python3 /srv/cms-data-platform/production-ops/current/pipeline/production_manager.py \
@@ -204,6 +205,7 @@ PYTHONPATH=/srv/cms-data-platform/production-ops/current \
   --rollback-hospital-affiliations ROLLBACK_AFFILIATION_COUNT \
   --rollback-affiliated-providers ROLLBACK_AFFILIATED_PROVIDER_COUNT \
   --rollback-raw-hospital-enrollments ROLLBACK_RAW_HOSPITAL_COUNT \
+  --rollback-industry-detail-status ROLLBACK_INDUSTRY_DETAIL_STATUS \
   --json
 ```
 

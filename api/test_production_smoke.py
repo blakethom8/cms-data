@@ -185,6 +185,37 @@ def test_smoke_fails_on_exact_count_change(monkeypatch: pytest.MonkeyPatch):
     assert "warehouse_counts" in evidence["error_summary"]
 
 
+def test_smoke_can_verify_known_rollback_detail_absence(monkeypatch: pytest.MonkeyPatch):
+    def rollback_request(base_url, method, path, api_key, payload=None):
+        if path.startswith("/industry/") and path.endswith("/detail"):
+            return 404, {"detail": "Not Found"}
+        return _successful_request(base_url, method, path, api_key, payload)
+
+    monkeypatch.setattr(smoke, "_request", rollback_request)
+    monkeypatch.setattr(
+        smoke,
+        "_process_identity",
+        lambda *args, **kwargs: (True, {"warehouse_open": True}),
+    )
+    evidence = smoke.run_smoke(
+        base_url="http://127.0.0.1:8080",
+        deployment_id="legacy-20260721T120000Z-abcdef1234",
+        api_key="secret-not-for-evidence",
+        expected_core_providers=1196535,
+        expected_hospital_affiliations=146970,
+        expected_affiliated_providers=118864,
+        expected_raw_hospital_enrollments=9175,
+        expected_industry_detail_status=404,
+        representative_npi="1003005257",
+        process_id=123,
+        production_root=Path("/srv/cms-data-platform/production"),
+    )
+
+    detail = next(check for check in evidence["checks"] if check["name"] == "industry_detail")
+    assert detail["state"] == "passed"
+    assert detail["summary"]["expected_status"] == 404
+
+
 def test_smoke_rejects_non_loopback_before_sending_api_key(monkeypatch: pytest.MonkeyPatch):
     called = False
 
