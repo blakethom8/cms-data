@@ -14,7 +14,6 @@ from enum import Enum
 from pathlib import Path
 
 from .acquisition import (
-    DEFAULT_MAX_DOWNLOAD_BYTES,
     SUPPORTED_ACQUISITION_SOURCES,
     AcquisitionError,
     acquire_release,
@@ -313,8 +312,7 @@ def _parser() -> argparse.ArgumentParser:
     acquire.add_argument(
         "--max-bytes",
         type=int,
-        default=DEFAULT_MAX_DOWNLOAD_BYTES,
-        help="Hard transfer limit; defaults to 100 MiB",
+        help="Optional hard transfer limit; defaults to the source-specific safety ceiling",
     )
     build = subparsers.add_parser(
         "build-release",

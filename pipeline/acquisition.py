@@ -1,8 +1,9 @@
 """Immutable source acquisition for staged data-platform runs.
 
-The first supported source is CMS Hospital Enrollments. Downloads are bounded,
-streamed to a ``.partial`` file, and atomically renamed only after the response is
-complete. This module never opens DuckDB and never promotes a release.
+CMS CSV downloads are bounded, streamed to a ``.partial`` file, and atomically
+renamed only after the response is complete. Each source is then checked against a
+small explicit schema contract while every CSV row is parsed. This module never
+opens DuckDB and never promotes a release.
 """
 
 from __future__ import annotations
@@ -29,18 +30,102 @@ from .manifests import (
 )
 from .source_registry import SOURCE_REGISTRY
 
-SUPPORTED_ACQUISITION_SOURCES = frozenset({"cms_hospital_enrollments"})
 DEFAULT_MAX_DOWNLOAD_BYTES = 100 * 1024 * 1024
 DOWNLOAD_CHUNK_BYTES = 1024 * 1024
 USER_AGENT = "cms-data-platform-acquisition/1.0 (+staged immutable download)"
 
-HOSPITAL_REQUIRED_COLUMNS = (
-    "ENROLLMENT ID",
-    "NPI",
-    "CCN",
-    "ORGANIZATION NAME",
-    "STATE",
-)
+
+@dataclass(frozen=True, slots=True)
+class CsvAcquisitionProfile:
+    label: str
+    required_columns: tuple[str, ...]
+    identifier_column: str
+    max_download_bytes: int
+
+
+GIB = 1024 * 1024 * 1024
+CMS_CSV_PROFILES: dict[str, CsvAcquisitionProfile] = {
+    "cms_physician_by_provider": CsvAcquisitionProfile(
+        "Physician by Provider CSV",
+        (
+            "Rndrng_NPI",
+            "Rndrng_Prvdr_Ent_Cd",
+            "Rndrng_Prvdr_Type",
+            "Tot_HCPCS_Cds",
+            "Tot_Srvcs",
+            "Tot_Benes",
+        ),
+        "Rndrng_NPI",
+        2 * GIB,
+    ),
+    "cms_physician_by_provider_and_service": CsvAcquisitionProfile(
+        "Physician by Provider and Service CSV",
+        (
+            "Rndrng_NPI",
+            "Rndrng_Prvdr_Ent_Cd",
+            "HCPCS_Cd",
+            "Place_Of_Srvc",
+            "Tot_Srvcs",
+        ),
+        "Rndrng_NPI",
+        12 * GIB,
+    ),
+    "cms_part_d_by_provider": CsvAcquisitionProfile(
+        "Part D by Provider CSV",
+        ("PRSCRBR_NPI", "Tot_Clms", "Tot_Drug_Cst", "Opioid_Prscrbr_Rate"),
+        "PRSCRBR_NPI",
+        2 * GIB,
+    ),
+    "cms_part_d_by_provider_and_drug": CsvAcquisitionProfile(
+        "Part D by Provider and Drug CSV",
+        ("Prscrbr_NPI", "Brnd_Name", "Gnrc_Name", "Tot_Clms", "Tot_Drug_Cst"),
+        "Prscrbr_NPI",
+        12 * GIB,
+    ),
+    "cms_dme_by_referring_provider": CsvAcquisitionProfile(
+        "DME by Referring Provider CSV",
+        ("Rfrg_NPI", "Tot_Suplr_Clms", "Suplr_Mdcr_Pymt_Amt"),
+        "Rfrg_NPI",
+        2 * GIB,
+    ),
+    "cms_qpp_experience": CsvAcquisitionProfile(
+        "QPP Experience CSV",
+        ("npi", "practice state or us territory", "final score"),
+        "npi",
+        2 * GIB,
+    ),
+    "cms_pecos_public_provider_enrollment": CsvAcquisitionProfile(
+        "PECOS Public Provider Enrollment CSV",
+        ("NPI", "MULTIPLE_NPI_FLAG", "ENRLMT_ID", "PROVIDER_TYPE_CD"),
+        "NPI",
+        2 * GIB,
+    ),
+    "cms_order_and_referring": CsvAcquisitionProfile(
+        "Order and Referring CSV",
+        ("NPI", "LAST_NAME", "FIRST_NAME", "PARTB", "DME", "HHA", "HOSPICE"),
+        "NPI",
+        1 * GIB,
+    ),
+    "cms_hospital_enrollments": CsvAcquisitionProfile(
+        "Hospital Enrollments CSV",
+        ("ENROLLMENT ID", "NPI", "CCN", "ORGANIZATION NAME", "STATE"),
+        "NPI",
+        256 * 1024 * 1024,
+    ),
+    "cms_revalidation_group_reassignment": CsvAcquisitionProfile(
+        "Revalidation Group Reassignment CSV",
+        (
+            "Group PAC ID",
+            "Group Enrollment ID",
+            "Group Legal Business Name",
+            "Group State Code",
+            "Individual NPI",
+        ),
+        "Individual NPI",
+        2 * GIB,
+    ),
+}
+SUPPORTED_ACQUISITION_SOURCES = frozenset(CMS_CSV_PROFILES)
 
 
 class AcquisitionError(RuntimeError):
@@ -110,7 +195,7 @@ def _validate_source_url(url: str) -> str:
     parsed = urlparse(url)
     if parsed.scheme != "https" or parsed.hostname != "data.cms.gov":
         raise AcquisitionError(
-            "Hospital Enrollments artifact must use HTTPS on data.cms.gov"
+            "CMS artifact must use HTTPS on data.cms.gov"
         )
     return parsed.hostname
 
@@ -190,8 +275,16 @@ def download_artifact(
     return byte_size, digest.hexdigest()
 
 
-def inspect_hospital_enrollments(path: Path) -> ArtifactInspection:
-    """Validate the Hospital Enrollments CSV and derive durable artifact metrics."""
+def _normalized_column(value: str) -> str:
+    return " ".join(value.strip().lower().split())
+
+
+def inspect_cms_csv(
+    path: Path,
+    *,
+    profile: CsvAcquisitionProfile,
+) -> ArtifactInspection:
+    """Validate a CMS CSV and derive durable artifact metrics without loading it."""
     digest = hashlib.sha256()
     byte_size = 0
     with path.open("rb") as raw:
@@ -211,7 +304,7 @@ def inspect_hospital_enrollments(path: Path) -> ArtifactInspection:
         break
     if source_encoding is None:
         raise AcquisitionError(
-            "Hospital Enrollments CSV is neither valid UTF-8 nor Windows-1252"
+            f"{profile.label} is neither valid UTF-8 nor Windows-1252"
         )
 
     try:
@@ -219,36 +312,46 @@ def inspect_hospital_enrollments(path: Path) -> ArtifactInspection:
             reader = csv.reader(handle)
             header = next(reader, None)
             if not header:
-                raise AcquisitionError("Hospital Enrollments CSV has no header")
+                raise AcquisitionError(f"{profile.label} has no header")
             if any(not column.strip() for column in header):
-                raise AcquisitionError("Hospital Enrollments CSV has a blank column name")
-            if len(header) != len(set(header)):
-                raise AcquisitionError("Hospital Enrollments CSV has duplicate column names")
-            missing = [column for column in HOSPITAL_REQUIRED_COLUMNS if column not in header]
+                raise AcquisitionError(f"{profile.label} has a blank column name")
+            normalized_header = [_normalized_column(column) for column in header]
+            if len(normalized_header) != len(set(normalized_header)):
+                raise AcquisitionError(f"{profile.label} has duplicate column names")
+            normalized_required = {
+                _normalized_column(column): column for column in profile.required_columns
+            }
+            missing = [
+                original
+                for normalized, original in normalized_required.items()
+                if normalized not in normalized_header
+            ]
             if missing:
                 raise AcquisitionError(
-                    "Hospital Enrollments CSV is missing required columns: "
+                    f"{profile.label} is missing required columns: "
                     + ", ".join(missing)
                 )
-            npi_index = header.index("NPI")
+            identifier_index = normalized_header.index(
+                _normalized_column(profile.identifier_column)
+            )
             row_count = 0
             for line_number, row in enumerate(reader, start=2):
                 if len(row) != len(header):
                     raise AcquisitionError(
-                        f"Hospital Enrollments CSV row {line_number} has {len(row)} fields; "
+                        f"{profile.label} row {line_number} has {len(row)} fields; "
                         f"expected {len(header)}"
                     )
-                npi = row[npi_index].strip()
+                npi = row[identifier_index].strip()
                 if not (len(npi) == 10 and npi.isdigit()):
                     raise AcquisitionError(
-                        f"Hospital Enrollments CSV row {line_number} has an invalid NPI"
+                        f"{profile.label} row {line_number} has an invalid NPI"
                     )
                 row_count += 1
     except csv.Error as error:
-        raise AcquisitionError(f"Hospital Enrollments CSV is malformed: {safe_error(error)}") from error
+        raise AcquisitionError(f"{profile.label} is malformed: {safe_error(error)}") from error
 
     if row_count == 0:
-        raise AcquisitionError("Hospital Enrollments CSV contains no data rows")
+        raise AcquisitionError(f"{profile.label} contains no data rows")
     schema_payload = json.dumps(header, ensure_ascii=False, separators=(",", ":"))
     schema_fingerprint = "sha256:" + hashlib.sha256(
         schema_payload.encode("utf-8")
@@ -259,6 +362,14 @@ def inspect_hospital_enrollments(path: Path) -> ArtifactInspection:
         schema_fingerprint=schema_fingerprint,
         source_encoding=source_encoding,
         row_count=row_count,
+    )
+
+
+def inspect_hospital_enrollments(path: Path) -> ArtifactInspection:
+    """Validate Hospital Enrollments using its source-specific CMS CSV profile."""
+    return inspect_cms_csv(
+        path,
+        profile=CMS_CSV_PROFILES["cms_hospital_enrollments"],
     )
 
 
@@ -279,7 +390,7 @@ def acquire_release(
     discovery_timestamp: str,
     data_root: Path,
     manifest_path: Path,
-    max_bytes: int = DEFAULT_MAX_DOWNLOAD_BYTES,
+    max_bytes: int | None = None,
     timeout: float = 60.0,
     code_commit: str | None = None,
 ) -> AcquisitionResult:
@@ -289,6 +400,7 @@ def acquire_release(
             f"Immutable acquisition is not implemented for {release.source_id}"
         )
     spec = SOURCE_REGISTRY[release.source_id]
+    profile = CMS_CSV_PROFILES[release.source_id]
     run_id = make_run_id()
     run_directory = data_root / "runs" / release.source_id / run_id
     artifact_path = run_directory / "source.csv"
@@ -311,13 +423,15 @@ def acquire_release(
         downloaded_size, downloaded_sha = download_artifact(
             release,
             artifact_path,
-            max_bytes=max_bytes,
+            max_bytes=(
+                profile.max_download_bytes if max_bytes is None else max_bytes
+            ),
             timeout=timeout,
         )
         manifest.retrieval_timestamp = utc_now()
         manifest.byte_size = downloaded_size
         manifest.sha256 = downloaded_sha
-        inspection = inspect_hospital_enrollments(artifact_path)
+        inspection = inspect_cms_csv(artifact_path, profile=profile)
         if inspection.byte_size != downloaded_size or inspection.sha256 != downloaded_sha:
             raise AcquisitionError("Artifact changed between retrieval and validation")
         manifest.schema_fingerprint = inspection.schema_fingerprint

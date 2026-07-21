@@ -10,7 +10,10 @@ sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from pipeline.acquisition import (
     AcquisitionError,
+    CMS_CSV_PROFILES,
+    SUPPORTED_ACQUISITION_SOURCES,
     acquire_release,
+    inspect_cms_csv,
     inspect_hospital_enrollments,
 )
 from pipeline.data_platform import EXIT_HEALTHY, main
@@ -56,6 +59,16 @@ def _release() -> ReleaseMetadata:
         source_data_period="2099-07-01/2099-07-31",
         publisher_release_timestamp="2099-07-14T00:00:00+00:00",
         source_url="https://data.cms.gov/example/hospital-enrollments.csv",
+    )
+
+
+def _cms_release(source_id: str) -> ReleaseMetadata:
+    return ReleaseMetadata(
+        source_id=source_id,
+        publisher_version="cms-resource:10000000-0000-4000-8000-000000000001",
+        source_data_period="2097-01-01/2097-12-31",
+        publisher_release_timestamp="2099-05-21T00:00:00+00:00",
+        source_url="https://data.cms.gov/example/source.csv",
     )
 
 
@@ -167,6 +180,64 @@ def test_hospital_validator_accepts_and_records_windows_1252(tmp_path: Path) -> 
     assert inspection.source_encoding == "cp1252"
 
 
+@pytest.mark.parametrize("source_id", sorted(SUPPORTED_ACQUISITION_SOURCES))
+def test_every_cms_source_has_a_bounded_acquisition_profile(source_id: str) -> None:
+    profile = CMS_CSV_PROFILES[source_id]
+
+    assert profile.required_columns
+    assert profile.identifier_column in profile.required_columns
+    assert profile.max_download_bytes > 0
+
+
+def test_generic_cms_acquisition_accepts_case_stable_schema_and_records_manifest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    payload = (
+        b"Prscrbr_NPI,Tot_Clms,Tot_Drug_Cst,Opioid_Prscrbr_Rate\n"
+        b"1234567890,12,34.50,1.25\n"
+    )
+    _install_response(monkeypatch, payload)
+
+    result = acquire_release(
+        _cms_release("cms_part_d_by_provider"),
+        discovery_timestamp="2099-07-20T00:00:00+00:00",
+        data_root=tmp_path,
+        manifest_path=tmp_path / "manifests.json",
+        code_commit="d" * 40,
+    )
+
+    assert result.manifest.row_counts == {"source_rows": 1}
+    assert result.manifest.validation_state == ValidationState.PASSED
+    assert result.manifest.sha256 == hashlib.sha256(payload).hexdigest()
+
+
+def test_generic_cms_validator_rejects_missing_transform_contract_column(
+    tmp_path: Path,
+) -> None:
+    artifact = tmp_path / "part-d.csv"
+    artifact.write_bytes(b"Prscrbr_NPI,Tot_Clms,Tot_Drug_Cst\n1234567890,12,34.50\n")
+
+    with pytest.raises(AcquisitionError, match="missing required columns: Opioid_Prscrbr_Rate"):
+        inspect_cms_csv(
+            artifact,
+            profile=CMS_CSV_PROFILES["cms_part_d_by_provider"],
+        )
+
+
+def test_generic_cms_validator_rejects_row_width_change(tmp_path: Path) -> None:
+    artifact = tmp_path / "order.csv"
+    artifact.write_bytes(
+        b"NPI,LAST_NAME,FIRST_NAME,PARTB,DME,HHA,HOSPICE\n"
+        b"1234567890,Last,First,Y,Y,Y\n"
+    )
+
+    with pytest.raises(AcquisitionError, match="row 2 has 6 fields; expected 7"):
+        inspect_cms_csv(
+            artifact,
+            profile=CMS_CSV_PROFILES["cms_order_and_referring"],
+        )
+
+
 def test_acquire_dry_run_uses_fixtures_and_writes_nothing(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -198,3 +269,32 @@ def test_acquire_dry_run_uses_fixtures_and_writes_nothing(
     assert payload["source_id"] == "cms_hospital_enrollments"
     assert not data_root.exists()
     assert (database.read_bytes(), database.stat().st_mtime_ns) == before
+
+
+@pytest.mark.parametrize("source_id", sorted(SUPPORTED_ACQUISITION_SOURCES))
+def test_acquire_dry_run_discovers_every_supported_cms_source_without_writes(
+    source_id: str,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    data_root = tmp_path / source_id
+
+    code = main(
+        [
+            "acquire",
+            source_id,
+            "--fixtures",
+            str(FIXTURES),
+            "--dry-run",
+            "--json",
+            "--data-root",
+            str(data_root),
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert code == EXIT_HEALTHY
+    assert payload["source_id"] == source_id
+    assert payload["dry_run"] is True
+    assert payload["wrote_files"] is False
+    assert not data_root.exists()
