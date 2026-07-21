@@ -154,6 +154,7 @@ CMS_CSV_PROFILES: dict[str, CsvAcquisitionProfile] = {
     "cms_qpp_experience": CsvAcquisitionProfile(
         "QPP Experience CSV",
         (
+            "provider key",
             "npi",
             "practice state or us territory",
             "practice size",
