@@ -45,6 +45,23 @@ def test_aact_archive_requires_dump_and_dictionary(tmp_path: Path) -> None:
         inspect_archive(path, ARCHIVE_PROFILES["aact_clinical_trials_snapshot"])
 
 
+@pytest.mark.parametrize(
+    ("source_id", "member"),
+    [
+        ("open_payments_general", "OP_DTL_GNRL_PGYR2025.csv"),
+        ("open_payments_research", "OP_DTL_RSRCH_PGYR2025.csv"),
+        ("open_payments_ownership", "OP_DTL_OWNRSHP_PGYR2025.csv"),
+    ],
+)
+def test_open_payments_category_member_contract(
+    source_id: str, member: str, tmp_path: Path
+) -> None:
+    path = tmp_path / f"{source_id}.zip"
+    _zip(path, {member: b"header\nvalue\n"})
+
+    assert inspect_archive(path, ARCHIVE_PROFILES[source_id]).member_count == 1
+
+
 def test_archive_rejects_path_traversal_member(tmp_path: Path) -> None:
     path = tmp_path / "unsafe.zip"
     _zip(

@@ -51,6 +51,24 @@ ARCHIVE_PROFILES = {
         5 * GIB,
         20 * GIB,
     ),
+    "open_payments_general": ArchiveProfile(
+        "Open Payments archive",
+        (r"(^|/).*GNRL.*\.csv$",),
+        3 * GIB,
+        30 * GIB,
+    ),
+    "open_payments_research": ArchiveProfile(
+        "Open Payments archive",
+        (r"(^|/).*RSRCH.*\.csv$",),
+        3 * GIB,
+        30 * GIB,
+    ),
+    "open_payments_ownership": ArchiveProfile(
+        "Open Payments archive",
+        (r"(^|/).*(OWNRSHP|OWNERSHIP).*\.csv$",),
+        3 * GIB,
+        30 * GIB,
+    ),
 }
 SUPPORTED_ARCHIVE_ACQUISITION_SOURCES = frozenset(ARCHIVE_PROFILES)
 
