@@ -40,6 +40,20 @@ COMPARISON_SCHEMA_VERSION = 1
 COPY_CHUNK_BYTES = 8 * 1024 * 1024
 STAGING_ENVIRONMENT = "staging"
 HOSPITAL_SOURCE_ID = "cms_hospital_enrollments"
+FULL_CMS_SOURCE_IDS = frozenset(
+    {
+        "cms_physician_by_provider",
+        "cms_physician_by_provider_and_service",
+        "cms_part_d_by_provider",
+        "cms_part_d_by_provider_and_drug",
+        "cms_dme_by_referring_provider",
+        "cms_qpp_experience",
+        "cms_pecos_public_provider_enrollment",
+        "cms_order_and_referring",
+        HOSPITAL_SOURCE_ID,
+        "cms_revalidation_group_reassignment",
+    }
+)
 AFFILIATION_MATCH_POLICY = "normalized_name_and_state_unique_hospital_npi_v1"
 AFFILIATION_CHANGED_TABLES = frozenset(
     {"raw_hospital_enrollments", "hospital_affiliations"}
@@ -959,6 +973,183 @@ def build_warehouse_release(
             release.sha256 = sha256_file(partial_path)
             release.table_counts = table_counts
             release.validation_details = validation_details
+            release.validation_state = ValidationState.PASSED
+            release.validation_timestamp = utc_now()
+            os.replace(partial_path, database_path)
+            os.chmod(database_path, 0o440)
+            _save_release_document(data_root, document)
+        except Exception as error:
+            release.validation_state = ValidationState.FAILED
+            release.error_summary = safe_error(error)
+            _save_release_document(data_root, document)
+            raise ReleaseError(release.error_summary) from error
+
+    return BuildResult(
+        release=release,
+        database_path=database_path,
+        release_manifest_path=_release_manifest_path(data_root, warehouse_release_id),
+        release_store_path=release_store_path,
+    )
+
+
+def _period_year(manifest: RunManifest) -> int:
+    value = manifest.source_data_period[:4]
+    if len(value) != 4 or not value.isdigit():
+        raise ReleaseError(
+            f"Source {manifest.source_id} period does not begin with a four-digit year"
+        )
+    return int(value)
+
+
+def build_full_cms_warehouse_release(
+    *,
+    data_root: Path,
+    source_run_ids: tuple[str, ...],
+    backup_manifest_path: Path,
+    code_commit: str | None = None,
+) -> BuildResult:
+    """Build all ten CMS sources into a new immutable warehouse candidate."""
+    from .candidate_sources import load_cms_raw_tables, verified_cms_runs
+    from .transform import clear_refresh_targets, transform_all
+
+    if len(source_run_ids) != len(set(source_run_ids)):
+        raise ReleaseError("Full CMS build source run IDs must be unique")
+    source_document = ManifestStore(data_root / "manifests.json").load()
+    by_run_id = {manifest.run_id: manifest for manifest in source_document.manifests}
+    try:
+        manifests = tuple(by_run_id[run_id] for run_id in source_run_ids)
+    except KeyError as error:
+        raise ReleaseError(f"Source manifest is missing for run {error.args[0]}") from error
+    by_source_id = {manifest.source_id: manifest for manifest in manifests}
+    if len(by_source_id) != len(manifests):
+        raise ReleaseError("Full CMS build contains multiple runs for one source")
+    missing = sorted(FULL_CMS_SOURCE_IDS - set(by_source_id))
+    unexpected = sorted(set(by_source_id) - FULL_CMS_SOURCE_IDS)
+    if missing or unexpected:
+        detail = []
+        if missing:
+            detail.append("missing=" + ",".join(missing))
+        if unexpected:
+            detail.append("unexpected=" + ",".join(unexpected))
+        raise ReleaseError("Full CMS build source set is incomplete: " + "; ".join(detail))
+
+    hospital_manifest = by_source_id[HOSPITAL_SOURCE_ID]
+    if hospital_manifest.run_id != _source_manifest(
+        data_root, hospital_manifest.run_id
+    ).run_id:
+        raise ReleaseError("Hospital source manifest verification failed")
+    hospital_artifact = _verified_source_artifact(data_root, hospital_manifest)
+    non_hospital_run_ids = tuple(
+        manifest.run_id
+        for manifest in manifests
+        if manifest.source_id != HOSPITAL_SOURCE_ID
+    )
+    verified_cms_runs(data_root, non_hospital_run_ids)
+
+    baseline, baseline_sha, baseline_bytes = _load_backup_manifest(backup_manifest_path)
+    commit = code_commit or pipeline_commit()
+    if commit is None:
+        raise ReleaseError("A full pipeline Git commit is required to build a release")
+    identity = hashlib.sha256("\0".join(sorted(source_run_ids)).encode()).hexdigest()
+    warehouse_release_id = make_warehouse_release_id(identity, commit)
+    release_dir = data_root / "releases" / warehouse_release_id
+    database_path = release_dir / "warehouse.duckdb"
+    partial_path = release_dir / "warehouse.duckdb.partial"
+    release_store_path = _release_store_path(data_root)
+
+    with _exclusive_lock(data_root / "locks" / "build.lock"):
+        release_dir.mkdir(parents=True, exist_ok=False)
+        document = WarehouseReleaseStore(release_store_path).load()
+        release = WarehouseRelease(
+            warehouse_release_id=warehouse_release_id,
+            created_at=utc_now(),
+            source_run_ids=tuple(sorted(source_run_ids)),
+            pipeline_code_commit=commit,
+            baseline_path=str(baseline),
+            baseline_sha256=baseline_sha,
+            database_path=str(database_path.relative_to(data_root)),
+            duckdb_version=duckdb.__version__,
+        )
+        document.releases.append(release)
+        _save_release_document(data_root, document)
+        try:
+            _copy_verified_baseline(
+                baseline,
+                partial_path,
+                expected_sha256=baseline_sha,
+                expected_bytes=baseline_bytes,
+            )
+            connection = duckdb.connect(str(partial_path), read_only=False)
+            try:
+                raw_counts = load_cms_raw_tables(
+                    connection,
+                    data_root=data_root,
+                    run_ids=non_hospital_run_ids,
+                )
+                connection.execute("BEGIN TRANSACTION")
+                _create_raw_hospital_table(connection)
+                hospital_rows = _load_hospital_rows(
+                    connection, hospital_artifact, hospital_manifest
+                )
+                clear_refresh_targets(connection)
+                transform_counts = transform_all(
+                    connection,
+                    _period_year(by_source_id["cms_physician_by_provider"]),
+                    practice_year=_period_year(
+                        by_source_id["cms_revalidation_group_reassignment"]
+                    ),
+                    quality_year=_period_year(by_source_id["cms_qpp_experience"]),
+                    include_hospital_affiliations=False,
+                )
+                affiliation_counts = _rebuild_hospital_affiliations(
+                    connection,
+                    data_year=_period_year(hospital_manifest),
+                )
+                table_counts = {
+                    **raw_counts,
+                    "raw_hospital_enrollments": hospital_rows,
+                    **transform_counts,
+                    "hospital_affiliations": affiliation_counts[
+                        "hospital_affiliations"
+                    ],
+                }
+                required_nonempty = (
+                    "core_providers",
+                    "utilization_metrics",
+                    "practice_locations",
+                    "provider_quality_scores",
+                    "provider_service_detail",
+                    "provider_drug_detail",
+                    "order_referring_eligibility",
+                    "hospital_affiliations",
+                )
+                empty = [name for name in required_nonempty if table_counts.get(name, 0) <= 0]
+                if empty:
+                    raise ReleaseError(
+                        "Full CMS candidate has empty required tables: " + ", ".join(empty)
+                    )
+                connection.execute("COMMIT")
+                release.validation_details = {
+                    "source_periods": {
+                        source_id: manifest.source_data_period
+                        for source_id, manifest in sorted(by_source_id.items())
+                    },
+                    "affiliation_match_policy": AFFILIATION_MATCH_POLICY,
+                    "affiliation_counts": affiliation_counts,
+                }
+                connection.execute("CHECKPOINT")
+            except Exception:
+                try:
+                    connection.execute("ROLLBACK")
+                except duckdb.Error:
+                    pass
+                raise
+            finally:
+                connection.close()
+
+            release.byte_size = partial_path.stat().st_size
+            release.sha256 = sha256_file(partial_path)
+            release.table_counts = dict(sorted(table_counts.items()))
             release.validation_state = ValidationState.PASSED
             release.validation_timestamp = utc_now()
             os.replace(partial_path, database_path)

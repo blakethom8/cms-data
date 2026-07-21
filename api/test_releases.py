@@ -24,6 +24,7 @@ from pipeline.releases import (
     ReleaseError,
     WAREHOUSE_RELEASE_SCHEMA_VERSION,
     WarehouseReleaseStore,
+    build_full_cms_warehouse_release,
     build_warehouse_release,
     compare_warehouse_release,
     promote_staging_release,
@@ -287,6 +288,19 @@ def test_schema_ddl_matches_canonical_raw_hospital_loader() -> None:
         "source_data_period",
         "ingested_at",
     ]
+
+
+def test_full_cms_build_refuses_an_incomplete_source_set(tmp_path: Path) -> None:
+    data_root = tmp_path / "data"
+    manifest = _stage_source(data_root)
+
+    with pytest.raises(ReleaseError, match="source set is incomplete: missing="):
+        build_full_cms_warehouse_release(
+            data_root=data_root,
+            source_run_ids=(manifest.run_id,),
+            backup_manifest_path=tmp_path / "unused-backup.json",
+            code_commit=CODE_COMMIT,
+        )
 
 
 def test_affiliation_transform_excludes_ambiguous_names_and_labels_dba_matches(

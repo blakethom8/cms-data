@@ -32,6 +32,7 @@ from .manifests import ManifestDocument, ManifestStore
 from .releases import (
     STAGING_ENVIRONMENT,
     ReleaseError,
+    build_full_cms_warehouse_release,
     build_warehouse_release,
     compare_warehouse_release,
     promote_staging_release,
@@ -327,6 +328,19 @@ def _parser() -> argparse.ArgumentParser:
         "--environment", choices=[STAGING_ENVIRONMENT], required=True
     )
     build.add_argument("--json", action="store_true")
+    build_cms = subparsers.add_parser(
+        "build-cms-release",
+        help="Build all ten validated CMS source runs into one staging candidate",
+    )
+    build_cms.add_argument("--source-run-id", action="append", required=True)
+    build_cms.add_argument("--backup-manifest", required=True, type=Path)
+    build_cms.add_argument(
+        "--data-root", type=Path, default=DEFAULT_MANIFEST_PATH.parent
+    )
+    build_cms.add_argument(
+        "--environment", choices=[STAGING_ENVIRONMENT], required=True
+    )
+    build_cms.add_argument("--json", action="store_true")
     compare = subparsers.add_parser(
         "compare-release",
         help="Compare a validated staging candidate with its immutable baseline",
@@ -405,7 +419,13 @@ def _render_acquisition(payload: dict, *, dry_run: bool) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
-    if args.command in {"build-release", "compare-release", "promote", "rollback"}:
+    if args.command in {
+        "build-release",
+        "build-cms-release",
+        "compare-release",
+        "promote",
+        "rollback",
+    }:
         try:
             if args.command == "build-release":
                 payload = build_warehouse_release(
@@ -414,6 +434,13 @@ def main(argv: list[str] | None = None) -> int:
                     backup_manifest_path=args.backup_manifest,
                 ).to_dict()
                 heading = "Staging warehouse release built"
+            elif args.command == "build-cms-release":
+                payload = build_full_cms_warehouse_release(
+                    data_root=args.data_root,
+                    source_run_ids=tuple(args.source_run_id),
+                    backup_manifest_path=args.backup_manifest,
+                ).to_dict()
+                heading = "Full CMS staging warehouse release built"
             elif args.command == "compare-release":
                 payload = compare_warehouse_release(
                     data_root=args.data_root,

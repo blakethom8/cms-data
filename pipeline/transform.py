@@ -423,6 +423,7 @@ def transform_all(
     *,
     practice_year: int | None = None,
     quality_year: int | None = None,
+    include_hospital_affiliations: bool = True,
 ) -> dict[str, int]:
     """Run all transforms in dependency order. Returns {table: row_count}."""
     results = {}
@@ -435,9 +436,10 @@ def transform_all(
     results["practice_locations"] = build_practice_locations(
         con, practice_year or data_year
     )
-    results["hospital_affiliations"] = build_hospital_affiliations(
-        con, practice_year or data_year
-    )
+    if include_hospital_affiliations:
+        results["hospital_affiliations"] = build_hospital_affiliations(
+            con, practice_year or data_year
+        )
     results["provider_quality_scores"] = build_provider_quality_scores(
         con, quality_year or data_year
     )
