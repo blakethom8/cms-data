@@ -86,6 +86,15 @@ def _check(name: str, condition: bool, status: int | None, summary: dict | None 
     }
 
 
+def _references_runtime(command: list[str], roots: list[Path]) -> bool:
+    for value in command:
+        for root in roots:
+            root_text = str(root)
+            if value == root_text or value.startswith(root_text + os.sep):
+                return True
+    return False
+
+
 def _process_identity(
     process_id: int,
     production_root: Path,
@@ -121,10 +130,13 @@ def _process_identity(
         command_text = [part.decode(errors="replace") for part in command if part]
     except (FileNotFoundError, OSError):
         return False, {"process_id": process_id}
-    runtime_referenced = any(
-        value.startswith(str(runtime_pointer)) or value.startswith(str(expected_runtime))
-        for value in command_text
-    )
+    runtime_roots = [runtime_pointer, expected_runtime]
+    try:
+        if selector.is_symlink() and selector.resolve(strict=True) == bundle:
+            runtime_roots.append(selector / "runtime")
+    except (FileNotFoundError, OSError):
+        pass
+    runtime_referenced = _references_runtime(command_text, runtime_roots)
     passed = (
         actual_code == expected_code
         and expected_warehouse in open_targets

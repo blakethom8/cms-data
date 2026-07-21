@@ -161,6 +161,19 @@ def test_smoke_validates_required_contracts_and_exact_counts(monkeypatch: pytest
     }
 
 
+def test_runtime_identity_accepts_selected_bundle_path_without_prefix_collisions():
+    selector_runtime = Path("/srv/cms-data-platform/production/release-current/runtime")
+
+    assert smoke._references_runtime(
+        [str(selector_runtime / "bin/python"), "-m", "uvicorn"],
+        [selector_runtime],
+    )
+    assert not smoke._references_runtime(
+        [str(selector_runtime) + "-unrelated/bin/python"],
+        [selector_runtime],
+    )
+
+
 def test_smoke_fails_on_exact_count_change(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(smoke, "_request", _successful_request)
     monkeypatch.setattr(
