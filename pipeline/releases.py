@@ -36,7 +36,7 @@ from .manifests import (
 WAREHOUSE_RELEASE_SCHEMA_VERSION = 2
 SUPPORTED_WAREHOUSE_RELEASE_SCHEMA_VERSIONS = frozenset({1, 2})
 PROMOTION_JOURNAL_SCHEMA_VERSION = 1
-COMPARISON_SCHEMA_VERSION = 1
+COMPARISON_SCHEMA_VERSION = 2
 COPY_CHUNK_BYTES = 8 * 1024 * 1024
 STAGING_ENVIRONMENT = "staging"
 HOSPITAL_SOURCE_ID = "cms_hospital_enrollments"
@@ -96,6 +96,30 @@ AFFILIATION_MATCH_POLICY = "normalized_name_and_state_unique_hospital_npi_v1"
 AFFILIATION_CHANGED_TABLES = frozenset(
     {"raw_hospital_enrollments", "hospital_affiliations"}
 )
+FULL_CMS_CHANGED_TABLES = frozenset(
+    {
+        "core_providers",
+        "practice_locations",
+        "utilization_metrics",
+        "industry_relationships",
+        "hospital_affiliations",
+        "provider_service_detail",
+        "provider_drug_detail",
+        "provider_quality_scores",
+        "order_referring_eligibility",
+        "raw_physician_by_provider",
+        "raw_physician_by_provider_and_service",
+        "raw_part_d_by_provider",
+        "raw_part_d_by_provider_and_drug",
+        "raw_dme_by_referring_provider",
+        "raw_qpp_experience",
+        "raw_pecos_enrollment",
+        "raw_order_and_referring",
+        "raw_hospital_enrollments",
+        "raw_reassignment",
+    }
+)
+FULL_PLATFORM_CHANGED_TABLES = frozenset(FULL_PLATFORM_SMOKE_TABLES)
 
 HOSPITAL_COLUMN_MAP: tuple[tuple[str, str], ...] = (
     ("ENROLLMENT ID", "enrollment_id"),
@@ -1401,6 +1425,42 @@ def _database_table_counts(
     return counts
 
 
+def _comparison_policy(
+    release: WarehouseRelease,
+) -> tuple[str, frozenset[str], dict[str, int]]:
+    """Select the exact source-owned table set for a release comparison."""
+    source_periods = release.validation_details.get("source_periods")
+    source_ids = set(source_periods) if isinstance(source_periods, dict) else set()
+    if source_ids == FULL_PLATFORM_WAREHOUSE_SOURCE_IDS:
+        evidence = release.validation_details.get("smoke_table_counts")
+        if not isinstance(evidence, dict):
+            raise ReleaseError(
+                "Full platform release is missing exact smoke table-count evidence"
+            )
+        missing = sorted(set(FULL_PLATFORM_SMOKE_TABLES) - set(evidence))
+        unexpected = sorted(set(evidence) - set(FULL_PLATFORM_SMOKE_TABLES))
+        if missing or unexpected:
+            raise ReleaseError(
+                "Full platform smoke table-count evidence has the wrong table set: "
+                f"missing={','.join(missing) or 'none'}; "
+                f"unexpected={','.join(unexpected) or 'none'}"
+            )
+        try:
+            expected_counts = {name: int(evidence[name]) for name in evidence}
+        except (TypeError, ValueError) as error:
+            raise ReleaseError(
+                "Full platform smoke table-count evidence contains a non-integer count"
+            ) from error
+        if any(count < 0 for count in expected_counts.values()):
+            raise ReleaseError(
+                "Full platform smoke table-count evidence contains a negative count"
+            )
+        return "full_platform_v1", FULL_PLATFORM_CHANGED_TABLES, expected_counts
+    if source_ids == FULL_CMS_SOURCE_IDS:
+        return "full_cms_v1", FULL_CMS_CHANGED_TABLES, {}
+    return "hospital_affiliations_v1", AFFILIATION_CHANGED_TABLES, {}
+
+
 def compare_warehouse_release(
     *,
     data_root: Path,
@@ -1412,6 +1472,9 @@ def compare_warehouse_release(
         document = WarehouseReleaseStore(_release_store_path(data_root)).load()
         release = _find_release(document, warehouse_release_id)
         candidate = _verify_promotable(data_root, release)
+        policy_name, allowed_changed_tables, expected_counts = _comparison_policy(
+            release
+        )
         baseline, baseline_sha, baseline_bytes = _load_backup_manifest(
             backup_manifest_path
         )
@@ -1450,7 +1513,7 @@ def compare_warehouse_release(
             raise ReleaseError("Comparison candidate changed during its read-only inspection")
 
         table_names = set(baseline_counts) | set(candidate_counts)
-        invariant_tables = sorted(table_names - AFFILIATION_CHANGED_TABLES)
+        invariant_tables = sorted(table_names - allowed_changed_tables)
         unexpected_differences = [
             {
                 "table": table,
@@ -1465,7 +1528,7 @@ def compare_warehouse_release(
                 "baseline_rows": baseline_counts.get(table),
                 "candidate_rows": candidate_counts.get(table),
             }
-            for table in sorted(AFFILIATION_CHANGED_TABLES)
+            for table in sorted(allowed_changed_tables)
         }
         required_counts = {
             "core_providers": candidate_counts.get("core_providers", 0),
@@ -1478,9 +1541,20 @@ def compare_warehouse_release(
         failed_requirements = [
             table for table, count in required_counts.items() if count <= 0
         ]
+        evidence_mismatches = [
+            {
+                "table": table,
+                "expected_rows": expected,
+                "candidate_rows": candidate_counts.get(table),
+            }
+            for table, expected in sorted(expected_counts.items())
+            if candidate_counts.get(table) != expected
+        ]
         state = (
             "passed"
-            if not unexpected_differences and not failed_requirements
+            if not unexpected_differences
+            and not failed_requirements
+            and not evidence_mismatches
             else "failed"
         )
         payload = {
@@ -1490,6 +1564,7 @@ def compare_warehouse_release(
             "warehouse_release_id": warehouse_release_id,
             "pipeline_code_commit": release.pipeline_code_commit,
             "duckdb_version": release.duckdb_version,
+            "comparison_policy": policy_name,
             "baseline": {
                 "database_path": str(baseline),
                 "sha256": baseline_sha,
@@ -1505,6 +1580,7 @@ def compare_warehouse_release(
             "required_candidate_counts": required_counts,
             "unexpected_differences": unexpected_differences,
             "failed_requirements": failed_requirements,
+            "evidence_mismatches": evidence_mismatches,
             "representative_affiliations": [
                 {
                     "npi": row[0],
@@ -1526,7 +1602,8 @@ def compare_warehouse_release(
             raise ReleaseError(
                 "Candidate comparison failed: "
                 f"unexpected_differences={len(unexpected_differences)}, "
-                f"failed_requirements={','.join(failed_requirements) or 'none'}"
+                f"failed_requirements={','.join(failed_requirements) or 'none'}, "
+                f"evidence_mismatches={len(evidence_mismatches)}"
             )
         return payload
 
