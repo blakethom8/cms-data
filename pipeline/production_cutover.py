@@ -14,7 +14,7 @@ import re
 import subprocess
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import production_manager as manager
@@ -34,6 +34,7 @@ class ExpectedCounts:
     hospital_affiliations: int
     affiliated_providers: int
     raw_hospital_enrollments: int
+    table_counts: dict[str, int] = field(default_factory=dict)
 
 
 def _restart_service(service: str) -> int:
@@ -105,6 +106,7 @@ def _run_smoke_and_record(
             expected_hospital_affiliations=counts.hospital_affiliations,
             expected_affiliated_providers=counts.affiliated_providers,
             expected_raw_hospital_enrollments=counts.raw_hospital_enrollments,
+            expected_table_counts=counts.table_counts,
             expected_industry_detail_status=expected_industry_detail_status,
             representative_npi=representative_npi,
             process_id=process_id,
@@ -199,6 +201,9 @@ def _counts(prefix: str, args: argparse.Namespace) -> ExpectedCounts:
         hospital_affiliations=getattr(args, f"{prefix}_hospital_affiliations"),
         affiliated_providers=getattr(args, f"{prefix}_affiliated_providers"),
         raw_hospital_enrollments=getattr(args, f"{prefix}_raw_hospital_enrollments"),
+        table_counts=smoke._load_expected_table_counts(
+            getattr(args, f"{prefix}_table_counts")
+        ),
     )
 
 
@@ -221,6 +226,11 @@ def build_parser() -> argparse.ArgumentParser:
         parser.add_argument(f"--{prefix}-hospital-affiliations", type=int, required=True)
         parser.add_argument(f"--{prefix}-affiliated-providers", type=int, required=True)
         parser.add_argument(f"--{prefix}-raw-hospital-enrollments", type=int, required=True)
+        parser.add_argument(
+            f"--{prefix}-table-counts",
+            type=Path,
+            help="Release JSON containing validation_details.smoke_table_counts",
+        )
     parser.add_argument("--json", action="store_true")
     return parser
 

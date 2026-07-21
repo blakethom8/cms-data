@@ -46,18 +46,19 @@ unavailability or a discovery-contract error.
 
 ### Immutable staged acquisition
 
-Hospital Enrollments is the first source supported by the acquisition path. A dry run performs live
-publisher discovery but does not download or write anything:
+All registered CMS CSV, NPPES V2, Open Payments, and AACT sources use the immutable acquisition
+path. A dry run performs live publisher discovery but does not download or write anything:
 
 ```bash
 .venv/bin/python -m pipeline.data_platform acquire cms_hospital_enrollments --dry-run
 ```
 
-An actual acquisition writes only below the selected staging data root. It caps the download at
-100 MiB by default, streams to `source.csv.partial`, atomically renames the completed artifact,
-validates required columns and NPIs, and records byte count, SHA-256, source encoding, schema
-fingerprint, row count, source period, and code commit. The resulting manifest remains
-`not_promoted`; this command never opens DuckDB or changes an active release pointer.
+An actual acquisition writes only below the selected staging data root. Source-specific transfer
+and expansion ceilings apply. CSV sources are schema- and row-validated; ZIP sources are checked for
+safe member paths, encryption, required members, CRC integrity, compressed and uncompressed size,
+and member-list fingerprint. Every run records bytes, SHA-256, source period, publisher version,
+retrieval time, and code commit. The resulting manifest remains `not_promoted`; acquisition never
+opens DuckDB or changes an active release pointer.
 
 ```bash
 .venv/bin/python -m pipeline.data_platform acquire cms_hospital_enrollments \
@@ -86,18 +87,39 @@ warehouse backup. The environment flag is intentionally restricted to `staging`:
   --data-root data --json
 ```
 
+The complete DuckDB candidate uses the ten CMS runs plus monthly and weekly NPPES and all three Open
+Payments categories. Repeat `--source-run-id` exactly once for each of those 15 validated runs:
+
+```bash
+.venv/bin/python -m pipeline.data_platform build-platform-release \
+  --environment staging \
+  --backup-manifest <verified-backup-manifest.json> \
+  --data-root data \
+  --source-run-id <run-1> --source-run-id <run-2> \
+  --source-run-id <...remaining-13-runs> --json
+
+.venv/bin/python -m pipeline.data_platform prepare-aact-release \
+  --environment staging \
+  --source-run-id <validated-aact-run-id> \
+  --data-root data --output-root <immutable-artifact-root> --json
+```
+
 The builder never opens `DUCKDB_PATH`. It copies the verified backup to a new partial candidate,
-loads `raw_hospital_enrollments`, runs row/schema/NPI/API-baseline checks, computes the completed
-database checksum, and then atomically renames it. Promotion changes only the staging symlink and
-records a recoverable journal. The staging CLI has no production environment option; production
-serving releases use the separate ledger described below.
+strictly replaces publisher-shaped raw tables, rebuilds CMS-derived tables, applies the monthly
+NPPES baseline followed by the weekly overlay and Radar events, rebuilds Open Payments aggregates,
+records release-wide exact smoke counts, computes the completed database checksum, and atomically
+renames the candidate. AACT remains PostgreSQL-backed; its command prepares a sealed `postgres.dmp`
+and dictionary release for a separately validated staging restore. Promotion changes only the
+staging symlink and records a recoverable journal. The staging CLI has no production environment
+option; production serving releases use the separate ledger described below.
 
 Focused data-platform tests run from the API test directory so they are included in the repository's
 complete suite:
 
 ```bash
 cd api && ../.venv/bin/python -m pytest \
-  test_data_platform.py test_acquisition.py test_releases.py \
+  test_data_platform.py test_acquisition.py test_archive_acquisition.py \
+  test_archive_sources.py test_releases.py \
   test_production.py test_production_smoke.py -q
 cd api && ../.venv/bin/python -m pytest -q
 ```

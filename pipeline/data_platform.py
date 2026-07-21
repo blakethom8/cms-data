@@ -24,6 +24,7 @@ from .archive_acquisition import (
     SUPPORTED_ARCHIVE_ACQUISITION_SOURCES,
     acquire_archive_release,
 )
+from .aact_releases import prepare_aact_release
 from .discovery import (
     DiscoveryResult,
     DiscoveryState,
@@ -37,6 +38,7 @@ from .releases import (
     STAGING_ENVIRONMENT,
     ReleaseError,
     build_full_cms_warehouse_release,
+    build_full_platform_warehouse_release,
     build_warehouse_release,
     compare_warehouse_release,
     promote_staging_release,
@@ -350,6 +352,32 @@ def _parser() -> argparse.ArgumentParser:
         "--environment", choices=[STAGING_ENVIRONMENT], required=True
     )
     build_cms.add_argument("--json", action="store_true")
+    build_platform = subparsers.add_parser(
+        "build-platform-release",
+        help="Build all CMS, NPPES, and Open Payments runs into one staging candidate",
+    )
+    build_platform.add_argument("--source-run-id", action="append", required=True)
+    build_platform.add_argument("--backup-manifest", required=True, type=Path)
+    build_platform.add_argument(
+        "--data-root", type=Path, default=DEFAULT_MANIFEST_PATH.parent
+    )
+    build_platform.add_argument(
+        "--environment", choices=[STAGING_ENVIRONMENT], required=True
+    )
+    build_platform.add_argument("--json", action="store_true")
+    prepare_aact = subparsers.add_parser(
+        "prepare-aact-release",
+        help="Prepare a sealed AACT PostgreSQL restore artifact in staging",
+    )
+    prepare_aact.add_argument("--source-run-id", required=True)
+    prepare_aact.add_argument("--output-root", required=True, type=Path)
+    prepare_aact.add_argument(
+        "--data-root", type=Path, default=DEFAULT_MANIFEST_PATH.parent
+    )
+    prepare_aact.add_argument(
+        "--environment", choices=[STAGING_ENVIRONMENT], required=True
+    )
+    prepare_aact.add_argument("--json", action="store_true")
     compare = subparsers.add_parser(
         "compare-release",
         help="Compare a validated staging candidate with its immutable baseline",
@@ -431,6 +459,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command in {
         "build-release",
         "build-cms-release",
+        "build-platform-release",
+        "prepare-aact-release",
         "compare-release",
         "promote",
         "rollback",
@@ -450,6 +480,20 @@ def main(argv: list[str] | None = None) -> int:
                     backup_manifest_path=args.backup_manifest,
                 ).to_dict()
                 heading = "Full CMS staging warehouse release built"
+            elif args.command == "build-platform-release":
+                payload = build_full_platform_warehouse_release(
+                    data_root=args.data_root,
+                    source_run_ids=tuple(args.source_run_id),
+                    backup_manifest_path=args.backup_manifest,
+                ).to_dict()
+                heading = "Full platform staging warehouse release built"
+            elif args.command == "prepare-aact-release":
+                payload = prepare_aact_release(
+                    data_root=args.data_root,
+                    source_run_id=args.source_run_id,
+                    output_root=args.output_root,
+                ).to_dict()
+                heading = "AACT staging restore release prepared"
             elif args.command == "compare-release":
                 payload = compare_warehouse_release(
                     data_root=args.data_root,

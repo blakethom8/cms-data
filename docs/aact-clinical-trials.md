@@ -56,3 +56,25 @@ contains `apiVersion`, `dataTimestamp`, `snapshotDate`, `studyCount`, and `sourc
 Refreshes must restore into staging, validate row counts and representative queries, and promote
 only after validation succeeds. The current refresh is operator-triggered. Preserve the previous
 snapshot until the replacement has passed application smoke tests.
+
+The public-data acquisition and restore-artifact preparation steps are now repository-owned:
+
+```bash
+.venv/bin/python -m pipeline.data_platform acquire aact_clinical_trials_snapshot \
+  --data-root <staging-data-root> --json
+
+.venv/bin/python -m pipeline.data_platform prepare-aact-release \
+  --environment staging \
+  --source-run-id <validated-aact-run-id> \
+  --data-root <staging-data-root> \
+  --output-root <immutable-artifact-root> --json
+```
+
+Preparation revalidates the acquired ZIP, extracts only `postgres.dmp` and
+`data_dictionary.csv`, verifies PostgreSQL custom-dump magic, hashes both files, and seals the
+versioned directory. It does not connect to PostgreSQL or change `CURRENT_SNAPSHOT`. Restore that
+artifact into a separately named candidate database, grant the read-only role, and validate the
+study count, latest update date, representative searches, and temporary API process before any
+database rename. AACT promotion is a coordinated PostgreSQL operation, not a DuckDB pointer change;
+stop the API during a combined cutover so no mixed DuckDB/AACT release is served, and retain the
+previous PostgreSQL database until the complete smoke suite passes.

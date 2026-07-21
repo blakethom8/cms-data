@@ -198,6 +198,80 @@ def test_smoke_fails_on_exact_count_change(monkeypatch: pytest.MonkeyPatch):
     assert "warehouse_counts" in evidence["error_summary"]
 
 
+def test_smoke_validates_release_wide_exact_table_counts(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    def request(base_url, method, path, api_key, payload=None):
+        if path == "/tables":
+            return 200, {
+                "tables": [
+                    {"name": "core_providers", "approx_rows": 1196535},
+                    {"name": "hospital_affiliations", "approx_rows": 146970},
+                    {"name": "raw_hospital_enrollments", "approx_rows": 9175},
+                    {"name": "raw_nppes", "approx_rows": 2},
+                    {"name": "raw_open_payments_general", "approx_rows": 1},
+                ]
+            }
+        if path == "/query":
+            assert "raw_nppes" in payload["sql"]
+            assert "raw_open_payments_general" in payload["sql"]
+            return 200, {"rows": [[1196535, 9175, 146970, 2, 1, 118864]]}
+        return _successful_request(base_url, method, path, api_key, payload)
+
+    monkeypatch.setattr(smoke, "_request", request)
+    monkeypatch.setattr(
+        smoke,
+        "_process_identity",
+        lambda *args, **kwargs: (True, {"warehouse_open": True}),
+    )
+    evidence = smoke.run_smoke(
+        base_url="http://127.0.0.1:8080",
+        deployment_id="deployment-20260721T120000Z-abcdef1234",
+        api_key="secret-not-for-evidence",
+        expected_core_providers=1196535,
+        expected_hospital_affiliations=146970,
+        expected_affiliated_providers=118864,
+        expected_raw_hospital_enrollments=9175,
+        expected_table_counts={
+            "core_providers": 1196535,
+            "raw_nppes": 2,
+            "raw_open_payments_general": 1,
+        },
+        representative_npi="1003005257",
+        process_id=123,
+        production_root=Path("/srv/cms-data-platform/production"),
+    )
+
+    assert evidence["state"] == "passed"
+    counts = next(
+        check for check in evidence["checks"] if check["name"] == "warehouse_counts"
+    )
+    assert counts["summary"]["raw_nppes"] == 2
+
+
+def test_release_manifest_table_counts_are_loaded_for_smoke(tmp_path: Path):
+    release = tmp_path / "release.json"
+    release.write_text(
+        json.dumps(
+            {
+                "release": {
+                    "validation_details": {
+                        "smoke_table_counts": {
+                            "raw_nppes": 10,
+                            "raw_open_payments_general": 20,
+                        }
+                    }
+                }
+            }
+        )
+    )
+
+    assert smoke._load_expected_table_counts(release) == {
+        "raw_nppes": 10,
+        "raw_open_payments_general": 20,
+    }
+
+
 def test_smoke_can_verify_known_rollback_detail_absence(monkeypatch: pytest.MonkeyPatch):
     def rollback_request(base_url, method, path, api_key, payload=None):
         if path.startswith("/industry/") and path.endswith("/detail"):

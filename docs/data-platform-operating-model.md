@@ -152,17 +152,20 @@ manifest must account for every registry source; sources that cannot be proved a
 `unresolved` or `not_installed` and do not receive an active manifest. The command writes candidate
 evidence only and never changes a warehouse, deployment pointer, or selected deployment evidence.
 
-## First Immutable Acquisition
+## Immutable Acquisition and Complete Candidate Builds
 
-`pipeline/acquisition.py` makes lifecycle steps 2 and 3 concrete for CMS Hospital Enrollments. The
-`pipeline.data_platform acquire cms_hospital_enrollments` command:
+`pipeline/acquisition.py` and `pipeline/archive_acquisition.py` make lifecycle steps 2 and 3
+concrete for every registered source. CMS CSVs use source-specific column, identifier, encoding,
+row, and byte contracts. NPPES, Open Payments, and AACT archives use publisher-discovered URLs and
+enforce safe member paths, required member patterns, CRC checks, encryption rejection, expansion
+ceilings, and member-list fingerprints. The
+`pipeline.data_platform acquire <source-id>` command:
 
 - resolves the current CSV through live `data.json` discovery instead of a dated URL in code;
 - accepts only HTTPS artifacts on `data.cms.gov` and rejects cross-host redirects;
-- enforces a 100 MiB default transfer ceiling while streaming to `source.csv.partial`;
+- enforces a source-specific transfer ceiling while streaming to a `.partial` artifact;
 - atomically renames the artifact only after the response completes and the file is flushed;
-- validates a non-empty UTF-8 or Windows-1252 CSV, records the detected encoding, and checks unique
-  column names, required enrollment/NPI/organization fields, exact row widths, and ten-digit NPIs;
+- validates the source-specific CSV or archive contract and records its encoding or archive shape;
 - records actual bytes, SHA-256, an ordered-header schema fingerprint, source row count, discovery and
   retrieval timestamps, source period, publisher release/version, and Git commit; and
 - writes a per-run manifest plus the local versioned manifest store with validation state `passed`
@@ -173,6 +176,14 @@ overwritten. Failed retrieval or validation runs retain a safe failed manifest a
 warehouse unchanged. `--dry-run` performs discovery and path planning without creating the data
 root. Fixture metadata is deliberately accepted only with `--dry-run`, so fixture-derived publisher
 versions cannot be acquired as promotion candidates.
+
+`build-platform-release --environment staging` requires exactly the ten CMS, two NPPES, and three
+Open Payments runs. It copies a checksum-verified baseline to a new candidate, strictly replaces raw
+tables, rebuilds derived data, applies monthly NPPES before the weekly overlay, rebuilds Radar and
+Open Payments summaries, and records exact counts for every table required by production smoke.
+`prepare-aact-release --environment staging` revalidates the AACT archive and seals its PostgreSQL
+custom dump and data dictionary as a separate immutable restore artifact. Neither operation opens or
+overwrites the selected production DuckDB.
 
 ## Production Model
 
@@ -249,10 +260,8 @@ The checked-in systemd definition under `deploy/systemd/` uses only the selected
 refuses startup while a transition sentinel or blocking journal event exists. It reads control logic
 from a separate immutable operations package so rollback does not depend on candidate code, and it
 loads secrets only from stable protected environment files. Staging and production therefore have
-independent active states
-and rollback histories. This establishes reproducible serving and promotion; it does not imply that
-all source families have automated refresh jobs. Hospital Enrollments remains the first complete
-immutable acquisition/build vertical slice, and future timers must still build and validate in
+independent active states and rollback histories. This establishes reproducible serving and
+promotion; refresh remains operator-triggered, and future timers must still build and validate in
 staging before an explicitly approved production promotion.
 
 `deploy/systemd/cms-data-status.timer` schedules live publisher-metadata discovery daily at 06:15

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.parse
@@ -166,6 +167,7 @@ def run_smoke(
     process_id: int,
     production_root: Path,
     release_bundle: Path | None = None,
+    expected_table_counts: dict[str, int] | None = None,
 ) -> dict:
     """Run bounded read-only checks and return evidence without response bodies."""
     _validate_loopback_url(base_url)
@@ -458,11 +460,21 @@ def run_smoke(
         for item in table_values
         if isinstance(item, dict)
     }
-    required_tables = {
-        "core_providers",
-        "hospital_affiliations",
-        "raw_hospital_enrollments",
+    base_expected_counts = {
+        "core_providers": expected_core_providers,
+        "raw_hospital_enrollments": expected_raw_hospital_enrollments,
+        "hospital_affiliations": expected_hospital_affiliations,
     }
+    extra_expected_counts = expected_table_counts or {}
+    for table, expected in extra_expected_counts.items():
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", table):
+            raise ValueError(f"Invalid expected table name: {table!r}")
+        if not isinstance(expected, int) or isinstance(expected, bool) or expected < 0:
+            raise ValueError(f"Invalid expected count for table {table}")
+        if table in base_expected_counts and base_expected_counts[table] != expected:
+            raise ValueError(f"Conflicting expected count for table {table}")
+    all_expected_counts = {**base_expected_counts, **extra_expected_counts}
+    required_tables = set(all_expected_counts)
     tables_ok = status == 200 and required_tables.issubset(table_counts)
     checks.append(
         _check(
@@ -475,37 +487,37 @@ def run_smoke(
         )
     )
 
+    count_names = [
+        "core_providers",
+        "raw_hospital_enrollments",
+        "hospital_affiliations",
+    ] + sorted(set(extra_expected_counts) - set(base_expected_counts))
+    count_sql = ", ".join(
+        f'(SELECT COUNT(*) FROM "{name}") AS "{name}"' for name in count_names
+    )
+    count_sql += (
+        ", (SELECT COUNT(DISTINCT npi) FROM hospital_affiliations) "
+        "AS affiliated_providers"
+    )
     status, count_query = _request(
         base_url,
         "POST",
         "/query",
         api_key,
         {
-            "sql": (
-                "SELECT "
-                "(SELECT COUNT(*) FROM core_providers) AS core_providers, "
-                "(SELECT COUNT(*) FROM raw_hospital_enrollments) AS raw_hospital_enrollments, "
-                "(SELECT COUNT(*) FROM hospital_affiliations) AS hospital_affiliations, "
-                "(SELECT COUNT(DISTINCT npi) FROM hospital_affiliations) "
-                "AS affiliated_providers"
-            )
+            "sql": "SELECT " + count_sql
         },
     )
     rows = count_query.get("rows", []) if isinstance(count_query, dict) else []
-    actual_counts = (
-        rows[0] if rows and isinstance(rows[0], list) else [None, None, None, None]
-    )
-    if len(actual_counts) != 4:
-        actual_counts = [None, None, None, None]
+    expected_values = [all_expected_counts[name] for name in count_names] + [
+        expected_affiliated_providers
+    ]
+    actual_counts = rows[0] if rows and isinstance(rows[0], list) else []
+    if len(actual_counts) != len(expected_values):
+        actual_counts = [None] * len(expected_values)
     counts_ok = (
         status == 200
-        and actual_counts
-        == [
-            expected_core_providers,
-            expected_raw_hospital_enrollments,
-            expected_hospital_affiliations,
-            expected_affiliated_providers,
-        ]
+        and actual_counts == expected_values
     )
     checks.append(
         _check(
@@ -513,10 +525,8 @@ def run_smoke(
             counts_ok,
             status,
             {
-                "core_providers": actual_counts[0],
-                "raw_hospital_enrollments": actual_counts[1],
-                "hospital_affiliations": actual_counts[2],
-                "affiliated_providers": actual_counts[3],
+                **dict(zip(count_names, actual_counts[:-1])),
+                "affiliated_providers": actual_counts[-1],
             },
         )
     )
@@ -555,6 +565,39 @@ def _write_json_atomic(path: Path, value: dict) -> None:
         temporary.unlink(missing_ok=True)
 
 
+def _load_expected_table_counts(path: Path | None) -> dict[str, int]:
+    if path is None:
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"Expected table-count evidence is unreadable: {error}") from error
+    candidates = [
+        payload.get("smoke_table_counts") if isinstance(payload, dict) else None,
+        (payload.get("validation_details") or {}).get("smoke_table_counts")
+        if isinstance(payload, dict)
+        else None,
+        ((payload.get("release") or {}).get("validation_details") or {}).get(
+            "smoke_table_counts"
+        )
+        if isinstance(payload, dict)
+        else None,
+    ]
+    counts = next((value for value in candidates if isinstance(value, dict)), None)
+    if not counts:
+        raise ValueError("Expected table-count evidence has no smoke_table_counts object")
+    validated: dict[str, int] = {}
+    for name, count in counts.items():
+        if not isinstance(name, str) or not re.fullmatch(
+            r"[A-Za-z_][A-Za-z0-9_]*", name
+        ):
+            raise ValueError("Expected table-count evidence has an invalid table name")
+        if not isinstance(count, int) or isinstance(count, bool) or count < 0:
+            raise ValueError(f"Expected table-count evidence has an invalid count for {name}")
+        validated[name] = count
+    return validated
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run bounded read-only production API checks")
     parser.add_argument("--base-url", default="http://127.0.0.1:8080")
@@ -567,6 +610,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--expected-hospital-affiliations", type=int, required=True)
     parser.add_argument("--expected-affiliated-providers", type=int, required=True)
     parser.add_argument("--expected-raw-hospital-enrollments", type=int, required=True)
+    parser.add_argument(
+        "--expected-table-counts",
+        type=Path,
+        help="Release JSON containing validation_details.smoke_table_counts",
+    )
     parser.add_argument(
         "--expected-industry-detail-status", type=int, choices=(200, 404), default=200
     )
@@ -591,6 +639,9 @@ def main(argv: list[str] | None = None) -> int:
             expected_hospital_affiliations=args.expected_hospital_affiliations,
             expected_affiliated_providers=args.expected_affiliated_providers,
             expected_raw_hospital_enrollments=args.expected_raw_hospital_enrollments,
+            expected_table_counts=_load_expected_table_counts(
+                args.expected_table_counts
+            ),
             expected_industry_detail_status=args.expected_industry_detail_status,
             representative_npi=args.representative_npi,
             process_id=args.process_id,
