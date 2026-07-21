@@ -60,7 +60,7 @@ def build_production_status(
     manifest_path = selected_manifest_path(production_root, selected_id)
     try:
         manifests = ManifestStore(manifest_path).load()
-    except (OSError, ProductionError, ValueError) as error:
+    except (OSError, ValueError) as error:
         payload = {
             "schema_version": 1,
             "generated_at": utc_now(),
@@ -117,7 +117,7 @@ def main(argv: list[str] | None = None) -> int:
             fixture_dir=fixture_dir,
             timeout=args.timeout,
         )
-    except (OSError, ValueError) as error:
+    except (OSError, ProductionError, ValueError) as error:
         payload = {
             "schema_version": 1,
             "generated_at": utc_now(),

@@ -70,6 +70,26 @@ def test_unhealthy_control_plane_fails_without_publisher_discovery(
     assert "not healthy" in payload["error"]
 
 
+def test_control_plane_read_error_is_explicit_json(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(
+        monitor,
+        "production_status",
+        lambda root: (_ for _ in ()).throw(
+            monitor.ProductionError("control ledger is not readable")
+        ),
+    )
+
+    exit_code = monitor.main(
+        ["--production-root", str(tmp_path), "--offline", "--json"]
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == EXIT_DISCOVERY_FAILURE
+    assert payload["error"] == "control ledger is not readable"
+
+
 def test_malformed_selected_manifest_is_discovery_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
