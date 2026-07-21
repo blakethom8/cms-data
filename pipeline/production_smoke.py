@@ -168,11 +168,19 @@ def run_smoke(
     production_root: Path,
     release_bundle: Path | None = None,
     expected_table_counts: dict[str, int] | None = None,
+    expected_aact_study_count: int | None = None,
+    expected_aact_snapshot_date: str | None = None,
 ) -> dict:
     """Run bounded read-only checks and return evidence without response bodies."""
     _validate_loopback_url(base_url)
     if expected_industry_detail_status not in {200, 404}:
         raise ValueError("Expected industry detail status must be 200 or 404")
+    if expected_aact_study_count is not None and expected_aact_study_count <= 0:
+        raise ValueError("Expected AACT study count must be positive")
+    if expected_aact_snapshot_date is not None and not re.fullmatch(
+        r"[0-9]{4}-[0-9]{2}-[0-9]{2}", expected_aact_snapshot_date
+    ):
+        raise ValueError("Expected AACT snapshot date must use YYYY-MM-DD")
     checks: list[dict] = []
 
     status, health = _request(base_url, "GET", "/health", api_key)
@@ -423,6 +431,14 @@ def run_smoke(
         and isinstance(clinical, dict)
         and clinical.get("studyCount") is not None
         and clinical.get("snapshotDate") is not None
+        and (
+            expected_aact_study_count is None
+            or clinical.get("studyCount") == expected_aact_study_count
+        )
+        and (
+            expected_aact_snapshot_date is None
+            or clinical.get("snapshotDate") == expected_aact_snapshot_date
+        )
     )
     checks.append(
         _check(
@@ -436,6 +452,8 @@ def run_smoke(
                 "study_count": clinical.get("studyCount")
                 if isinstance(clinical, dict)
                 else None,
+                "expected_snapshot_date": expected_aact_snapshot_date,
+                "expected_study_count": expected_aact_study_count,
             },
         )
     )
@@ -610,6 +628,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--expected-hospital-affiliations", type=int, required=True)
     parser.add_argument("--expected-affiliated-providers", type=int, required=True)
     parser.add_argument("--expected-raw-hospital-enrollments", type=int, required=True)
+    parser.add_argument("--expected-aact-study-count", type=int, required=True)
+    parser.add_argument("--expected-aact-snapshot-date", required=True)
     parser.add_argument(
         "--expected-table-counts",
         type=Path,
@@ -639,6 +659,8 @@ def main(argv: list[str] | None = None) -> int:
             expected_hospital_affiliations=args.expected_hospital_affiliations,
             expected_affiliated_providers=args.expected_affiliated_providers,
             expected_raw_hospital_enrollments=args.expected_raw_hospital_enrollments,
+            expected_aact_study_count=args.expected_aact_study_count,
+            expected_aact_snapshot_date=args.expected_aact_snapshot_date,
             expected_table_counts=_load_expected_table_counts(
                 args.expected_table_counts
             ),

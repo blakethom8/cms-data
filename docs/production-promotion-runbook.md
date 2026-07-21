@@ -118,6 +118,8 @@ serves its original paths.
   --expected-hospital-affiliations ROLLBACK_AFFILIATION_COUNT \
   --expected-affiliated-providers ROLLBACK_AFFILIATED_PROVIDER_COUNT \
   --expected-raw-hospital-enrollments ROLLBACK_RAW_HOSPITAL_COUNT \
+  --expected-aact-study-count ROLLBACK_AACT_STUDY_COUNT \
+  --expected-aact-snapshot-date ROLLBACK_AACT_SNAPSHOT_DATE \
   --expected-table-counts ROLLBACK_RELEASE_JSON \
   --expected-industry-detail-status ROLLBACK_INDUSTRY_DETAIL_STATUS \
   --output /srv/cms-data-platform/production/evidence/ROLLBACK_DEPLOYMENT_ID/smoke.json
@@ -202,11 +204,15 @@ PYTHONPATH=/srv/cms-data-platform/production-ops/current \
   --candidate-hospital-affiliations CANDIDATE_AFFILIATION_COUNT \
   --candidate-affiliated-providers CANDIDATE_AFFILIATED_PROVIDER_COUNT \
   --candidate-raw-hospital-enrollments CANDIDATE_RAW_HOSPITAL_COUNT \
+  --candidate-aact-study-count CANDIDATE_AACT_STUDY_COUNT \
+  --candidate-aact-snapshot-date CANDIDATE_AACT_SNAPSHOT_DATE \
   --candidate-table-counts CANDIDATE_RELEASE_JSON \
   --rollback-core-providers ROLLBACK_CORE_COUNT \
   --rollback-hospital-affiliations ROLLBACK_AFFILIATION_COUNT \
   --rollback-affiliated-providers ROLLBACK_AFFILIATED_PROVIDER_COUNT \
   --rollback-raw-hospital-enrollments ROLLBACK_RAW_HOSPITAL_COUNT \
+  --rollback-aact-study-count ROLLBACK_AACT_STUDY_COUNT \
+  --rollback-aact-snapshot-date ROLLBACK_AACT_SNAPSHOT_DATE \
   --rollback-table-counts ROLLBACK_RELEASE_JSON \
   --rollback-industry-detail-status ROLLBACK_INDUSTRY_DETAIL_STATUS \
   --json

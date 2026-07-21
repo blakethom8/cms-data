@@ -161,6 +161,40 @@ def test_smoke_validates_required_contracts_and_exact_counts(monkeypatch: pytest
     }
 
 
+def test_smoke_requires_exact_aact_snapshot_and_study_count(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(smoke, "_request", _successful_request)
+    monkeypatch.setattr(
+        smoke,
+        "_process_identity",
+        lambda *args, **kwargs: (True, {"warehouse_open": True}),
+    )
+
+    evidence = smoke.run_smoke(
+        base_url="http://127.0.0.1:8080",
+        deployment_id="deployment-20260721T120000Z-abcdef1234",
+        api_key="secret-not-for-evidence",
+        expected_core_providers=1196535,
+        expected_hospital_affiliations=146970,
+        expected_affiliated_providers=118864,
+        expected_raw_hospital_enrollments=9175,
+        expected_aact_study_count=600001,
+        expected_aact_snapshot_date="2026-07-21",
+        representative_npi="1003005257",
+        process_id=123,
+        production_root=Path("/srv/cms-data-platform/production"),
+    )
+
+    assert evidence["state"] == "failed"
+    clinical = next(
+        check for check in evidence["checks"] if check["name"] == "clinical_trials"
+    )
+    assert clinical["state"] == "failed"
+    assert clinical["summary"]["study_count"] == 600000
+    assert clinical["summary"]["expected_study_count"] == 600001
+
+
 def test_runtime_identity_accepts_selected_bundle_path_without_prefix_collisions():
     selector_runtime = Path("/srv/cms-data-platform/production/release-current/runtime")
 
@@ -353,6 +387,10 @@ def test_smoke_error_replaces_old_passing_evidence(
             "1",
             "--expected-raw-hospital-enrollments",
             "1",
+            "--expected-aact-study-count",
+            "600000",
+            "--expected-aact-snapshot-date",
+            "2026-07-20",
             "--output",
             str(output),
         ]

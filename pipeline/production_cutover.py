@@ -34,6 +34,8 @@ class ExpectedCounts:
     hospital_affiliations: int
     affiliated_providers: int
     raw_hospital_enrollments: int
+    aact_study_count: int = 0
+    aact_snapshot_date: str = ""
     table_counts: dict[str, int] = field(default_factory=dict)
 
 
@@ -106,6 +108,8 @@ def _run_smoke_and_record(
             expected_hospital_affiliations=counts.hospital_affiliations,
             expected_affiliated_providers=counts.affiliated_providers,
             expected_raw_hospital_enrollments=counts.raw_hospital_enrollments,
+            expected_aact_study_count=counts.aact_study_count,
+            expected_aact_snapshot_date=counts.aact_snapshot_date,
             expected_table_counts=counts.table_counts,
             expected_industry_detail_status=expected_industry_detail_status,
             representative_npi=representative_npi,
@@ -201,6 +205,8 @@ def _counts(prefix: str, args: argparse.Namespace) -> ExpectedCounts:
         hospital_affiliations=getattr(args, f"{prefix}_hospital_affiliations"),
         affiliated_providers=getattr(args, f"{prefix}_affiliated_providers"),
         raw_hospital_enrollments=getattr(args, f"{prefix}_raw_hospital_enrollments"),
+        aact_study_count=getattr(args, f"{prefix}_aact_study_count"),
+        aact_snapshot_date=getattr(args, f"{prefix}_aact_snapshot_date"),
         table_counts=smoke._load_expected_table_counts(
             getattr(args, f"{prefix}_table_counts")
         ),
@@ -226,6 +232,8 @@ def build_parser() -> argparse.ArgumentParser:
         parser.add_argument(f"--{prefix}-hospital-affiliations", type=int, required=True)
         parser.add_argument(f"--{prefix}-affiliated-providers", type=int, required=True)
         parser.add_argument(f"--{prefix}-raw-hospital-enrollments", type=int, required=True)
+        parser.add_argument(f"--{prefix}-aact-study-count", type=int, required=True)
+        parser.add_argument(f"--{prefix}-aact-snapshot-date", required=True)
         parser.add_argument(
             f"--{prefix}-table-counts",
             type=Path,
