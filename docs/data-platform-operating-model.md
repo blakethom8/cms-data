@@ -183,9 +183,30 @@ references this staging root, and no production database pointer or service was 
   journal blocks further transitions for operator review.
 
 Warehouse release records live in `data/warehouse-releases.json`, per-release evidence lives beside
-each immutable database, and transition evidence lives in `data/promotion-journal.json`. Production
-is not an accepted CLI environment. A production promotion command, systemd integration, and active
-service change remain a separate approval-gated milestone.
+each immutable database, and transition evidence lives in `data/promotion-journal.json`. Those
+records remain staging-specific; production state is not written back into a source manifest or
+guessed from the staging pointer.
+
+`pipeline.production` implements the independent production-serving control plane. Its versioned
+deployment ledger records code, warehouse, and Python-runtime targets and fingerprints; its separate
+journal makes a pending or interrupted pointer transaction explicit. Bootstrap captures an immutable
+legacy rollback release. Prepare validates a clean, read-only Git checkout, the warehouse release and
+comparison evidence, the complete database checksum, and the runtime package fingerprint without
+changing the serving selector. Activate and rollback atomically replace one `release-current` bundle
+pointer under one lock, restore the complete prior ledger and selector on a handled failure, and never
+open DuckDB. `pipeline.production_smoke` records bounded authenticated API and process-identity checks
+before a release may be marked verified. `pipeline.production_cutover` owns the one restart and
+automatically restarts and re-verifies the predecessor after a candidate failure.
+
+The checked-in systemd definition under `deploy/systemd/` uses only the selected production bundle and
+refuses startup while a transition sentinel or blocking journal event exists. It reads control logic
+from a separate immutable operations package so rollback does not depend on candidate code, and it
+loads secrets only from stable protected environment files. Staging and production therefore have
+independent active states
+and rollback histories. This establishes reproducible serving and promotion; it does not imply that
+all source families have automated refresh jobs. Hospital Enrollments remains the first complete
+immutable acquisition/build vertical slice, and future timers must still build and validate in
+staging before an explicitly approved production promotion.
 
 The name/state affiliation rule is intentionally incomplete. The current `practice_locations`
 snapshot has no populated city or ZIP values, so it cannot safely disambiguate a health system with

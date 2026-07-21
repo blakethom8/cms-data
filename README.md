@@ -86,16 +86,46 @@ warehouse backup. The environment flag is intentionally restricted to `staging`:
 The builder never opens `DUCKDB_PATH`. It copies the verified backup to a new partial candidate,
 loads `raw_hospital_enrollments`, runs row/schema/NPI/API-baseline checks, computes the completed
 database checksum, and then atomically renames it. Promotion changes only the staging symlink and
-records a recoverable journal. There is no production promotion option.
+records a recoverable journal. The staging CLI has no production environment option; production
+serving releases use the separate ledger described below.
 
 Focused data-platform tests run from the API test directory so they are included in the repository's
 complete suite:
 
 ```bash
 cd api && ../.venv/bin/python -m pytest \
-  test_data_platform.py test_acquisition.py test_releases.py -q
+  test_data_platform.py test_acquisition.py test_releases.py \
+  test_production.py test_production_smoke.py -q
 cd api && ../.venv/bin/python -m pytest -q
 ```
+
+### Production release bundle
+
+Production serving state is managed separately from staging. One atomic `release-current` symlink
+selects a versioned bundle whose internal links name immutable code, runtime, and DuckDB artifacts.
+The manager validates and journals that selection without opening DuckDB or reading API secrets.
+The separate cutover command performs the one approved restart and automatically selects, restarts,
+and verifies the predecessor if candidate smoke checks fail.
+
+```bash
+.venv/bin/python -m pipeline.production status \
+  --production-root /srv/cms-data-platform/production --json
+
+.venv/bin/python -m pipeline.production prepare \
+  --production-root /srv/cms-data-platform/production \
+  --artifact-root /srv/cms-data-platform/production-artifacts \
+  --data-root /srv/cms-data-platform/data \
+  --code-path /srv/cms-data-platform/production-artifacts/code/<full-git-commit> \
+  --runtime-path /srv/cms-data-platform/production-artifacts/runtimes/<runtime-id> \
+  --warehouse-path /srv/cms-data-platform/production-artifacts/warehouses/<warehouse-id>/warehouse.duckdb \
+  --warehouse-release-id <warehouse-release-id> \
+  --dry-run --json
+```
+
+The one-time legacy bootstrap, activation, verification, rollback, systemd installation, and smoke
+commands are approval-gated operational steps documented in
+[`docs/production-promotion-runbook.md`](docs/production-promotion-runbook.md). Production promotion
+switches the one bundle pointer; it never overwrites the active or rollback database file in place.
 
 **Total data:** 90M+ rows across 30+ tables (~5.5GB)
 

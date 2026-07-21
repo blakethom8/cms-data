@@ -1,0 +1,20 @@
+[Unit]
+Description=CMS Provider Data API
+After=network.target
+
+[Service]
+Type=simple
+User=dataops
+Group=dataops
+WorkingDirectory=/srv/cms-data-platform/production/release-current/code
+EnvironmentFile=/etc/cms-data/cms-api.env
+EnvironmentFile=/etc/aact/reader.env
+EnvironmentFile=/etc/cms-data/production-release.env
+ExecStartPre=+/usr/bin/python3 /srv/cms-data-platform/production-ops/current/pipeline/production_manager.py startup-check --production-root /srv/cms-data-platform/production
+ExecStart=/srv/cms-data-platform/production/release-current/runtime/bin/python -m uvicorn api.main:app --host 0.0.0.0 --port 8080
+Restart=on-failure
+RestartSec=5
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target
