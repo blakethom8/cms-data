@@ -117,6 +117,38 @@ def test_verification_rejects_two_runs_for_one_source(tmp_path: Path) -> None:
         verified_cms_runs(data_root, [first.run_id, second.run_id])
 
 
+def test_cp1252_source_is_transcoded_for_strict_candidate_load(tmp_path: Path) -> None:
+    data_root = tmp_path / "data"
+    manifest = _stage(
+        data_root,
+        source_id="cms_pecos_public_provider_enrollment",
+        run_id="20990720T040000Z-pecos",
+        payload=(
+            b"NPI,MULTIPLE_NPI_FLAG,PECOS_ASCT_CNTL_ID,ENRLMT_ID,"
+            b"PROVIDER_TYPE_CD,PROVIDER_TYPE_DESC,STATE_CD,FIRST_NAME,"
+            b"MDL_NAME,LAST_NAME,ORG_NAME\n"
+            b"1234567890,N,A1,E1,P1,Physician,CA,Jos\xe9,,Example,\n"
+        ),
+    )
+    assert manifest.source_encoding == "cp1252"
+    connection = duckdb.connect(":memory:")
+    try:
+        counts = load_cms_raw_tables(
+            connection,
+            data_root=data_root,
+            run_ids=[manifest.run_id],
+        )
+        name = connection.execute(
+            "select FIRST_NAME from raw_pecos_enrollment"
+        ).fetchone()[0]
+    finally:
+        connection.close()
+
+    assert counts == {"raw_pecos_enrollment": 1}
+    assert name == "José"
+    assert list((data_root / "staging" / "transcodes").glob("*.partial")) == []
+
+
 def test_failed_multi_table_load_rolls_back_every_replacement(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

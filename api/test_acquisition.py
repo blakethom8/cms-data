@@ -242,6 +242,23 @@ def test_generic_cms_validator_rejects_row_width_change(tmp_path: Path) -> None:
         )
 
 
+def test_reassignment_records_publisher_row_without_individual_npi(tmp_path: Path) -> None:
+    artifact = tmp_path / "reassignment.csv"
+    artifact.write_bytes(
+        b"Group PAC ID,Group Enrollment ID,Group Legal Business Name,Group State Code,"
+        b"Group Reassignments and Physician Assistants,Individual NPI,Individual State Code\n"
+        b"100,P100,Example Group,CA,4,,CA\n"
+    )
+
+    inspection = inspect_cms_csv(
+        artifact,
+        profile=CMS_CSV_PROFILES["cms_revalidation_group_reassignment"],
+    )
+
+    assert inspection.row_count == 1
+    assert inspection.invalid_identifier_rows == 1
+
+
 def test_acquire_dry_run_uses_fixtures_and_writes_nothing(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -41,6 +41,7 @@ class CsvAcquisitionProfile:
     required_columns: tuple[str, ...]
     identifier_column: str
     max_download_bytes: int
+    allow_invalid_identifiers: bool = False
 
 
 GIB = 1024 * 1024 * 1024
@@ -221,6 +222,7 @@ CMS_CSV_PROFILES: dict[str, CsvAcquisitionProfile] = {
         ),
         "Individual NPI",
         2 * GIB,
+        allow_invalid_identifiers=True,
     ),
 }
 SUPPORTED_ACQUISITION_SOURCES = frozenset(CMS_CSV_PROFILES)
@@ -255,6 +257,7 @@ class ArtifactInspection:
     schema_fingerprint: str
     source_encoding: str
     row_count: int
+    invalid_identifier_rows: int = 0
 
 
 def make_run_id(now: datetime | None = None) -> str:
@@ -433,6 +436,7 @@ def inspect_cms_csv(
                 _normalized_column(profile.identifier_column)
             )
             row_count = 0
+            invalid_identifier_rows = 0
             for line_number, row in enumerate(reader, start=2):
                 if len(row) != len(header):
                     raise AcquisitionError(
@@ -441,6 +445,10 @@ def inspect_cms_csv(
                     )
                 npi = row[identifier_index].strip()
                 if not (len(npi) == 10 and npi.isdigit()):
+                    if profile.allow_invalid_identifiers:
+                        invalid_identifier_rows += 1
+                        row_count += 1
+                        continue
                     raise AcquisitionError(
                         f"{profile.label} row {line_number} has an invalid NPI"
                     )
@@ -460,6 +468,7 @@ def inspect_cms_csv(
         schema_fingerprint=schema_fingerprint,
         source_encoding=source_encoding,
         row_count=row_count,
+        invalid_identifier_rows=invalid_identifier_rows,
     )
 
 
@@ -535,6 +544,10 @@ def acquire_release(
         manifest.schema_fingerprint = inspection.schema_fingerprint
         manifest.source_encoding = inspection.source_encoding
         manifest.row_counts = {"source_rows": inspection.row_count}
+        if inspection.invalid_identifier_rows:
+            manifest.row_counts["invalid_identifier_rows"] = (
+                inspection.invalid_identifier_rows
+            )
         manifest.validation_state = ValidationState.PASSED
         manifest.validation_timestamp = utc_now()
     except (AcquisitionError, OSError, ValueError) as error:

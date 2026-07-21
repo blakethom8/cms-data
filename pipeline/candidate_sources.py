@@ -1,14 +1,18 @@
 """Verified CMS source loading for an isolated DuckDB candidate.
 
 The loader accepts only immutable acquisition runs whose bytes, schema fingerprint,
-encoding, and row count still match their manifests. It writes only to the DuckDB
-connection supplied by the caller; production path selection belongs to the release
-control plane.
+encoding, and row count still match their manifests. Windows-1252 files are
+transcoded through a short-lived staging file; source artifacts are never changed.
+Production path selection belongs to the release control plane.
 """
 
 from __future__ import annotations
 
+import os
+import shutil
+import tempfile
 from collections.abc import Iterable
+from contextlib import contextmanager
 from pathlib import Path
 
 import duckdb
@@ -95,24 +99,60 @@ def verified_cms_runs(
             profile=CMS_CSV_PROFILES[manifest.source_id],
         )
         expected_rows = manifest.row_counts.get("source_rows")
+        expected_invalid_identifiers = manifest.row_counts.get(
+            "invalid_identifier_rows", 0
+        )
         if (
             inspection.sha256 != manifest.sha256
             or inspection.byte_size != manifest.byte_size
             or inspection.schema_fingerprint != manifest.schema_fingerprint
             or inspection.source_encoding != manifest.source_encoding
             or inspection.row_count != expected_rows
+            or inspection.invalid_identifier_rows != expected_invalid_identifiers
         ):
             raise ReleaseError(
                 f"Source artifact no longer matches acquisition manifest for run {run_id}"
             )
-        if manifest.source_encoding != "utf-8-sig":
-            raise ReleaseError(
-                f"Source run {run_id} uses {manifest.source_encoding}; "
-                "the strict bulk loader currently requires UTF-8"
-            )
         verified.append((manifest, artifact))
 
     return tuple(sorted(verified, key=lambda item: item[0].source_id))
+
+
+@contextmanager
+def _utf8_artifact(
+    data_root: Path,
+    manifest: RunManifest,
+    artifact: Path,
+):
+    if manifest.source_encoding == "utf-8-sig":
+        yield artifact
+        return
+    if manifest.source_encoding != "cp1252":
+        raise ReleaseError(
+            f"Unsupported source encoding for run {manifest.run_id}: "
+            f"{manifest.source_encoding}"
+        )
+
+    staging = data_root / "staging" / "transcodes"
+    staging.mkdir(parents=True, exist_ok=True)
+    handle = tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        newline="",
+        prefix=f"{manifest.run_id}-",
+        suffix=".csv.partial",
+        dir=staging,
+        delete=False,
+    )
+    temporary = Path(handle.name)
+    try:
+        with artifact.open("r", encoding="cp1252", newline="") as source, handle:
+            shutil.copyfileobj(source, handle, length=1024 * 1024)
+            handle.flush()
+            os.fsync(handle.fileno())
+        yield temporary
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def load_cms_raw_tables(
@@ -131,32 +171,33 @@ def load_cms_raw_tables(
             quoted_table = _quoted_identifier(table)
             temporary = _quoted_identifier(f"{table}__candidate_load")
             connection.execute(f"DROP TABLE IF EXISTS {temporary}")
-            connection.execute(
-                f"""
-                CREATE TABLE {temporary} AS
-                SELECT
-                    *,
-                    ?::VARCHAR AS source_run_id,
-                    ?::VARCHAR AS source_release_id,
-                    ?::VARCHAR AS source_data_period,
-                    ?::TIMESTAMPTZ AS ingested_at
-                FROM read_csv(
-                    ?,
-                    header = true,
-                    all_varchar = true,
-                    strict_mode = true,
-                    ignore_errors = false,
-                    encoding = 'utf-8'
+            with _utf8_artifact(data_root, manifest, artifact) as load_artifact:
+                connection.execute(
+                    f"""
+                    CREATE TABLE {temporary} AS
+                    SELECT
+                        *,
+                        ?::VARCHAR AS source_run_id,
+                        ?::VARCHAR AS source_release_id,
+                        ?::VARCHAR AS source_data_period,
+                        ?::TIMESTAMPTZ AS ingested_at
+                    FROM read_csv(
+                        ?,
+                        header = true,
+                        all_varchar = true,
+                        strict_mode = true,
+                        ignore_errors = false,
+                        encoding = 'utf-8'
+                    )
+                    """,
+                    [
+                        manifest.run_id,
+                        manifest.release_id,
+                        manifest.source_data_period,
+                        manifest.retrieval_timestamp,
+                        str(load_artifact),
+                    ],
                 )
-                """,
-                [
-                    manifest.run_id,
-                    manifest.release_id,
-                    manifest.source_data_period,
-                    manifest.retrieval_timestamp,
-                    str(artifact),
-                ],
-            )
             loaded = connection.execute(
                 f"SELECT count(*) FROM {temporary}"
             ).fetchone()[0]
