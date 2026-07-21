@@ -21,6 +21,10 @@ from the one validated `release-current` bundle, a newer staging manifest cannot
 production warehouse appear current. A missing snapshot deliberately reports installed versions as
 `unknown`.
 
+The selected deployment evidence directory must be `root:dataops` mode `0750`, and its manifest
+snapshot must be `root:dataops` mode `0440`, so the unprivileged monitor can read but never replace
+the evidence.
+
 Install and verify the monitor without restarting the API:
 
 ```bash

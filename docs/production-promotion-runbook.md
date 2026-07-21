@@ -241,7 +241,7 @@ After the initial cutover, every refresh uses the same release mechanism; there 
 4. Create separate immutable production code, runtime, and warehouse artifacts. Prepare a new
    deployment bundle while the live bundle remains selected.
 5. Reconcile the candidate's source manifests to the contents of that exact warehouse. Write the
-   resulting document as root-owned mode `0440` at
+   resulting document as `root:dataops` mode `0440`, in a `root:dataops` mode `0750` directory, at
    `production/evidence/<candidate-deployment-id>/source-manifests.json`. Validate it with fixture
    status and, when publisher metadata is reachable, live status. Missing provenance stays unknown.
 6. Reconfirm the selected release, hashes, journal, transition sentinel, rollback artifact, and disk

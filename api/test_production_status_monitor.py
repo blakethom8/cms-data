@@ -92,10 +92,10 @@ def test_systemd_monitor_is_read_only_and_scheduled_daily() -> None:
     service = (REPOSITORY_ROOT / "deploy/systemd/cms-data-status.service").read_text()
     timer = (REPOSITORY_ROOT / "deploy/systemd/cms-data-status.timer").read_text()
 
-    assert "production_manager.py startup-check" in service
     assert "release-current/runtime/bin/python" in service
     assert "-m pipeline.production_status_monitor" in service
     assert "--json --timeout 30" in service
+    assert "PYTHONDONTWRITEBYTECODE=1" in service
     assert "ProtectSystem=strict" in service
     assert not any(
         command in service

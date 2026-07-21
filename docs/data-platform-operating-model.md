@@ -255,8 +255,9 @@ is absent, installed provenance remains `unknown`. Output and semantic exit stat
 the systemd journal: `0` is current, `1` is stale/unknown, and `2` is discovery or control-plane
 failure. This monitor downloads no dataset, opens no DuckDB file, and never launches a refresh.
 
-Before activating every future candidate, write a root-owned `0440` source-manifest snapshot into
-that candidate's deployment evidence directory. It must contain only validated active source
+Before activating every future candidate, write a root-owned `root:dataops` mode `0440`
+source-manifest snapshot into a root-owned `root:dataops` mode `0750` deployment evidence
+directory. It must contain only validated active source
 versions actually present in the candidate warehouse. Copying the mutable staging manifest without
 reconciling it to the candidate is prohibited. Rollback automatically selects the predecessor's
 deployment-scoped snapshot because it restores the complete bundle pointer.
