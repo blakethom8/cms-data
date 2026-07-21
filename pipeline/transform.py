@@ -456,8 +456,17 @@ def transform_all(
     return results
 
 
-def clear_refresh_targets(con: duckdb.DuckDBPyConnection) -> None:
-    """Clear CMS-derived rows in foreign-key-safe order inside a candidate only."""
+def clear_refresh_targets(
+    con: duckdb.DuckDBPyConnection,
+    *,
+    include_core_providers: bool = True,
+) -> None:
+    """Clear CMS-derived rows in foreign-key-safe order inside a candidate only.
+
+    DuckDB cannot always delete referenced parent rows in the same transaction
+    that deleted their children. Complete release builds therefore clear the
+    dependent tables, commit, and delete ``core_providers`` separately.
+    """
     for table in (
         "hospital_affiliations",
         "practice_locations",
@@ -469,4 +478,5 @@ def clear_refresh_targets(con: duckdb.DuckDBPyConnection) -> None:
         "order_referring_eligibility",
     ):
         con.execute(f"DELETE FROM {table}")
-    con.execute("DELETE FROM core_providers")
+    if include_core_providers:
+        con.execute("DELETE FROM core_providers")

@@ -1123,7 +1123,17 @@ def _load_full_cms_content(
         hospital_rows = _load_hospital_rows(
             connection, hospital_artifact, hospital_manifest
         )
-        clear_refresh_targets(connection)
+        clear_refresh_targets(connection, include_core_providers=False)
+        connection.execute("COMMIT")
+    except Exception:
+        connection.execute("ROLLBACK")
+        raise
+
+    # DuckDB's foreign-key indexes are updated only at the transaction boundary.
+    # Delete the now-unreferenced parents separately before rebuilding children.
+    connection.execute("DELETE FROM core_providers")
+    connection.execute("BEGIN TRANSACTION")
+    try:
         transform_counts = transform_all(
             connection,
             _period_year(by_source_id["cms_physician_by_provider"]),

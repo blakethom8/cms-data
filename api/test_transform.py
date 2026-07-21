@@ -9,6 +9,7 @@ sys.path.insert(0, str(REPOSITORY_ROOT))
 from pipeline.transform import (
     build_provider_drug_detail,
     build_provider_quality_scores,
+    clear_refresh_targets,
 )
 
 
@@ -23,6 +24,31 @@ def _connection() -> duckdb.DuckDBPyConnection:
         """
     )
     return connection
+
+
+def test_refresh_can_commit_child_deletes_before_deleting_core_providers() -> None:
+    connection = _connection()
+    try:
+        connection.execute(
+            """
+            insert into industry_relationships (
+                npi, payment_year, paying_company_name, total_amount_received
+            ) values ('1234567890', 2025, 'Example', 1.00)
+            """
+        )
+        connection.execute("BEGIN TRANSACTION")
+        clear_refresh_targets(connection, include_core_providers=False)
+        connection.execute("COMMIT")
+        connection.execute("DELETE FROM core_providers")
+
+        assert connection.execute(
+            "SELECT count(*) FROM industry_relationships"
+        ).fetchone()[0] == 0
+        assert connection.execute(
+            "SELECT count(*) FROM core_providers"
+        ).fetchone()[0] == 0
+    finally:
+        connection.close()
 
 
 def test_qpp_transform_handles_boolean_inference_and_selects_best_npi_row() -> None:
