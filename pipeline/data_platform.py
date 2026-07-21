@@ -25,6 +25,7 @@ from .archive_acquisition import (
     acquire_archive_release,
 )
 from .aact_releases import prepare_aact_release
+from .aact_staging import stage_aact_database, write_stage_evidence
 from .discovery import (
     DiscoveryResult,
     DiscoveryState,
@@ -378,6 +379,18 @@ def _parser() -> argparse.ArgumentParser:
         "--environment", choices=[STAGING_ENVIRONMENT], required=True
     )
     prepare_aact.add_argument("--json", action="store_true")
+    stage_aact = subparsers.add_parser(
+        "stage-aact-database",
+        help="Restore a sealed AACT artifact into a new validated PostgreSQL candidate",
+    )
+    stage_aact.add_argument("--release-manifest", required=True, type=Path)
+    stage_aact.add_argument("--restore-log", required=True, type=Path)
+    stage_aact.add_argument("--evidence", required=True, type=Path)
+    stage_aact.add_argument("--minimum-study-count", type=int, default=500_000)
+    stage_aact.add_argument(
+        "--environment", choices=[STAGING_ENVIRONMENT], required=True
+    )
+    stage_aact.add_argument("--json", action="store_true")
     compare = subparsers.add_parser(
         "compare-release",
         help="Compare a validated staging candidate with its immutable baseline",
@@ -461,6 +474,7 @@ def main(argv: list[str] | None = None) -> int:
         "build-cms-release",
         "build-platform-release",
         "prepare-aact-release",
+        "stage-aact-database",
         "compare-release",
         "promote",
         "rollback",
@@ -494,6 +508,19 @@ def main(argv: list[str] | None = None) -> int:
                     output_root=args.output_root,
                 ).to_dict()
                 heading = "AACT staging restore release prepared"
+            elif args.command == "stage-aact-database":
+                result = stage_aact_database(
+                    release_manifest_path=args.release_manifest,
+                    restore_log_path=args.restore_log,
+                    minimum_study_count=args.minimum_study_count,
+                )
+                write_stage_evidence(args.evidence, result)
+                payload = {
+                    "result": result.to_dict(),
+                    "evidence": str(args.evidence),
+                    "restore_log": str(args.restore_log),
+                }
+                heading = "AACT PostgreSQL candidate restored and validated"
             elif args.command == "compare-release":
                 payload = compare_warehouse_release(
                     data_root=args.data_root,

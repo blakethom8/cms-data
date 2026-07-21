@@ -68,13 +68,21 @@ The public-data acquisition and restore-artifact preparation steps are now repos
   --source-run-id <validated-aact-run-id> \
   --data-root <staging-data-root> \
   --output-root <immutable-artifact-root> --json
+
+.venv/bin/python -m pipeline.data_platform stage-aact-database \
+  --environment staging \
+  --release-manifest <immutable-artifact-root>/aact-releases/<release-id>/release.json \
+  --restore-log <new-absolute-log-path> \
+  --evidence <new-absolute-evidence-path> --json
 ```
 
 Preparation revalidates the acquired ZIP, extracts only `postgres.dmp` and
 `data_dictionary.csv`, verifies PostgreSQL custom-dump magic, hashes both files, and seals the
-versioned directory. It does not connect to PostgreSQL or change `CURRENT_SNAPSHOT`. Restore that
-artifact into a separately named candidate database, grant the read-only role, and validate the
-study count, latest update date, representative searches, and temporary API process before any
-database rename. AACT promotion is a coordinated PostgreSQL operation, not a DuckDB pointer change;
+versioned directory. It does not connect to PostgreSQL or change `CURRENT_SNAPSHOT`.
+`stage-aact-database` refuses an existing candidate name, restores only to a release-derived
+`aact_candidate_*` database, grants the read-only role, validates study/table counts and the latest
+update date, and records immutable evidence. It has no database-drop, rename, or promotion path.
+Run representative searches and the temporary API smoke suite before any database rename. AACT
+promotion is a coordinated PostgreSQL operation, not a DuckDB pointer change;
 stop the API during a combined cutover so no mixed DuckDB/AACT release is served, and retain the
 previous PostgreSQL database until the complete smoke suite passes.

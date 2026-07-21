@@ -9,6 +9,7 @@ import tempfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from .acquisition import pipeline_commit
 from .archive_sources import extracted_member, verified_archive_runs
 from .discovery import utc_now
 from .releases import ReleaseError, sha256_file
@@ -24,7 +25,8 @@ class AactRelease:
     source_run_id: str
     source_release_id: str
     source_data_period: str
-    pipeline_code_commit: str
+    source_pipeline_code_commit: str
+    preparation_code_commit: str
     prepared_at: str
     dump_path: str
     dump_byte_size: int
@@ -65,9 +67,13 @@ def _atomic_json(path: Path, value: dict) -> None:
     os.replace(temporary, path)
 
 
-def _release_id(source_data_period: str, source_release_id: str) -> str:
+def _release_id(
+    source_data_period: str, source_release_id: str, preparation_commit: str
+) -> str:
     compact = source_data_period.replace("-", "")
-    suffix = hashlib.sha256(source_release_id.encode()).hexdigest()[:10]
+    suffix = hashlib.sha256(
+        f"{source_release_id}\0{preparation_commit}".encode()
+    ).hexdigest()[:10]
     return f"aact-{compact}-{suffix}"
 
 
@@ -85,7 +91,12 @@ def prepare_aact_release(
     )
     if not manifest.pipeline_code_commit:
         raise ReleaseError("AACT source manifest lacks a pipeline code commit")
-    release_id = _release_id(manifest.source_data_period, manifest.release_id)
+    preparation_commit = pipeline_commit()
+    if not preparation_commit:
+        raise ReleaseError("AACT preparation requires a full pipeline Git commit")
+    release_id = _release_id(
+        manifest.source_data_period, manifest.release_id, preparation_commit
+    )
     releases_root = output_root / "aact-releases"
     release_directory = releases_root / release_id
     partial = releases_root / f".{release_id}.partial"
@@ -135,7 +146,8 @@ def prepare_aact_release(
             source_run_id=manifest.run_id,
             source_release_id=manifest.release_id,
             source_data_period=manifest.source_data_period,
-            pipeline_code_commit=manifest.pipeline_code_commit,
+            source_pipeline_code_commit=manifest.pipeline_code_commit,
+            preparation_code_commit=preparation_commit,
             prepared_at=utc_now(),
             dump_path="postgres.dmp",
             dump_byte_size=dump.stat().st_size,

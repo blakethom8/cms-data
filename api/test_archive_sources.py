@@ -1,6 +1,7 @@
 import csv
 import io
 import json
+import subprocess
 import sys
 import zipfile
 from pathlib import Path
@@ -12,6 +13,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from pipeline.aact_releases import prepare_aact_release
+from pipeline import aact_staging
 from pipeline.archive_acquisition import ARCHIVE_PROFILES, inspect_archive
 from pipeline.archive_sources import (
     load_nppes_sources,
@@ -408,3 +410,91 @@ def test_prepare_aact_release_seals_dump_and_records_hashes(tmp_path: Path) -> N
     payload = json.loads(result.release_manifest_path.read_text())
     assert payload["schema_version"] == 1
     assert payload["release"]["source_run_id"] == "aact-run"
+    assert payload["release"]["source_pipeline_code_commit"] == CODE_COMMIT
+    assert len(payload["release"]["preparation_code_commit"]) == 40
+
+
+def test_stage_aact_database_creates_only_a_named_candidate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data_root = tmp_path / "data"
+    manifest = _stage_archive(
+        data_root,
+        "aact_clinical_trials_snapshot",
+        "aact-run",
+        "2026-07-21",
+        {
+            "postgres.dmp": b"PGDMPfixture",
+            "data_dictionary.csv": b"table,column\nstudies,nct_id\n",
+        },
+    )
+    prepared = prepare_aact_release(
+        data_root=data_root,
+        source_run_id=manifest.run_id,
+        output_root=tmp_path / "artifacts",
+    )
+    password = tmp_path / "postgres_password"
+    password.write_text("not-a-real-secret")
+    monkeypatch.setattr(aact_staging, "PASSWORD_FILE", password)
+    commands: list[list[str]] = []
+
+    def runner(command, **kwargs):
+        commands.append(command)
+        joined = " ".join(command)
+        stdout = ""
+        if "count(*) FROM ctgov.studies" in joined:
+            stdout = "600001\n"
+        elif "max(last_update_posted_date)" in joined:
+            stdout = "2026-07-20\n"
+        elif "information_schema.tables" in joined:
+            stdout = "55\n"
+        return subprocess.CompletedProcess(command, 0, stdout, "")
+
+    result = aact_staging.stage_aact_database(
+        release_manifest_path=prepared.release_manifest_path,
+        restore_log_path=tmp_path / "logs" / "restore.log",
+        runner=runner,
+    )
+
+    assert result.study_count == 600001
+    assert result.reader_count == 600001
+    assert result.candidate_database.startswith("aact_candidate_20260721_")
+    all_commands = "\n".join(" ".join(command) for command in commands)
+    assert "createdb -U aact_admin aact_candidate_" in all_commands
+    assert "pg_restore" in all_commands
+    assert "ALTER DATABASE" not in all_commands
+    assert "DROP DATABASE" not in all_commands
+
+
+def test_stage_aact_database_refuses_to_reuse_existing_candidate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data_root = tmp_path / "data"
+    manifest = _stage_archive(
+        data_root,
+        "aact_clinical_trials_snapshot",
+        "aact-run",
+        "2026-07-21",
+        {
+            "postgres.dmp": b"PGDMPfixture",
+            "data_dictionary.csv": b"table,column\nstudies,nct_id\n",
+        },
+    )
+    prepared = prepare_aact_release(
+        data_root=data_root,
+        source_run_id=manifest.run_id,
+        output_root=tmp_path / "artifacts",
+    )
+    password = tmp_path / "postgres_password"
+    password.write_text("not-a-real-secret")
+    monkeypatch.setattr(aact_staging, "PASSWORD_FILE", password)
+
+    def runner(command, **kwargs):
+        return subprocess.CompletedProcess(command, 0, "1\n", "")
+
+    with pytest.raises(ReleaseError, match="already exists"):
+        aact_staging.stage_aact_database(
+            release_manifest_path=prepared.release_manifest_path,
+            restore_log_path=tmp_path / "restore.log",
+            runner=runner,
+        )

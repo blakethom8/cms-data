@@ -102,6 +102,12 @@ Payments categories. Repeat `--source-run-id` exactly once for each of those 15 
   --environment staging \
   --source-run-id <validated-aact-run-id> \
   --data-root data --output-root <immutable-artifact-root> --json
+
+.venv/bin/python -m pipeline.data_platform stage-aact-database \
+  --environment staging \
+  --release-manifest <immutable-aact-release.json> \
+  --restore-log <new-absolute-log-path> \
+  --evidence <new-absolute-evidence-path> --json
 ```
 
 The builder never opens `DUCKDB_PATH`. It copies the verified backup to a new partial candidate,
@@ -109,7 +115,9 @@ strictly replaces publisher-shaped raw tables, rebuilds CMS-derived tables, appl
 NPPES baseline followed by the weekly overlay and Radar events, rebuilds Open Payments aggregates,
 records release-wide exact smoke counts, computes the completed database checksum, and atomically
 renames the candidate. AACT remains PostgreSQL-backed; its command prepares a sealed `postgres.dmp`
-and dictionary release for a separately validated staging restore. Promotion changes only the
+and dictionary release. The staging restore command creates a new release-derived PostgreSQL
+database, validates it through the read-only role, and has no drop, rename, or promotion operation.
+Promotion changes only the
 staging symlink and records a recoverable journal. The staging CLI has no production environment
 option; production serving releases use the separate ledger described below.
 
