@@ -1483,7 +1483,7 @@ def build_ppef_warehouse_release(
     source_run_ids: tuple[str, ...],
     backup_manifest_path: Path,
     code_commit: str | None = None,
-    memory_limit_gb: int = 8,
+    memory_limit_gb: int = 12,
     threads: int = 1,
 ) -> BuildResult:
     """Build only PPEF raw and curated relationship tables in a candidate.

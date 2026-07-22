@@ -312,7 +312,7 @@ retrying. Do not kill the API or overwrite a release to recover capacity. The in
 remains unpromoted and must be rebuilt from the verified baseline after the resource plan is fixed.
 
 For PPEF specifically, use `build-ppef-release` with the two same-period PPEF run IDs and the
-checksum-verified production baseline manifest. Its defaults are `--memory-limit-gb 8 --threads 1`;
+checksum-verified production baseline manifest. Its defaults are `--memory-limit-gb 12 --threads 1`;
 lower the memory limit when the serving reserve requires it, but do not raise either limit without a
 new resource review. The full-platform command is not an acceptable operational substitute.
 

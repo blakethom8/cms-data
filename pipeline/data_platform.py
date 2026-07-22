@@ -367,8 +367,8 @@ def _parser() -> argparse.ArgumentParser:
         "--environment", choices=[STAGING_ENVIRONMENT], required=True
     )
     build_ppef.add_argument(
-        "--memory-limit-gb", type=int, default=8,
-        help="DuckDB memory ceiling for the targeted build (default: 8 GiB)",
+        "--memory-limit-gb", type=int, default=12,
+        help="DuckDB memory ceiling for the targeted build (default: 12 GiB)",
     )
     build_ppef.add_argument(
         "--threads", type=int, default=1,

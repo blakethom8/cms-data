@@ -89,7 +89,7 @@ enrollment keys, curated bridge key uniqueness, row-count evidence, and the usua
 contracts. It does not require a Medicare, NPPES, Open Payments, or AACT rebuild.
 
 Use `build-ppef-release` for this scope, passing exactly one validated reassignment run and one
-validated practice-location run. The command defaults to one DuckDB worker, an 8 GiB memory limit,
+validated practice-location run. The command defaults to one DuckDB worker, a 12 GiB memory limit,
 and a candidate-only spill directory. It verifies that both inputs match the installed PECOS
 enrollment period, rebuilds only the four PPEF-owned tables, and records complete-warehouse count
 evidence for comparison. Do not use `build-platform-release` as a substitute merely to add PPEF;
