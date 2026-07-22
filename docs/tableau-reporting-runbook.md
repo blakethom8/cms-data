@@ -37,6 +37,10 @@ The `source_detail` schema preserves every column loaded in the California slice
 join-safe facts. The NPPES raw loader itself retains a selected subset of the publisher's 329 columns;
 the original downloaded artifact remains the complete source record.
 
+The curated location bridge includes only DAC rows whose NPI also belongs to the California provider
+dimension. California DAC rows without that relationship remain visible in
+`source_detail.source_dac_clinician_location` instead of becoming orphan bridge records.
+
 The `control` schema exposes the active release, model catalog, declared grain, source period
 semantics, and column-level lineage. Every curated column identifies its source table/column,
 transformation, and whether it is derived or inferred.

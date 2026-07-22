@@ -122,14 +122,23 @@ REPORTING_MODELS: tuple[ReportingModel, ...] = (
     ReportingModel(
         name="bridge_provider_location",
         grain="one provider enrollment by DAC address identifier and organization",
-        scope_rule='raw_dac_national."State" = \'CA\'',
-        source_tables=("raw_dac_national",),
+        scope_rule=(
+            'raw_dac_national."State" = \'CA\' and provider belongs to '
+            "core_providers.state = 'CA'"
+        ),
+        source_tables=("raw_dac_national", "core_providers"),
         key_columns=("location_key",),
-        from_sql='FROM raw_dac_national d WHERE UPPER(d."State") = \'CA\'',
+        from_sql=(
+            "FROM raw_dac_national d "
+            'JOIN core_providers cp ON CAST(cp.npi AS VARCHAR) = CAST(d."NPI" AS VARCHAR) '
+            'WHERE UPPER(d."State") = \'CA\' AND UPPER(cp.state) = \'CA\''
+        ),
         notes=(
             "DAC practice-location bridge. Enrollment and publisher address identifiers "
             "distinguish otherwise identical address rows. A provider can have several rows; "
-            "do not physically join this table to provider-level measures before aggregation."
+            "do not physically join this table to provider-level measures before aggregation. "
+            "California DAC rows without a California dim_provider match remain available in "
+            "source_detail.source_dac_clinician_location."
         ),
         fields=(
             _field("location_key", "MD5(CONCAT_WS('|', CAST(d.\"NPI\" AS VARCHAR), COALESCE(CAST(d.\"Ind_PAC_ID\" AS VARCHAR), ''), COALESCE(CAST(d.\"Ind_enrl_ID\" AS VARCHAR), ''), COALESCE(CAST(d.org_pac_id AS VARCHAR), ''), COALESCE(CAST(d.adrs_id AS VARCHAR), '')))", "cms_dac_national_legacy", "raw_dac_national", "NPI + Ind_PAC_ID + Ind_enrl_ID + org_pac_id + adrs_id", "Stable hash of the source enrollment-location grain", derived=True),

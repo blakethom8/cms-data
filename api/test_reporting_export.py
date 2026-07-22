@@ -193,6 +193,27 @@ def test_profile_preserves_grain_and_source_detail(tmp_path: Path) -> None:
     assert (database.stat().st_size, database.stat().st_mtime_ns) == before
 
 
+def test_curated_location_bridge_excludes_orphans_preserved_in_source_detail(
+    tmp_path: Path,
+) -> None:
+    database = _warehouse(tmp_path / "warehouse.duckdb")
+    connection = duckdb.connect(str(database))
+    connection.execute(
+        """
+        INSERT INTO raw_dac_national VALUES
+            ('1000000999', 'IPAC9', 'ENRL9', 'PAC9', 'ADDR9', 'Unmatched Group',
+             '1', 'Cardiology', '9 Main', 'Los Angeles', 'CA', '90009', 'preserved')
+        """
+    )
+    connection.close()
+
+    profile = profile_database(database)
+    counts = {(row.layer, row.name): row.row_count for row in profile.models}
+
+    assert counts[("reporting", "bridge_provider_location")] == 2
+    assert counts[("source_detail", "source_dac_clinician_location")] == 3
+
+
 def test_profile_exposes_every_source_column(tmp_path: Path) -> None:
     database = _warehouse(tmp_path / "warehouse.duckdb")
     profile = profile_database(database)
