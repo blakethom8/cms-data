@@ -41,6 +41,58 @@ def _quoted_identifier(value: str) -> str:
     return '"' + value.replace('"', '""') + '"'
 
 
+def _existing_column_types(
+    connection: duckdb.DuckDBPyConnection,
+    table: str,
+) -> dict[str, str]:
+    """Capture the serving-compatible raw schema before replacing a table."""
+    try:
+        rows = connection.execute(
+            f"PRAGMA table_info({_quoted_identifier(table)})"
+        ).fetchall()
+    except duckdb.CatalogException:
+        return {}
+    return {str(row[1]).casefold(): str(row[2]) for row in rows}
+
+
+def _typed_replacements(
+    connection: duckdb.DuckDBPyConnection,
+    incoming_table: str,
+    existing_types: dict[str, str],
+) -> list[str]:
+    """Return strict casts that preserve an established raw-table contract.
+
+    Acquisition intentionally reads publisher CSV values as strings so schema
+    inference cannot change between releases.  The copied warehouse, however,
+    already carries the types consumed by the read API.  Preserve those types
+    for matching columns and leave newly published columns as VARCHAR.  CAST is
+    deliberately strict: a new non-empty value that violates the established
+    contract aborts the candidate instead of becoming NULL.
+    """
+    rows = connection.execute(
+        f"PRAGMA table_info({_quoted_identifier(incoming_table)})"
+    ).fetchall()
+    replacements: list[str] = []
+    for row in rows:
+        column = str(row[1])
+        target_type = existing_types.get(column.casefold())
+        if target_type is None or target_type.upper().startswith("VARCHAR"):
+            continue
+        if not all(
+            character.isalnum() or character in "_(), "
+            for character in target_type
+        ):
+            raise ReleaseError(
+                f"Existing raw schema has an unsafe type for {column}: {target_type}"
+            )
+        quoted = _quoted_identifier(column)
+        replacements.append(
+            f"CAST(NULLIF(trim(CAST({quoted} AS VARCHAR)), '') AS {target_type}) "
+            f"AS {quoted}"
+        )
+    return replacements
+
+
 def _manifest_by_run_id(data_root: Path) -> dict[str, RunManifest]:
     document = ManifestStore(data_root / "manifests.json").load()
     result: dict[str, RunManifest] = {}
@@ -170,7 +222,10 @@ def load_cms_raw_tables(
             table = CMS_RAW_TABLES[manifest.source_id]
             quoted_table = _quoted_identifier(table)
             temporary = _quoted_identifier(f"{table}__candidate_load")
+            typed_temporary = _quoted_identifier(f"{table}__candidate_typed")
+            existing_types = _existing_column_types(connection, table)
             connection.execute(f"DROP TABLE IF EXISTS {temporary}")
+            connection.execute(f"DROP TABLE IF EXISTS {typed_temporary}")
             with _utf8_artifact(data_root, manifest, artifact) as load_artifact:
                 connection.execute(
                     f"""
@@ -212,6 +267,21 @@ def load_cms_raw_tables(
                 raise ReleaseError(
                     f"Loaded {loaded} rows for {manifest.source_id}; expected {expected}"
                 )
+            replacements = _typed_replacements(
+                connection,
+                f"{table}__candidate_load",
+                existing_types,
+            )
+            if replacements:
+                connection.execute(
+                    f"""
+                    CREATE TABLE {typed_temporary} AS
+                    SELECT * REPLACE ({', '.join(replacements)})
+                    FROM {temporary}
+                    """
+                )
+                connection.execute(f"DROP TABLE {temporary}")
+                temporary = typed_temporary
             connection.execute(f"DROP TABLE IF EXISTS {quoted_table}")
             connection.execute(f"ALTER TABLE {temporary} RENAME TO {quoted_table}")
             counts[table] = loaded

@@ -98,6 +98,71 @@ def test_load_cms_raw_table_is_strict_and_records_run_provenance(tmp_path: Path)
     assert types["Tot_Clms"] == "VARCHAR"
 
 
+def test_load_cms_raw_table_preserves_established_numeric_types(tmp_path: Path) -> None:
+    data_root = tmp_path / "data"
+    manifest = _stage(data_root)
+    connection = duckdb.connect(":memory:")
+    try:
+        connection.execute(
+            """
+            create table raw_part_d_by_provider(
+                Prscrbr_NPI BIGINT,
+                Tot_Clms BIGINT,
+                Tot_Drug_Cst DOUBLE,
+                Brnd_Tot_Clms BIGINT,
+                Gnrc_Tot_Clms BIGINT,
+                Opioid_Prscrbr_Rate DOUBLE
+            )
+            """
+        )
+        load_cms_raw_tables(
+            connection,
+            data_root=data_root,
+            run_ids=[manifest.run_id],
+        )
+        row = connection.execute(
+            "select Prscrbr_NPI, Tot_Clms, Tot_Drug_Cst from raw_part_d_by_provider"
+        ).fetchone()
+        types = dict(
+            connection.execute(
+                "select column_name, data_type from information_schema.columns "
+                "where table_name = 'raw_part_d_by_provider'"
+            ).fetchall()
+        )
+    finally:
+        connection.close()
+
+    assert row == (1234567890, 10, 25.5)
+    assert types["Prscrbr_NPI"] == "BIGINT"
+    assert types["Tot_Clms"] == "BIGINT"
+    assert types["Tot_Drug_Cst"] == "DOUBLE"
+
+
+def test_load_cms_raw_table_rejects_numeric_contract_change(tmp_path: Path) -> None:
+    data_root = tmp_path / "data"
+    manifest = _stage(
+        data_root,
+        payload=(
+            b"Prscrbr_NPI,Tot_Clms,Tot_Drug_Cst,Brnd_Tot_Clms,Gnrc_Tot_Clms,"
+            b"Opioid_Prscrbr_Rate\n"
+            b"1234567890,not-a-number,25.50,4,6,2.5\n"
+        ),
+    )
+    connection = duckdb.connect(":memory:")
+    try:
+        connection.execute(
+            "create table raw_part_d_by_provider(Prscrbr_NPI BIGINT, Tot_Clms BIGINT)"
+        )
+        with pytest.raises(duckdb.ConversionException):
+            load_cms_raw_tables(
+                connection,
+                data_root=data_root,
+                run_ids=[manifest.run_id],
+            )
+    finally:
+        connection.close()
+
+
 def test_verification_rejects_artifact_changed_after_acquisition(tmp_path: Path) -> None:
     data_root = tmp_path / "data"
     manifest = _stage(data_root)
