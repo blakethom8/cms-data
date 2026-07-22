@@ -62,6 +62,7 @@ async def check_api_key(key: Optional[str] = Security(api_key_header)):
 # Data routers — every route requires the X-API-Key header.
 import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 _secured = [Depends(check_api_key)]
 
 from match import get_match_router
@@ -96,6 +97,9 @@ app.include_router(get_clinical_trials_router(), dependencies=_secured)
 
 from radar import get_radar_router
 app.include_router(get_radar_router(get_conn), dependencies=_secured)
+
+from operations import get_operations_router
+app.include_router(get_operations_router(get_conn), dependencies=_secured)
 
 app.add_middleware(
     CORSMiddleware,

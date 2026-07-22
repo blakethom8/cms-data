@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#101b25">
+  <title>CMS Data Command Center</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#workspace">Skip to workspace</a>
+
+  <div class="app-shell">
+    <aside class="rail" aria-label="Primary navigation">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </div>
+        <div>
+          <strong>CMS DATA</strong>
+          <small>COMMAND CENTER</small>
+        </div>
+      </div>
+
+      <nav class="rail-nav">
+        <a href="#overview" data-route="overview" aria-current="page">
+          <span class="nav-icon" aria-hidden="true">01</span>
+          <span>Overview</span>
+        </a>
+        <a href="#catalog" data-route="catalog">
+          <span class="nav-icon" aria-hidden="true">02</span>
+          <span>Data Catalog</span>
+        </a>
+        <a href="#lineage" data-route="lineage">
+          <span class="nav-icon" aria-hidden="true">03</span>
+          <span>Lineage</span>
+        </a>
+        <a href="#contracts" data-route="contracts">
+          <span class="nav-icon" aria-hidden="true">04</span>
+          <span>Contracts</span>
+        </a>
+        <a href="#operations" data-route="operations">
+          <span class="nav-icon" aria-hidden="true">05</span>
+          <span>Operations</span>
+        </a>
+      </nav>
+
+      <div class="rail-foot">
+        <span class="read-only-seal" aria-hidden="true">R/O</span>
+        <div>
+          <strong>Read-only surface</strong>
+          <small>Operator actions require a separate approved service.</small>
+        </div>
+      </div>
+    </aside>
+
+    <div class="main-shell">
+      <header class="topbar">
+        <div class="mobile-brand">
+          <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
+          <strong>CMS DATA</strong>
+        </div>
+        <button class="mobile-menu" id="mobile-menu" type="button" aria-label="Open workspace menu" aria-expanded="false">
+          <span></span><span></span><span></span>
+        </button>
+        <div class="environment">
+          <span class="eyebrow">Environment</span>
+          <strong id="environment-name">CMS warehouse</strong>
+          <span class="separator" aria-hidden="true"></span>
+          <span id="observed-time">Observing API…</span>
+        </div>
+        <div class="connection-state state-loading" id="connection-state" role="status" aria-live="polite">
+          <span class="state-lamp" aria-hidden="true"></span>
+          <span>Checking connection</span>
+        </div>
+      </header>
+
+      <main id="workspace" tabindex="-1">
+        <section class="view active" id="view-overview" data-view="overview" aria-labelledby="overview-title">
+          <div class="page-heading reveal">
+            <div>
+              <span class="eyebrow">Warehouse observatory</span>
+              <h1 id="overview-title">See the whole data system.</h1>
+            </div>
+            <p>From publisher evidence to the tables serving downstream products. Every status shown here is either observed or explicitly unavailable.</p>
+          </div>
+
+          <section class="metric-strip reveal" aria-label="Warehouse summary">
+            <article>
+              <span>Physical tables</span>
+              <strong id="metric-tables">—</strong>
+              <small id="metric-tables-note">Awaiting inventory</small>
+            </article>
+            <article>
+              <span>Estimated rows</span>
+              <strong id="metric-rows">—</strong>
+              <small>Across observed tables</small>
+            </article>
+            <article>
+              <span>Curated datasets</span>
+              <strong id="metric-marts">—</strong>
+              <small>Explorer catalog entries</small>
+            </article>
+            <article>
+              <span>Source contracts</span>
+              <strong id="metric-contracts">—</strong>
+              <small id="metric-contracts-note">Evidence not yet observed</small>
+            </article>
+            <article>
+              <span>Manifest coverage</span>
+              <strong id="metric-manifest">—</strong>
+              <small id="metric-manifest-note">Operations evidence required</small>
+            </article>
+          </section>
+
+          <section class="flightpath-panel reveal" aria-labelledby="flightpath-title">
+            <div class="section-heading">
+              <div>
+                <span class="eyebrow">End-to-end evidence path</span>
+                <h2 id="flightpath-title">Data flightpath</h2>
+              </div>
+              <div class="legend" aria-label="Status legend">
+                <span><i class="dot current"></i>Observed</span>
+                <span><i class="dot partial"></i>Partial</span>
+                <span><i class="dot unavailable"></i>Unavailable</span>
+              </div>
+            </div>
+            <ol class="flightpath" id="flightpath">
+              <li><button type="button" data-flight-target="lineage"><span>01</span><strong>Source</strong><small>Publisher</small></button></li>
+              <li><button type="button" data-flight-target="operations"><span>02</span><strong>Acquire</strong><small>Download</small></button></li>
+              <li><button type="button" data-flight-target="contracts"><span>03</span><strong>Validate</strong><small>Contract</small></button></li>
+              <li><button type="button" data-flight-target="catalog"><span>04</span><strong>Raw</strong><small>Landing</small></button></li>
+              <li><button type="button" data-flight-target="lineage"><span>05</span><strong>Transform</strong><small>Build</small></button></li>
+              <li><button type="button" data-flight-target="catalog"><span>06</span><strong>Mart</strong><small>Curate</small></button></li>
+              <li><button type="button" data-flight-target="overview"><span>07</span><strong>API</strong><small>Serve</small></button></li>
+            </ol>
+            <div class="evidence-caption" id="flightpath-caption">
+              <span class="caption-index">EVIDENCE</span>
+              <p>Connecting to the warehouse API and checking which stages can be verified.</p>
+            </div>
+          </section>
+
+          <div class="overview-grid reveal">
+            <section class="ledger-panel" aria-labelledby="source-health-title">
+              <div class="section-heading compact">
+                <div>
+                  <span class="eyebrow">Freshness & contracts</span>
+                  <h2 id="source-health-title">Source health</h2>
+                </div>
+                <a href="#contracts" class="text-link">View registry <span>→</span></a>
+              </div>
+              <div id="source-health" class="status-list loading-block" aria-live="polite">
+                <div class="skeleton-line"></div><div class="skeleton-line"></div><div class="skeleton-line"></div>
+              </div>
+            </section>
+
+            <section class="ledger-panel" aria-labelledby="recent-runs-title">
+              <div class="section-heading compact">
+                <div>
+                  <span class="eyebrow">Build ledger</span>
+                  <h2 id="recent-runs-title">Recent runs</h2>
+                </div>
+                <a href="#operations" class="text-link">Open operations <span>→</span></a>
+              </div>
+              <div id="recent-runs" class="run-list loading-block" aria-live="polite">
+                <div class="skeleton-line"></div><div class="skeleton-line"></div><div class="skeleton-line"></div>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="view-catalog" data-view="catalog" aria-labelledby="catalog-title" hidden>
+          <div class="page-heading">
+            <div>
+              <span class="eyebrow">Inspect the warehouse</span>
+              <h1 id="catalog-title">Data catalog</h1>
+            </div>
+            <p>Start with grain. Then inspect keys, columns, representative rows, and source context before using a dataset.</p>
+          </div>
+
+          <div class="catalog-toolbar" role="search">
+            <label class="search-field">
+              <span class="sr-only">Search datasets</span>
+              <span aria-hidden="true">⌕</span>
+              <input id="catalog-search" type="search" placeholder="Search title, table, grain, or join key…" autocomplete="off">
+            </label>
+            <label class="select-field">
+              <span>DOMAIN</span>
+              <select id="catalog-domain" aria-label="Filter by domain"><option value="all">All domains</option></select>
+            </label>
+            <div class="catalog-count"><strong id="catalog-count">—</strong><span>datasets</span></div>
+          </div>
+
+          <div class="catalog-layout">
+            <aside class="dataset-index" aria-label="Datasets">
+              <div class="index-header"><span>DATASET</span><span>ROWS</span></div>
+              <div id="dataset-list" class="dataset-list loading-block" aria-live="polite">
+                <div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div>
+              </div>
+            </aside>
+            <section class="dataset-detail" id="dataset-detail" aria-live="polite">
+              <div class="empty-detail">
+                <span class="empty-glyph" aria-hidden="true">⌗</span>
+                <h2>Select a dataset</h2>
+                <p>Choose a catalog entry to inspect its grain, schema, sample records, and relationship context.</p>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="view-lineage" data-view="lineage" aria-labelledby="lineage-title" hidden>
+          <div class="page-heading">
+            <div>
+              <span class="eyebrow">Trace every dependency</span>
+              <h1 id="lineage-title">Source-to-mart lineage</h1>
+            </div>
+            <p>Readable flow lanes connect published data to warehouse tables and curated analytical surfaces.</p>
+          </div>
+          <div class="lineage-banner" id="lineage-banner" role="status"></div>
+          <div class="lineage-layout">
+            <section class="lineage-map" aria-label="Lineage map">
+              <div class="lane-headings" aria-hidden="true">
+                <span>SOURCE / DOMAIN</span><span>RAW LANDING</span><span>CURATED SURFACE</span>
+              </div>
+              <div id="lineage-lanes" class="lineage-lanes loading-block"></div>
+            </section>
+            <aside class="lineage-inspector" id="lineage-inspector">
+              <span class="eyebrow">Selected source</span>
+              <h2>No source selected</h2>
+              <p>Select a flow lane to review cadence, discovery, source-period semantics, downstream marts, and usage notes.</p>
+            </aside>
+          </div>
+        </section>
+
+        <section class="view" id="view-contracts" data-view="contracts" aria-labelledby="contracts-title" hidden>
+          <div class="page-heading">
+            <div>
+              <span class="eyebrow">Trust before promotion</span>
+              <h1 id="contracts-title">Source contracts</h1>
+            </div>
+            <p>Publisher versions, periods, fingerprints, counts, and validation evidence in one inspectable registry.</p>
+          </div>
+          <div class="catalog-toolbar contract-toolbar" role="search">
+            <label class="search-field">
+              <span class="sr-only">Search contracts</span><span aria-hidden="true">⌕</span>
+              <input id="contract-search" type="search" placeholder="Search source, publisher, fingerprint…" autocomplete="off">
+            </label>
+            <label class="select-field">
+              <span>STATUS</span>
+              <select id="contract-status" aria-label="Filter by contract status">
+                <option value="all">All statuses</option><option value="current">Current</option><option value="warning">Attention</option><option value="failed">Failed</option><option value="unavailable">Unavailable</option>
+              </select>
+            </label>
+          </div>
+          <div class="table-frame">
+            <table class="data-table contracts-table">
+              <thead><tr><th>Source</th><th>Status</th><th>Source period</th><th>Publisher version</th><th>Rows</th><th>Schema fingerprint</th><th>Promotion evidence</th></tr></thead>
+              <tbody id="contracts-body"></tbody>
+            </table>
+            <div id="contracts-empty" class="table-empty"></div>
+          </div>
+        </section>
+
+        <section class="view" id="view-operations" data-view="operations" aria-labelledby="operations-title" hidden>
+          <div class="page-heading">
+            <div>
+              <span class="eyebrow">Refresh & promotion ledger</span>
+              <h1 id="operations-title">Operations</h1>
+            </div>
+            <p>Observe pipeline runs and the evidence that supports promotion. Execution remains deliberately outside this read-only API.</p>
+          </div>
+
+          <div class="operations-layout">
+            <section class="ledger-panel run-ledger" aria-labelledby="run-ledger-title">
+              <div class="section-heading compact">
+                <div><span class="eyebrow">Observed history</span><h2 id="run-ledger-title">Pipeline runs</h2></div>
+                <span id="runs-count" class="ledger-count">— RUNS</span>
+              </div>
+              <div class="table-frame flush">
+                <table class="data-table">
+                  <thead><tr><th>Run / started</th><th>Source</th><th>Acquire</th><th>Validate</th><th>Candidate</th><th>Promotion</th></tr></thead>
+                  <tbody id="runs-body"></tbody>
+                </table>
+                <div id="runs-empty" class="table-empty"></div>
+              </div>
+            </section>
+
+            <aside class="operator-panel" aria-labelledby="operator-title">
+              <div class="operator-lock" aria-hidden="true">LOCKED</div>
+              <span class="eyebrow">Future operator service</span>
+              <h2 id="operator-title">Manual refresh</h2>
+              <p>Execution is approval-gated and unavailable from the serving API. A future control plane must provide locks, preview, audit logs, and explicit confirmation.</p>
+              <button type="button" disabled aria-describedby="refresh-disabled-reason">Start manual refresh</button>
+              <small id="refresh-disabled-reason">Disabled by design · read-only API</small>
+            </aside>
+          </div>
+
+          <section class="safe-sequence" aria-labelledby="sequence-title">
+            <div class="section-heading compact">
+              <div><span class="eyebrow">Proposed approval path</span><h2 id="sequence-title">Safe refresh sequence</h2></div>
+            </div>
+            <ol>
+              <li><span>01</span><strong>Discover</strong><small>Resolve publisher release</small></li>
+              <li><span>02</span><strong>Preview</strong><small>Review expected change</small></li>
+              <li><span>03</span><strong>Acquire</strong><small>Download into staging</small></li>
+              <li><span>04</span><strong>Validate</strong><small>Enforce source contract</small></li>
+              <li><span>05</span><strong>Build candidate</strong><small>Create versioned warehouse</small></li>
+              <li><span>06</span><strong>Compare</strong><small>Diff active vs candidate</small></li>
+              <li><span>07</span><strong>Approve</strong><small>Record operator decision</small></li>
+              <li><span>08</span><strong>Promote</strong><small>Atomically switch release</small></li>
+            </ol>
+          </section>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script src="app.js" defer></script>
+</body>
+</html>

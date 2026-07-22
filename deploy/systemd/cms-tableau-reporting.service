@@ -1,0 +1,18 @@
+[Unit]
+Description=Build and publish the California Tableau reporting replica
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=dataops
+Group=dataops
+WorkingDirectory=/srv/cms-data-platform/production/release-current/code
+EnvironmentFile=/etc/cms-data/tableau-reporting.env
+ExecStart=/srv/cms-data-platform/production/release-current/runtime/bin/python -m pipeline.reporting_export publish --data-root /srv/cms-data-platform/data --production-root /srv/cms-data-platform/production --postgres-dsn-env CMS_REPORTING_DSN --temporary-root /srv/cms-data-platform/reporting/tmp --minimum-free-gb 15 --reader-role tableau_reader
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/srv/cms-data-platform/data/locks /srv/cms-data-platform/reporting/tmp
