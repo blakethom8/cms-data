@@ -250,6 +250,29 @@ def test_atomic_bundle_activation_verification_and_complete_rollback(
     assert all(event["state"] == "completed" for event in journal["events"])
 
 
+def test_atomic_control_writes_inherit_the_control_root_group(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "control" / "deployments.json"
+    target.parent.mkdir()
+    ownership_calls: list[tuple[Path, int, int, bool]] = []
+    monkeypatch.setattr(production.os, "geteuid", lambda: 0)
+    monkeypatch.setattr(
+        production.os,
+        "chown",
+        lambda path, uid, gid, *, follow_symlinks: ownership_calls.append(
+            (Path(path), uid, gid, follow_symlinks)
+        ),
+    )
+
+    production._write_json_atomic(target, {"schema_version": 1})
+
+    assert json.loads(target.read_text()) == {"schema_version": 1}
+    assert len(ownership_calls) == 1
+    assert ownership_calls[0][0].parent == target.parent
+    assert ownership_calls[0][1:] == (0, target.parent.stat().st_gid, False)
+
+
 def test_activation_replaces_only_one_selector(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
