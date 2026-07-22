@@ -65,6 +65,20 @@ FULL_PLATFORM_WAREHOUSE_SOURCE_IDS = FULL_CMS_SOURCE_IDS | frozenset(
         "open_payments_ownership",
     }
 )
+PPEF_SOURCE_IDS = frozenset(
+    {
+        "cms_pecos_reassignment",
+        "cms_pecos_practice_location",
+    }
+)
+PPEF_CHANGED_TABLES = frozenset(
+    {
+        "raw_pecos_reassignment",
+        "raw_pecos_practice_location",
+        "pecos_provider_organizations",
+        "pecos_provider_practice_locations",
+    }
+)
 FULL_PLATFORM_SMOKE_TABLES = (
     "core_providers",
     "practice_locations",
@@ -1406,6 +1420,223 @@ def build_full_cms_warehouse_release(
     )
 
 
+def _configure_targeted_build_resources(
+    connection: duckdb.DuckDBPyConnection,
+    *,
+    memory_limit_gb: int,
+    threads: int,
+    spill_directory: Path,
+) -> None:
+    _validate_targeted_build_resources(memory_limit_gb, threads)
+    spill_directory.mkdir(parents=True, exist_ok=False)
+    escaped_spill = str(spill_directory).replace("'", "''")
+    connection.execute(f"SET memory_limit = '{memory_limit_gb}GB'")
+    connection.execute(f"SET threads = {threads}")
+    connection.execute(f"SET temp_directory = '{escaped_spill}'")
+    connection.execute("SET preserve_insertion_order = false")
+
+
+def _validate_targeted_build_resources(memory_limit_gb: int, threads: int) -> None:
+    if not 1 <= memory_limit_gb <= 64:
+        raise ReleaseError("Targeted build memory limit must be between 1 and 64 GiB")
+    if not 1 <= threads <= 32:
+        raise ReleaseError("Targeted build thread count must be between 1 and 32")
+
+
+def _single_table_source_period(
+    connection: duckdb.DuckDBPyConnection,
+    table: str,
+) -> str:
+    rows = connection.execute(
+        f'SELECT DISTINCT source_data_period FROM "{table}" '
+        "WHERE source_data_period IS NOT NULL"
+    ).fetchall()
+    periods = sorted(str(row[0]) for row in rows)
+    if len(periods) != 1:
+        raise ReleaseError(
+            f"Baseline {table} must contain exactly one source period; "
+            f"found {len(periods)}"
+        )
+    return periods[0]
+
+
+def _smoke_table_counts(
+    connection: duckdb.DuckDBPyConnection,
+) -> dict[str, int]:
+    try:
+        return {
+            table: int(
+                connection.execute(f'SELECT count(*) FROM "{table}"').fetchone()[0]
+            )
+            for table in FULL_PLATFORM_SMOKE_TABLES
+        }
+    except duckdb.Error as error:
+        raise ReleaseError(
+            "Candidate is missing a required production smoke table: "
+            + safe_error(error)
+        ) from error
+
+
+def build_ppef_warehouse_release(
+    *,
+    data_root: Path,
+    source_run_ids: tuple[str, ...],
+    backup_manifest_path: Path,
+    code_commit: str | None = None,
+    memory_limit_gb: int = 8,
+    threads: int = 1,
+) -> BuildResult:
+    """Build only PPEF raw and curated relationship tables in a candidate.
+
+    The public provider enrollment table remains a baseline dependency and is
+    never rebuilt by this scope. Its source period must match both PPEF inputs.
+    """
+    _validate_targeted_build_resources(memory_limit_gb, threads)
+    by_source_id = _resolve_exact_source_set(
+        data_root,
+        source_run_ids,
+        PPEF_SOURCE_IDS,
+        label="PPEF targeted build",
+    )
+    ppef_periods = {
+        manifest.source_data_period for manifest in by_source_id.values()
+    }
+    if len(ppef_periods) != 1:
+        raise ReleaseError(
+            "PPEF reassignment and practice-location runs must use the same source period"
+        )
+    ppef_period = next(iter(ppef_periods))
+    baseline, baseline_sha, baseline_bytes = _load_backup_manifest(backup_manifest_path)
+    commit = code_commit or pipeline_commit()
+    if commit is None:
+        raise ReleaseError("A full pipeline Git commit is required to build a release")
+    identity = hashlib.sha256("\0".join(sorted(source_run_ids)).encode()).hexdigest()
+    warehouse_release_id = make_warehouse_release_id(identity, commit)
+    release_dir = data_root / "releases" / warehouse_release_id
+    database_path = release_dir / "warehouse.duckdb"
+    partial_path = release_dir / "warehouse.duckdb.partial"
+    spill_directory = data_root / "staging" / "duckdb-spill" / warehouse_release_id
+    release_store_path = _release_store_path(data_root)
+
+    with _exclusive_lock(data_root / "locks" / "build.lock"):
+        release_dir.mkdir(parents=True, exist_ok=False)
+        document = WarehouseReleaseStore(release_store_path).load()
+        release = WarehouseRelease(
+            warehouse_release_id=warehouse_release_id,
+            created_at=utc_now(),
+            source_run_ids=tuple(sorted(source_run_ids)),
+            pipeline_code_commit=commit,
+            baseline_path=str(baseline),
+            baseline_sha256=baseline_sha,
+            database_path=str(database_path.relative_to(data_root)),
+            duckdb_version=duckdb.__version__,
+        )
+        document.releases.append(release)
+        _save_release_document(data_root, document)
+        try:
+            _copy_verified_baseline(
+                baseline,
+                partial_path,
+                expected_sha256=baseline_sha,
+                expected_bytes=baseline_bytes,
+            )
+            connection = duckdb.connect(str(partial_path), read_only=False)
+            try:
+                _configure_targeted_build_resources(
+                    connection,
+                    memory_limit_gb=memory_limit_gb,
+                    threads=threads,
+                    spill_directory=spill_directory,
+                )
+                enrollment_period = _single_table_source_period(
+                    connection, "raw_pecos_enrollment"
+                )
+                if enrollment_period != ppef_period:
+                    raise ReleaseError(
+                        "PPEF source period does not match baseline PECOS enrollment: "
+                        f"ppef={ppef_period}; enrollment={enrollment_period}"
+                    )
+
+                from .candidate_sources import load_cms_raw_tables
+                from .transform import build_pecos_provider_relationships
+
+                raw_counts = load_cms_raw_tables(
+                    connection,
+                    data_root=data_root,
+                    run_ids=source_run_ids,
+                )
+                connection.execute("BEGIN TRANSACTION")
+                try:
+                    curated_counts = build_pecos_provider_relationships(connection)
+                    connection.execute("COMMIT")
+                except Exception:
+                    connection.execute("ROLLBACK")
+                    raise
+                table_counts = {**raw_counts, **curated_counts}
+                empty = [
+                    table
+                    for table in sorted(PPEF_CHANGED_TABLES)
+                    if table_counts.get(table, 0) <= 0
+                ]
+                if empty:
+                    raise ReleaseError(
+                        "PPEF candidate has empty required tables: " + ", ".join(empty)
+                    )
+                ppef_quality = _validate_ppef_relationships(connection, table_counts)
+                smoke_table_counts = _smoke_table_counts(connection)
+                release.validation_details = {
+                    "release_scope": "targeted_additive",
+                    "comparison_policy": "ppef_additive_v1",
+                    "source_periods": {
+                        source_id: manifest.source_data_period
+                        for source_id, manifest in sorted(by_source_id.items())
+                    },
+                    "baseline_dependencies": {
+                        "cms_pecos_public_provider_enrollment": {
+                            "table": "raw_pecos_enrollment",
+                            "source_data_period": enrollment_period,
+                        }
+                    },
+                    "changed_tables": sorted(PPEF_CHANGED_TABLES),
+                    "ppef_relationship_quality": ppef_quality,
+                    "resource_limits": {
+                        "memory_limit_gb": memory_limit_gb,
+                        "threads": threads,
+                        "spill_directory": str(spill_directory),
+                        "preserve_insertion_order": False,
+                    },
+                    "smoke_table_counts": smoke_table_counts,
+                }
+                connection.execute("CHECKPOINT")
+            finally:
+                connection.close()
+
+            release.byte_size = partial_path.stat().st_size
+            release.sha256 = sha256_file(partial_path)
+            release.table_counts = dict(sorted(table_counts.items()))
+            release.validation_state = ValidationState.PASSED
+            release.validation_timestamp = utc_now()
+            os.replace(partial_path, database_path)
+            os.chmod(database_path, 0o440)
+            _save_release_document(data_root, document)
+            try:
+                spill_directory.rmdir()
+            except OSError:
+                pass
+        except Exception as error:
+            release.validation_state = ValidationState.FAILED
+            release.error_summary = safe_error(error)
+            _save_release_document(data_root, document)
+            raise ReleaseError(release.error_summary) from error
+
+    return BuildResult(
+        release=release,
+        database_path=database_path,
+        release_manifest_path=_release_manifest_path(data_root, warehouse_release_id),
+        release_store_path=release_store_path,
+    )
+
+
 def build_full_platform_warehouse_release(
     *,
     data_root: Path,
@@ -1581,17 +1812,17 @@ def _comparison_policy(
     """Select the exact source-owned table set for a release comparison."""
     source_periods = release.validation_details.get("source_periods")
     source_ids = set(source_periods) if isinstance(source_periods, dict) else set()
-    if source_ids == FULL_PLATFORM_WAREHOUSE_SOURCE_IDS:
+    if source_ids in (FULL_PLATFORM_WAREHOUSE_SOURCE_IDS, PPEF_SOURCE_IDS):
         evidence = release.validation_details.get("smoke_table_counts")
         if not isinstance(evidence, dict):
             raise ReleaseError(
-                "Full platform release is missing exact smoke table-count evidence"
+                "Release is missing exact smoke table-count evidence"
             )
         missing = sorted(set(FULL_PLATFORM_SMOKE_TABLES) - set(evidence))
         unexpected = sorted(set(evidence) - set(FULL_PLATFORM_SMOKE_TABLES))
         if missing or unexpected:
             raise ReleaseError(
-                "Full platform smoke table-count evidence has the wrong table set: "
+                "Smoke table-count evidence has the wrong table set: "
                 f"missing={','.join(missing) or 'none'}; "
                 f"unexpected={','.join(unexpected) or 'none'}"
             )
@@ -1599,12 +1830,14 @@ def _comparison_policy(
             expected_counts = {name: int(evidence[name]) for name in evidence}
         except (TypeError, ValueError) as error:
             raise ReleaseError(
-                "Full platform smoke table-count evidence contains a non-integer count"
+                "Smoke table-count evidence contains a non-integer count"
             ) from error
         if any(count < 0 for count in expected_counts.values()):
             raise ReleaseError(
-                "Full platform smoke table-count evidence contains a negative count"
+                "Smoke table-count evidence contains a negative count"
             )
+        if source_ids == PPEF_SOURCE_IDS:
+            return "ppef_additive_v1", PPEF_CHANGED_TABLES, expected_counts
         return "full_platform_v1", FULL_PLATFORM_CHANGED_TABLES, expected_counts
     if source_ids == FULL_CMS_SOURCE_IDS:
         return "full_cms_v1", FULL_CMS_CHANGED_TABLES, {}

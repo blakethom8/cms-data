@@ -311,8 +311,10 @@ candidate process, leave `release-current` untouched, and inspect the partial ca
 retrying. Do not kill the API or overwrite a release to recover capacity. The interrupted candidate
 remains unpromoted and must be rebuilt from the verified baseline after the resource plan is fixed.
 
-For PPEF specifically, the next attempt must use the documented targeted-additive scope; the current
-full-platform command is not an acceptable operational substitute.
+For PPEF specifically, use `build-ppef-release` with the two same-period PPEF run IDs and the
+checksum-verified production baseline manifest. Its defaults are `--memory-limit-gb 8 --threads 1`;
+lower the memory limit when the serving reserve requires it, but do not raise either limit without a
+new resource review. The full-platform command is not an acceptable operational substitute.
 
 The daily `cms-data-status.timer` is advisory discovery monitoring. A stale result opens an operator
 workflow; it does not authorize acquisition, candidate construction, restart, or promotion. Inspect

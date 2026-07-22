@@ -40,6 +40,7 @@ from .releases import (
     ReleaseError,
     build_full_cms_warehouse_release,
     build_full_platform_warehouse_release,
+    build_ppef_warehouse_release,
     build_warehouse_release,
     compare_warehouse_release,
     promote_staging_release,
@@ -353,6 +354,27 @@ def _parser() -> argparse.ArgumentParser:
         "--environment", choices=[STAGING_ENVIRONMENT], required=True
     )
     build_cms.add_argument("--json", action="store_true")
+    build_ppef = subparsers.add_parser(
+        "build-ppef-release",
+        help="Build only PPEF reassignment, practice-location, and relationship tables",
+    )
+    build_ppef.add_argument("--source-run-id", action="append", required=True)
+    build_ppef.add_argument("--backup-manifest", required=True, type=Path)
+    build_ppef.add_argument(
+        "--data-root", type=Path, default=DEFAULT_MANIFEST_PATH.parent
+    )
+    build_ppef.add_argument(
+        "--environment", choices=[STAGING_ENVIRONMENT], required=True
+    )
+    build_ppef.add_argument(
+        "--memory-limit-gb", type=int, default=8,
+        help="DuckDB memory ceiling for the targeted build (default: 8 GiB)",
+    )
+    build_ppef.add_argument(
+        "--threads", type=int, default=1,
+        help="DuckDB worker threads for the targeted build (default: 1)",
+    )
+    build_ppef.add_argument("--json", action="store_true")
     build_platform = subparsers.add_parser(
         "build-platform-release",
         help="Build all CMS, NPPES, and Open Payments runs into one staging candidate",
@@ -472,6 +494,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command in {
         "build-release",
         "build-cms-release",
+        "build-ppef-release",
         "build-platform-release",
         "prepare-aact-release",
         "stage-aact-database",
@@ -494,6 +517,15 @@ def main(argv: list[str] | None = None) -> int:
                     backup_manifest_path=args.backup_manifest,
                 ).to_dict()
                 heading = "Full CMS staging warehouse release built"
+            elif args.command == "build-ppef-release":
+                payload = build_ppef_warehouse_release(
+                    data_root=args.data_root,
+                    source_run_ids=tuple(args.source_run_id),
+                    backup_manifest_path=args.backup_manifest,
+                    memory_limit_gb=args.memory_limit_gb,
+                    threads=args.threads,
+                ).to_dict()
+                heading = "Targeted PPEF staging warehouse release built"
             elif args.command == "build-platform-release":
                 payload = build_full_platform_warehouse_release(
                     data_root=args.data_root,

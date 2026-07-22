@@ -10,7 +10,11 @@ import pytest
 REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from pipeline.acquisition import inspect_hospital_enrollments
+from pipeline.acquisition import (
+    CMS_CSV_PROFILES,
+    inspect_cms_csv,
+    inspect_hospital_enrollments,
+)
 from pipeline.data_platform import EXIT_HEALTHY, EXIT_RELEASE_FAILURE, main
 from pipeline.manifests import (
     ManifestDocument,
@@ -23,12 +27,14 @@ from pipeline.releases import (
     FULL_PLATFORM_SMOKE_TABLES,
     FULL_PLATFORM_WAREHOUSE_SOURCE_IDS,
     HOSPITAL_COLUMN_MAP,
+    PPEF_CHANGED_TABLES,
     ReleaseError,
     WAREHOUSE_RELEASE_SCHEMA_VERSION,
     WarehouseReleaseStore,
     _rebuild_hospital_affiliations,
     _validate_ppef_relationships,
     build_full_cms_warehouse_release,
+    build_ppef_warehouse_release,
     build_warehouse_release,
     compare_warehouse_release,
     promote_staging_release,
@@ -40,6 +46,9 @@ from pipeline.source_registry import SOURCE_REGISTRY
 SOURCE_RUN_ID = "20990720T010000Z-hospital"
 SOURCE_RELEASE_ID = "cms_hospital_enrollments-fixture"
 CODE_COMMIT = "a" * 40
+PPEF_PERIOD = "2026-01-01/2026-03-31"
+PPEF_PROVIDER_ENROLLMENT = "I00000000000001"
+PPEF_RECEIVER_ENROLLMENT = "O00000000000002"
 
 
 def _ppef_validation_connection() -> duckdb.DuckDBPyConnection:
@@ -280,6 +289,220 @@ def _build(tmp_path: Path):
         code_commit=CODE_COMMIT,
     )
     return data_root, backup, baseline_hash, result
+
+
+def _stage_ppef_sources(data_root: Path, *, period: str = PPEF_PERIOD) -> tuple[str, ...]:
+    payloads = {
+        "cms_pecos_reassignment": (
+            "REASGN_BNFT_ENRLMT_ID,RCV_BNFT_ENRLMT_ID\n"
+            f"{PPEF_PROVIDER_ENROLLMENT},{PPEF_RECEIVER_ENROLLMENT}\n"
+        ).encode(),
+        "cms_pecos_practice_location": (
+            "ENRLMT_ID,CITY_NAME,STATE_CD,ZIP_CD\n"
+            f"{PPEF_RECEIVER_ENROLLMENT},Los Angeles,CA,90048\n"
+        ).encode(),
+    }
+    manifests: list[RunManifest] = []
+    run_ids: list[str] = []
+    for index, (source_id, payload) in enumerate(payloads.items(), start=1):
+        run_id = f"20260401T00000{index}Z-{source_id}"
+        artifact = data_root / "runs" / source_id / run_id / "source.csv"
+        artifact.parent.mkdir(parents=True)
+        artifact.write_bytes(payload)
+        inspection = inspect_cms_csv(
+            artifact,
+            profile=CMS_CSV_PROFILES[source_id],
+        )
+        manifests.append(
+            RunManifest(
+                run_id=run_id,
+                release_id=f"{source_id}-2026q1",
+                source_id=source_id,
+                publisher=SOURCE_REGISTRY[source_id].publisher.value,
+                publisher_version="fixture-2026q1",
+                source_data_period=period,
+                publisher_release_timestamp="2026-04-01T00:00:00+00:00",
+                discovery_timestamp="2026-04-01T00:01:00+00:00",
+                retrieval_timestamp="2026-04-01T00:02:00+00:00",
+                source_url=f"https://data.cms.gov/fixture/{source_id}.csv",
+                byte_size=inspection.byte_size,
+                sha256=inspection.sha256,
+                schema_fingerprint=inspection.schema_fingerprint,
+                source_encoding=inspection.source_encoding,
+                row_counts={
+                    "source_rows": inspection.row_count,
+                    "invalid_identifier_rows": inspection.invalid_identifier_rows,
+                },
+                pipeline_code_commit=CODE_COMMIT,
+                validation_state=ValidationState.PASSED,
+                validation_timestamp="2026-04-01T00:03:00+00:00",
+            )
+        )
+        run_ids.append(run_id)
+    ManifestStore(data_root / "manifests.json").save(
+        ManifestDocument(manifests=manifests)
+    )
+    return tuple(run_ids)
+
+
+def _ppef_baseline(tmp_path: Path, *, period: str = PPEF_PERIOD) -> tuple[Path, Path]:
+    baseline = tmp_path / "ppef-backup" / "warehouse.duckdb"
+    baseline.parent.mkdir(parents=True)
+    connection = duckdb.connect(str(baseline))
+    try:
+        connection.execute(
+            """
+            CREATE TABLE raw_pecos_enrollment (
+                NPI VARCHAR,
+                ENRLMT_ID VARCHAR,
+                ORG_NAME VARCHAR,
+                PROVIDER_TYPE_CD VARCHAR,
+                PROVIDER_TYPE_DESC VARCHAR,
+                STATE_CD VARCHAR,
+                source_run_id VARCHAR,
+                source_data_period VARCHAR
+            )
+            """
+        )
+        connection.executemany(
+            "INSERT INTO raw_pecos_enrollment VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                (
+                    "1234567890",
+                    PPEF_PROVIDER_ENROLLMENT,
+                    None,
+                    "14",
+                    "Physician",
+                    "CA",
+                    "enrollment-run",
+                    period,
+                ),
+                (
+                    "1999999999",
+                    PPEF_RECEIVER_ENROLLMENT,
+                    "Example Medical Group",
+                    "70",
+                    "Clinic/Group Practice",
+                    "CA",
+                    "enrollment-run",
+                    period,
+                ),
+            ],
+        )
+        connection.execute(
+            """
+            CREATE TABLE hospital_affiliations (
+                npi VARCHAR,
+                hospital_npi VARCHAR,
+                hospital_name VARCHAR,
+                hospital_state VARCHAR,
+                affiliation_source VARCHAR,
+                confidence_level VARCHAR
+            )
+            """
+        )
+        connection.execute(
+            "INSERT INTO hospital_affiliations VALUES "
+            "('1234567890', '1888888888', 'Example Hospital', 'CA', 'fixture', 'high')"
+        )
+        for table in FULL_PLATFORM_SMOKE_TABLES:
+            if table in PPEF_CHANGED_TABLES or table in {
+                "raw_pecos_enrollment",
+                "hospital_affiliations",
+            }:
+                continue
+            connection.execute(f'CREATE TABLE "{table}" (value INTEGER)')
+            connection.execute(f'INSERT INTO "{table}" VALUES (1)')
+        connection.execute("CREATE TABLE baseline_marker (value VARCHAR)")
+        connection.execute("INSERT INTO baseline_marker VALUES ('preserved')")
+        connection.execute("CHECKPOINT")
+    finally:
+        connection.close()
+    digest = sha256_file(baseline)
+    manifest = baseline.parent / "backup-manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "backup_path": str(baseline),
+                "backup_identity": {"byte_size": baseline.stat().st_size},
+                "sha256": digest,
+                "validation": {"read_only_open": "passed"},
+            }
+        )
+    )
+    return baseline, manifest
+
+
+def test_targeted_ppef_release_changes_only_relationship_tables(tmp_path: Path) -> None:
+    data_root = tmp_path / "ppef-data"
+    run_ids = _stage_ppef_sources(data_root)
+    baseline, backup_manifest = _ppef_baseline(tmp_path)
+
+    result = build_ppef_warehouse_release(
+        data_root=data_root,
+        source_run_ids=run_ids,
+        backup_manifest_path=backup_manifest,
+        code_commit=CODE_COMMIT,
+        memory_limit_gb=1,
+        threads=1,
+    )
+    comparison = compare_warehouse_release(
+        data_root=data_root,
+        warehouse_release_id=result.release.warehouse_release_id,
+        backup_manifest_path=backup_manifest,
+    )
+
+    assert comparison["state"] == "passed"
+    assert comparison["comparison_policy"] == "ppef_additive_v1"
+    assert comparison["unexpected_differences"] == []
+    assert set(comparison["changed_tables"]) == PPEF_CHANGED_TABLES
+    assert result.release.validation_details["release_scope"] == "targeted_additive"
+    assert result.release.validation_details["resource_limits"]["threads"] == 1
+    assert result.release.validation_details["baseline_dependencies"][
+        "cms_pecos_public_provider_enrollment"
+    ]["source_data_period"] == PPEF_PERIOD
+    assert result.release.table_counts == {
+        "pecos_provider_organizations": 1,
+        "pecos_provider_practice_locations": 1,
+        "raw_pecos_practice_location": 1,
+        "raw_pecos_reassignment": 1,
+    }
+    baseline_connection = duckdb.connect(str(baseline), read_only=True)
+    candidate_connection = duckdb.connect(str(result.database_path), read_only=True)
+    try:
+        assert baseline_connection.execute(
+            "SELECT count(*) FROM raw_pecos_enrollment"
+        ).fetchone()[0] == 2
+        with pytest.raises(duckdb.CatalogException):
+            baseline_connection.execute("SELECT * FROM raw_pecos_reassignment")
+        assert candidate_connection.execute(
+            "SELECT receiving_organization_name FROM pecos_provider_organizations"
+        ).fetchone()[0] == "Example Medical Group"
+        assert candidate_connection.execute(
+            "SELECT value FROM baseline_marker"
+        ).fetchone()[0] == "preserved"
+    finally:
+        candidate_connection.close()
+        baseline_connection.close()
+
+
+def test_targeted_ppef_release_rejects_enrollment_period_mismatch(tmp_path: Path) -> None:
+    data_root = tmp_path / "ppef-data"
+    run_ids = _stage_ppef_sources(data_root)
+    _, backup_manifest = _ppef_baseline(
+        tmp_path, period="2025-10-01/2025-12-31"
+    )
+
+    with pytest.raises(ReleaseError, match="does not match baseline PECOS enrollment"):
+        build_ppef_warehouse_release(
+            data_root=data_root,
+            source_run_ids=run_ids,
+            backup_manifest_path=backup_manifest,
+            code_commit=CODE_COMMIT,
+            memory_limit_gb=1,
+            threads=1,
+        )
 
 
 def test_build_release_copies_baseline_loads_source_and_records_provenance(

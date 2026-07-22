@@ -88,10 +88,12 @@ reporting/export surfaces. It must enforce same-period alignment, declared raw g
 enrollment keys, curated bridge key uniqueness, row-count evidence, and the usual API/reporting
 contracts. It does not require a Medicare, NPPES, Open Payments, or AACT rebuild.
 
-The current CLI does not yet expose a PPEF-scoped builder. Until that builder and its focused tests
-exist, operators must not use `build-platform-release` as a substitute merely to add PPEF. That
-command is a full-reconciliation path and can exhaust the serving host without adding safety for an
-otherwise additive change.
+Use `build-ppef-release` for this scope, passing exactly one validated reassignment run and one
+validated practice-location run. The command defaults to one DuckDB worker, an 8 GiB memory limit,
+and a candidate-only spill directory. It verifies that both inputs match the installed PECOS
+enrollment period, rebuilds only the four PPEF-owned tables, and records complete-warehouse count
+evidence for comparison. Do not use `build-platform-release` as a substitute merely to add PPEF;
+that command is reserved for full reconciliation.
 
 Source-specific gates add to, and never replace, those common gates:
 
