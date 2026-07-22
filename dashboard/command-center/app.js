@@ -37,6 +37,9 @@
     tables: [],
     sources: [],
     runs: [],
+    lineage: null,
+    lineageFilter: "all",
+    selectedLineageNode: null,
     overview: null,
     offlinePreview: false,
     selectedDataset: null,
@@ -150,6 +153,7 @@
       overview: getJson("/operations/overview"),
       sources: getJson("/operations/sources"),
       runs: getJson("/operations/runs?limit=50"),
+      lineage: getJson("/operations/lineage"),
       providerEvidence: getJson(`/explorer/provider-evidence?npis=${evidenceProviders.map(provider => provider.npi).join(",")}&limit=10`)
     };
 
@@ -175,6 +179,7 @@
     state.overview = state.operations.overview?.ok ? state.operations.overview.data : null;
     state.sources = state.operations.sources?.ok ? arrayFrom(state.operations.sources.data, ["sources", "items", "data"]) : [];
     state.runs = state.operations.runs?.ok ? arrayFrom(state.operations.runs.data, ["runs", "items", "data"]) : [];
+    state.lineage = state.operations.lineage?.ok ? state.operations.lineage.data : null;
 
     renderConnectionState();
     renderOverview();
@@ -199,7 +204,7 @@
       return;
     }
 
-    if (coreSuccesses === 3 && operationSuccesses === 3) {
+    if (coreSuccesses === Object.keys(state.core).length && operationSuccesses === Object.keys(state.operations).length) {
       indicator.classList.add("state-connected");
       indicator.querySelector("span:last-child").textContent = "API connected";
     } else {
@@ -614,62 +619,218 @@
     });
   }
 
-  function lineageModels() {
-    if (state.sources.length) {
-      return state.sources.flatMap(source => {
-        const downstream = pick(source, ["downstream_tables"], []) || [];
-        const physical = downstream.filter(name => String(name).startsWith("raw_") || state.catalog.some(item => item.table === name));
-        const curated = downstream.filter(name => !String(name).startsWith("raw_") && !state.catalog.some(item => item.table === name));
-        if (!physical.length && !curated.length) return [{ source, raw: "No physical table declared", mart: "No curated table declared" }];
-        const count = Math.max(physical.length, curated.length, 1);
-        return Array.from({ length: count }, (_, index) => ({ source, raw: physical[index] || physical[0] || "No raw table declared", mart: curated[index] || curated[0] || "Catalog surface" }));
+  function lineageNodeEvidence(node) {
+    const status = String(node?.evidence_status || "declared").toLowerCase();
+    if (["observed", "validated_active", "active", "current", "success", "succeeded"].some(value => status.includes(value))) return "observed";
+    if (["declared", "planned", "unknown"].some(value => status.includes(value))) return "declared";
+    return "attention";
+  }
+
+  function lineageNodeStage(kind) {
+    if (kind === "source") return 0;
+    if (kind === "raw") return 1;
+    if (kind === "transform") return 2;
+    return 3;
+  }
+
+  function lineageDepths(nodes, edges) {
+    const depths = new Map(nodes.map(node => [node.id, lineageNodeStage(node.kind)]));
+    for (let pass = 0; pass < nodes.length; pass += 1) {
+      let changed = false;
+      edges.forEach(edge => {
+        const sourceDepth = depths.get(edge.source);
+        const targetDepth = depths.get(edge.target);
+        if (sourceDepth === undefined || targetDepth === undefined) return;
+        const nextDepth = Math.max(targetDepth, sourceDepth + 1);
+        if (nextDepth !== targetDepth) {
+          depths.set(edge.target, nextDepth);
+          changed = true;
+        }
+      });
+      if (!changed) break;
+    }
+    return depths;
+  }
+
+  function lineageStageHeading(stageNodes) {
+    const kinds = new Set(stageNodes.map(node => node.kind));
+    if (kinds.size === 1 && kinds.has("source")) return "Publisher source";
+    if (kinds.size === 1 && kinds.has("raw")) return "Raw landing";
+    if (kinds.size === 1 && kinds.has("transform")) return "Transformation";
+    if (kinds.size === 1 && kinds.has("bridge")) return "Bridge / core model";
+    if ([...kinds].every(kind => ["mart", "summary"].includes(kind))) return "Curated model";
+    return "Downstream model";
+  }
+
+  function lineageKindLabel(kind) {
+    return ({ source: "publisher source", raw: "raw landing", transform: "transform", bridge: "bridge table", mart: "curated mart", summary: "summary" })[kind] || "declared node";
+  }
+
+  function lineageStatusLabel(status) {
+    return ({ observed: "observed", declared: "declared", attention: "needs attention" })[status] || status;
+  }
+
+  function lineageTopology() {
+    const payload = state.lineage;
+    const nodes = Array.isArray(payload?.nodes) ? payload.nodes.filter(node => node?.id) : [];
+    const nodeIds = new Set(nodes.map(node => node.id));
+    const edges = (Array.isArray(payload?.edges) ? payload.edges : []).filter(edge => nodeIds.has(edge?.source) && nodeIds.has(edge?.target));
+    return { nodes, edges };
+  }
+
+  function lineageRelatedNodeIds(selectedId, edges) {
+    if (!selectedId) return new Set();
+    const upstream = new Set([selectedId]);
+    const downstream = new Set([selectedId]);
+    let upstreamChanged = true;
+    let downstreamChanged = true;
+    while (upstreamChanged || downstreamChanged) {
+      upstreamChanged = false;
+      downstreamChanged = false;
+      edges.forEach(edge => {
+        if (upstream.has(edge.target) && !upstream.has(edge.source)) {
+          upstream.add(edge.source);
+          upstreamChanged = true;
+        }
+        if (downstream.has(edge.source) && !downstream.has(edge.target)) {
+          downstream.add(edge.target);
+          downstreamChanged = true;
+        }
       });
     }
-    const grouped = Object.groupBy ? Object.groupBy(state.catalog, item => item.domain || "unknown") : state.catalog.reduce((acc, item) => { (acc[item.domain || "unknown"] ||= []).push(item); return acc; }, {});
-    return Object.entries(grouped).flatMap(([domain, items]) => items.map(item => ({ source: { source_id: domain, title: `${domain} domain`, evidence_status: "missing" }, raw: item.table, mart: item.title })));
+    return new Set([...upstream, ...downstream]);
+  }
+
+  function lineageFilterNodeIds(nodes, edges) {
+    if (state.lineageFilter === "all") return new Set(nodes.map(node => node.id));
+    const matching = new Set(nodes.filter(node => lineageNodeEvidence(node) === state.lineageFilter).map(node => node.id));
+    const contextual = new Set(matching);
+    edges.forEach(edge => {
+      if (matching.has(edge.source)) contextual.add(edge.target);
+      if (matching.has(edge.target)) contextual.add(edge.source);
+    });
+    return contextual;
+  }
+
+  function renderLineageSummary(summary = {}) {
+    const values = [summary.source, summary.raw, summary.transform, summary.bridge, (Number(summary.mart) || 0) + (Number(summary.summary) || 0)];
+    $$("#lineage-summary strong").forEach((element, index) => { element.textContent = Number.isFinite(Number(values[index])) ? fullNumber(values[index]) : "—"; });
   }
 
   function renderLineage() {
     const banner = $("#lineage-banner");
-    banner.textContent = state.operations.sources?.ok ? "" : "Source contracts are unavailable. This map is derived only from the observed catalog and does not assert acquisition, validation, or promotion evidence.";
-    const lanes = lineageModels();
     const container = $("#lineage-lanes");
+    const payload = state.lineage;
+    renderLineageSummary(payload?.summary);
     container.classList.remove("loading-block");
-    if (!lanes.length) {
-      container.innerHTML = '<div class="unavailable-state"><strong>Lineage cannot be assembled</strong><p>Connect either the source registry or the explorer catalog to expose flow lanes.</p></div>';
+
+    if (!state.operations.lineage?.ok) {
+      banner.textContent = "Lineage evidence is unavailable. The Command Center does not infer a topology from catalog metadata.";
+      container.innerHTML = '<div class="unavailable-state lineage-empty"><strong>Lineage graph unavailable</strong><p>Connect <code>/operations/lineage</code> to inspect declared transforms and read-only inventory evidence.</p></div>';
       return;
     }
-    container.innerHTML = lanes.map((model, index) => `
-      <div class="lineage-lane">
-        <button class="lineage-node source" type="button" data-lineage-index="${index}"><strong>${escapeHtml(pick(model.source, ["title", "source_id"], "Unknown source"))}</strong><small>${escapeHtml(pick(model.source, ["publisher", "cadence"], "evidence unavailable"))}</small></button>
-        <span class="lineage-arrow one" aria-hidden="true">→</span>
-        <div class="lineage-node raw"><strong>${escapeHtml(model.raw)}</strong><small>physical / landing</small></div>
-        <span class="lineage-arrow two" aria-hidden="true">→</span>
-        <div class="lineage-node mart"><strong>${escapeHtml(model.mart)}</strong><small>curated / downstream</small></div>
-      </div>`).join("");
-    container.dataset.models = "ready";
-    state.lineageModels = lanes;
+
+    const { nodes, edges } = lineageTopology();
+    if (!nodes.length) {
+      banner.textContent = payload?.evidence_error ? `Operational evidence note: ${payload.evidence_error}` : "";
+      container.innerHTML = '<div class="empty-state lineage-empty"><strong>No lineage nodes returned</strong><p>The endpoint responded successfully, but it did not declare any source, table, or transform dependencies.</p></div>';
+      return;
+    }
+
+    const generatedAt = payload?.generated_at ? `Generated ${formatDate(payload.generated_at)}.` : "";
+    const evidenceNote = payload?.evidence_error ? ` Operational evidence note: ${payload.evidence_error}` : "";
+    banner.textContent = `Edges marked declared describe pipeline intent; only observed edges have supporting active-warehouse evidence.${generatedAt ? ` ${generatedAt}` : ""}${evidenceNote}`;
+
+    const visibleIds = lineageFilterNodeIds(nodes, edges);
+    if (state.selectedLineageNode && !visibleIds.has(state.selectedLineageNode)) state.selectedLineageNode = null;
+    const visibleNodes = nodes.filter(node => visibleIds.has(node.id));
+    const visibleEdges = edges.filter(edge => visibleIds.has(edge.source) && visibleIds.has(edge.target));
+    const relatedIds = lineageRelatedNodeIds(state.selectedLineageNode, visibleEdges);
+    const depths = lineageDepths(visibleNodes, visibleEdges);
+    const stageCount = Math.max(1, ...visibleNodes.map(node => depths.get(node.id) || 0)) + 1;
+    const stages = Array.from({ length: stageCount }, (_, stage) => visibleNodes.filter(node => depths.get(node.id) === stage).sort((a, b) => String(a.label).localeCompare(String(b.label))));
+    const stageRows = Math.max(1, ...stages.map(stage => stage.length));
+    const graphHeight = Math.max(560, 98 + stageRows * 98);
+    const stageWidth = 174;
+    const graphWidth = Math.max(880, stageCount * stageWidth + 24);
+    const positions = new Map();
+    stages.forEach((stageNodes, stage) => stageNodes.forEach((node, index) => positions.set(node.id, { x: 18 + stage * stageWidth, y: 72 + index * 98 })));
+    const stageNames = stages.map(lineageStageHeading);
+
+    const connectorMarkup = visibleEdges.map(edge => {
+      const from = positions.get(edge.source);
+      const to = positions.get(edge.target);
+      if (!from || !to) return "";
+      const startX = from.x + 160;
+      const startY = from.y + 34;
+      const endX = to.x;
+      const endY = to.y + 34;
+      const curve = Math.max(28, (endX - startX) * .42);
+      const evidence = String(edge.evidence_status || "declared").toLowerCase().includes("observed") ? "observed" : "declared";
+      const related = !state.selectedLineageNode || (relatedIds.has(edge.source) && relatedIds.has(edge.target));
+      return `<path class="lineage-edge ${evidence}${related ? " is-related" : " is-dimmed"}" d="M ${startX} ${startY} C ${startX + curve} ${startY}, ${endX - curve} ${endY}, ${endX} ${endY}" data-edge-id="${escapeHtml(edge.id || "")}" />`;
+    }).join("");
+
+    const nodeMarkup = visibleNodes.map(node => {
+      const position = positions.get(node.id);
+      const evidence = lineageNodeEvidence(node);
+      const isSelected = node.id === state.selectedLineageNode;
+      const related = !state.selectedLineageNode || relatedIds.has(node.id);
+      const observedRows = node?.observed?.approx_rows;
+      const subtitle = node.kind === "source"
+        ? pick(node, ["source_id"], lineageKindLabel(node.kind))
+        : node.table || node.transform_id || lineageKindLabel(node.kind);
+      return `<button type="button" class="lineage-node ${escapeHtml(node.kind || "unknown")} evidence-${evidence}${isSelected ? " selected" : ""}${related ? " is-related" : " is-dimmed"}" data-lineage-node="${escapeHtml(node.id)}" style="--node-x:${position.x}px;--node-y:${position.y}px" aria-pressed="${isSelected}">
+        <span class="lineage-node-top"><span class="lineage-node-kind">${escapeHtml(lineageKindLabel(node.kind))}</span><i class="lineage-evidence ${evidence}" aria-label="${escapeHtml(lineageStatusLabel(evidence))}"></i></span>
+        <strong title="${escapeHtml(node.label || node.id)}">${escapeHtml(node.label || node.id)}</strong>
+        <small title="${escapeHtml(subtitle)}">${escapeHtml(subtitle)}</small>
+        ${observedRows !== null && observedRows !== undefined ? `<em>${escapeHtml(compactNumber(observedRows))} rows</em>` : ""}
+      </button>`;
+    }).join("");
+
+    container.style.minWidth = `${graphWidth}px`;
+    container.style.height = `${graphHeight}px`;
+    container.innerHTML = `<div class="lineage-stage-headings" style="grid-template-columns:repeat(${stageCount}, ${stageWidth}px);width:${graphWidth}px" aria-hidden="true">${stageNames.map(name => `<span>${name}</span>`).join("")}</div><svg class="lineage-connectors" viewBox="0 0 ${graphWidth} ${graphHeight}" width="${graphWidth}" height="${graphHeight}" aria-hidden="true"><defs><marker id="lineage-arrowhead" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 8 4 L 0 8 z" /></marker></defs>${connectorMarkup}</svg>${nodeMarkup}`;
+    renderLineageInspector(nodes, edges);
   }
 
-  function inspectLineage(index) {
-    const model = state.lineageModels?.[index];
-    if (!model) return;
-    $$(".lineage-node.source").forEach((node, nodeIndex) => node.classList.toggle("selected", nodeIndex === index));
-    const source = model.source;
-    const status = evidenceStatus(source);
-    const downstream = pick(source, ["downstream_tables"], []) || [];
-    $("#lineage-inspector").innerHTML = `
-      <span class="eyebrow">Selected source</span>
-      <h2>${escapeHtml(pick(source, ["title", "source_id"], "Unknown source"))}</h2>
-      ${statusChip(status, status === "current" ? "validated active" : status)}
-      <dl class="inspector-facts">
-        <div><dt>Publisher</dt><dd>${escapeHtml(pick(source, ["publisher"], "Not observed"))}</dd></div>
-        <div><dt>Cadence</dt><dd>${escapeHtml(pick(source, ["cadence"], "Not observed"))}</dd></div>
-        <div><dt>Discovery</dt><dd>${escapeHtml(pick(source, ["discovery_mechanism"], "Not observed"))}</dd></div>
-        <div><dt>Source period semantics</dt><dd>${escapeHtml(pick(source, ["source_period_semantics"], "Not documented in available evidence"))}</dd></div>
-        <div><dt>Downstream tables</dt><dd>${escapeHtml(downstream.join(" · ") || model.raw)}</dd></div>
-        <div><dt>Usage / licensing</dt><dd>${escapeHtml(pick(source, ["licensing_notes"], "Not documented in available evidence"))}</dd></div>
-      </dl>`;
+  function lineageDetails(node) {
+    const details = node?.details && typeof node.details === "object" ? node.details : {};
+    const observed = node?.observed && typeof node.observed === "object" ? node.observed : {};
+    const manifest = node?.latest_manifest && typeof node.latest_manifest === "object" ? node.latest_manifest : {};
+    const facts = [
+      ["Node kind", lineageKindLabel(node?.kind)],
+      ["Evidence", lineageStatusLabel(lineageNodeEvidence(node))],
+      ["Table", node?.table],
+      ["Source ID", node?.source_id],
+      ["Transform ID", node?.transform_id],
+      ["Warehouse inventory", observed.table_present === true ? "Observed in active inventory" : observed.table_present === false ? "Not observed in active inventory" : null],
+      ["Approx. rows", observed.approx_rows !== null && observed.approx_rows !== undefined ? fullNumber(observed.approx_rows) : null],
+      ["Source period", pick(manifest, ["source_data_period", "source_period"], null)],
+      ...Object.entries(details).map(([key, value]) => [key.replaceAll("_", " "), typeof value === "object" ? JSON.stringify(value) : value])
+    ];
+    return facts.filter(([, value]) => value !== null && value !== undefined && value !== "");
+  }
+
+  function renderLineageInspector(nodes, edges) {
+    const inspector = $("#lineage-inspector");
+    const node = nodes.find(item => item.id === state.selectedLineageNode);
+    if (!node) {
+      inspector.innerHTML = `<span class="eyebrow">Graph inspector</span><h2>No node selected</h2><p>Select a source, landing, transform, bridge, or curated model to trace every connected upstream and downstream path.</p><div class="lineage-inspector-note"><strong>Evidence-aware</strong><span>Declared edges are implementation intent. Observed edges have active-warehouse support.</span></div>`;
+      return;
+    }
+    const byId = new Map(nodes.map(item => [item.id, item]));
+    const upstream = edges.filter(edge => edge.target === node.id).map(edge => ({ edge, node: byId.get(edge.source) })).filter(item => item.node);
+    const downstream = edges.filter(edge => edge.source === node.id).map(edge => ({ edge, node: byId.get(edge.target) })).filter(item => item.node);
+    const dependencyList = (items, direction) => items.length ? `<ul class="lineage-dependency-list">${items.map(({ edge, node: dependency }) => `<li><button type="button" data-lineage-node="${escapeHtml(dependency.id)}"><strong>${escapeHtml(dependency.label || dependency.id)}</strong><small>${escapeHtml(direction)} · ${escapeHtml(edge.label || edge.kind || "dependency")} · ${escapeHtml(String(edge.evidence_status || "declared"))}</small></button></li>`).join("")}</ul>` : '<p class="lineage-no-dependencies">None declared.</p>';
+    inspector.innerHTML = `<span class="eyebrow">Selected ${escapeHtml(lineageKindLabel(node.kind))}</span><h2>${escapeHtml(node.label || node.id)}</h2><div class="lineage-inspector-status"><span class="lineage-kind-badge">${escapeHtml(lineageKindLabel(node.kind))}</span><span class="status-chip ${lineageNodeEvidence(node) === "observed" ? "current" : lineageNodeEvidence(node) === "attention" ? "warning" : ""}">${escapeHtml(lineageStatusLabel(lineageNodeEvidence(node)))}</span></div><dl class="inspector-facts">${lineageDetails(node).map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}</dl><section class="lineage-dependencies"><h3>Direct inputs</h3>${dependencyList(upstream, "reads from")}</section><section class="lineage-dependencies"><h3>Direct outputs</h3>${dependencyList(downstream, "feeds")}</section>`;
+  }
+
+  function inspectLineage(nodeId) {
+    const { nodes } = lineageTopology();
+    if (!nodes.some(node => node.id === nodeId)) return;
+    state.selectedLineageNode = state.selectedLineageNode === nodeId ? null : nodeId;
+    renderLineage();
   }
 
   function renderContracts() {
@@ -963,8 +1124,24 @@
       if (detailTab) renderDetailTab(detailTab.dataset.detailTab);
       const flightButton = event.target.closest("[data-flight-target]");
       if (flightButton) location.hash = flightButton.dataset.flightTarget;
-      const lineageButton = event.target.closest("[data-lineage-index]");
-      if (lineageButton) inspectLineage(Number(lineageButton.dataset.lineageIndex));
+      const lineageFilter = event.target.closest("[data-lineage-filter]");
+      if (lineageFilter) {
+        state.lineageFilter = lineageFilter.dataset.lineageFilter;
+        state.selectedLineageNode = null;
+        $$("[data-lineage-filter]").forEach(button => {
+          const selected = button.dataset.lineageFilter === state.lineageFilter;
+          button.classList.toggle("selected", selected);
+          button.setAttribute("aria-pressed", String(selected));
+        });
+        renderLineage();
+      }
+      const lineagePan = event.target.closest("[data-lineage-pan]");
+      if (lineagePan?.dataset.lineagePan === "outputs") {
+        const canvas = $("#lineage-graph-canvas");
+        canvas?.scrollTo({ left: canvas.scrollWidth, behavior: "smooth" });
+      }
+      const lineageButton = event.target.closest("[data-lineage-node]");
+      if (lineageButton) inspectLineage(lineageButton.dataset.lineageNode);
       const providerButton = event.target.closest("[data-provider-npi]");
       if (providerButton) {
         state.providerEvidence.focusedNpi = providerButton.dataset.providerNpi;

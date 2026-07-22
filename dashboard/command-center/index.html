@@ -275,20 +275,46 @@
               <span class="eyebrow">Trace every dependency</span>
               <h1 id="lineage-title">Source-to-mart lineage</h1>
             </div>
-            <p>Readable flow lanes connect published data to warehouse tables and curated analytical surfaces.</p>
+            <p>Follow declared dependencies from publisher sources through raw landings, transforms, bridges, and curated models.</p>
           </div>
           <div class="lineage-banner" id="lineage-banner" role="status"></div>
+          <section class="lineage-summary-strip" id="lineage-summary" aria-label="Lineage graph summary" aria-live="polite">
+            <article><span>Publisher sources</span><strong>—</strong></article>
+            <article><span>Raw landings</span><strong>—</strong></article>
+            <article><span>Transforms</span><strong>—</strong></article>
+            <article><span>Bridge tables</span><strong>—</strong></article>
+            <article><span>Curated models</span><strong>—</strong></article>
+          </section>
+          <div class="lineage-instruments">
+            <div class="lineage-filter" role="group" aria-label="Filter lineage evidence">
+              <span class="instrument-label">SHOW</span>
+              <button type="button" class="selected" data-lineage-filter="all" aria-pressed="true">All</button>
+              <button type="button" data-lineage-filter="attention" aria-pressed="false">Attention</button>
+              <button type="button" data-lineage-filter="observed" aria-pressed="false">Observed</button>
+            </div>
+            <div class="lineage-legend" aria-label="Lineage legend">
+              <span><i class="lineage-key source" aria-hidden="true"></i>Source</span>
+              <span><i class="lineage-key raw" aria-hidden="true"></i>Raw</span>
+              <span><i class="lineage-key transform" aria-hidden="true"></i>Transform</span>
+              <span><i class="lineage-key bridge" aria-hidden="true"></i>Bridge / core</span>
+              <span><i class="lineage-key curated" aria-hidden="true"></i>Curated</span>
+              <span><i class="edge-key observed" aria-hidden="true"></i>Observed edge</span>
+              <span><i class="edge-key declared" aria-hidden="true"></i>Declared edge</span>
+            </div>
+          </div>
           <div class="lineage-layout">
             <section class="lineage-map" aria-label="Lineage map">
-              <div class="lane-headings" aria-hidden="true">
-                <span>SOURCE / DOMAIN</span><span>RAW LANDING</span><span>CURATED SURFACE</span>
+              <div id="lineage-graph-canvas" class="lineage-graph-canvas" tabindex="0" aria-label="Directed lineage graph. Select a node to inspect its upstream and downstream dependencies.">
+                <div id="lineage-lanes" class="lineage-graph loading-block" aria-live="polite"></div>
               </div>
-              <div id="lineage-lanes" class="lineage-lanes loading-block"></div>
+              <button class="lineage-scroll-cue" type="button" data-lineage-pan="outputs" aria-label="Scroll the lineage graph to curated outputs">
+                <span>Scroll to curated outputs</span><strong aria-hidden="true">→</strong>
+              </button>
             </section>
             <aside class="lineage-inspector" id="lineage-inspector">
-              <span class="eyebrow">Selected source</span>
-              <h2>No source selected</h2>
-              <p>Select a flow lane to review cadence, discovery, source-period semantics, downstream marts, and usage notes.</p>
+              <span class="eyebrow">Graph inspector</span>
+              <h2>No node selected</h2>
+              <p>Select a source, landing, transform, bridge, or curated model to trace its direct dependencies and complete path.</p>
             </aside>
           </div>
         </section>

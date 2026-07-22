@@ -108,6 +108,57 @@ def test_sources_join_registry_contracts_to_latest_manifest_evidence(tmp_path: P
     assert nppes["latest_manifest"]["run_id"] == "active"
 
 
+def test_lineage_reports_declared_dependencies_and_observed_inventory(tmp_path: Path) -> None:
+    payload = _client(tmp_path).get("/operations/lineage").json()
+    nodes = {node["id"]: node for node in payload["nodes"]}
+    edges = {(edge["source"], edge["target"], edge["kind"]) for edge in payload["edges"]}
+
+    assert payload["summary"]["transform"] > 0
+    assert nodes["table:raw_nppes"]["observed"]["table_present"] is True
+    assert nodes["table:raw_nppes"]["observed"]["approx_rows"] == 2
+    assert nodes["table:raw_part_d_by_provider"]["observed"]["table_present"] is False
+    assert nodes["source:nppes_monthly_v2"]["evidence_status"] == "validated_active"
+    assert (
+        "table:raw_physician_by_provider",
+        "transform:build_utilization_metrics",
+        "reads_from",
+    ) in edges
+    assert (
+        "transform:build_utilization_metrics",
+        "table:utilization_metrics",
+        "materializes",
+    ) in edges
+    assert (
+        "table:raw_pecos_enrollment",
+        "transform:build_core_providers",
+        "reads_from",
+    ) in edges
+    assert (
+        "transform:build_pecos_provider_organizations",
+        "table:pecos_provider_organizations",
+        "materializes",
+    ) in edges
+
+
+def test_lineage_keeps_declared_graph_when_manifest_evidence_is_missing(tmp_path: Path) -> None:
+    connection = duckdb.connect(":memory:")
+    app = FastAPI()
+    app.include_router(
+        get_operations_router(lambda: connection, tmp_path / "missing-manifests.json")
+    )
+
+    payload = TestClient(app).get("/operations/lineage").json()
+
+    assert payload["evidence_error"] is None
+    assert payload["nodes"]
+    assert payload["edges"]
+    assert all(
+        node["evidence_status"] == "missing"
+        for node in payload["nodes"]
+        if node["kind"] == "source"
+    )
+
+
 def test_runs_are_newest_first_and_respect_limit(tmp_path: Path) -> None:
     payload = _client(tmp_path).get("/operations/runs?limit=1").json()
 

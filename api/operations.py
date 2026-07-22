@@ -17,6 +17,7 @@ from fastapi import APIRouter, Query
 
 REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
 from pipeline.manifests import ManifestDocument, ManifestStore, RunManifest
+from pipeline.lineage import TRANSFORMS, raw_table_for_source, table_kind
 from pipeline.source_registry import SOURCE_REGISTRY, SourceSpec
 
 
@@ -117,6 +118,190 @@ def _source_contract(
         "evidence_status": status,
         "evidence_reason": reason,
         "latest_manifest": _manifest_summary(latest) if latest else None,
+    }
+
+
+def _lineage_inventory(connection) -> dict[str, int]:
+    """Return observed table row estimates without assuming the main schema."""
+
+    rows = connection.execute(
+        """
+        SELECT
+            CASE WHEN schema_name = 'main' THEN table_name
+                ELSE schema_name || '.' || table_name END AS table_name,
+            estimated_size
+        FROM duckdb_tables()
+        """
+    ).fetchall()
+    return {str(name): int(size or 0) for name, size in rows}
+
+
+def _lineage_payload(
+    connection,
+    document: ManifestDocument,
+    evidence_error: str | None,
+) -> dict:
+    """Build declared topology and annotate it with live read-only evidence.
+
+    Table presence is observed inventory. Transform edges remain declared even when
+    their input and output tables are present: the API cannot prove a particular
+    execution from table existence alone.
+    """
+
+    inventory = _lineage_inventory(connection)
+    latest = _latest_by_source(document)
+    nodes: dict[str, dict] = {}
+    edges: list[dict] = []
+
+    def add_table(table: str) -> str:
+        node_id = f"table:{table}"
+        if node_id not in nodes:
+            observed = table in inventory
+            nodes[node_id] = {
+                "id": node_id,
+                "label": table,
+                "kind": table_kind(table),
+                "table": table,
+                "declared": True,
+                "observed": {"table_present": observed, "approx_rows": inventory.get(table)},
+                "evidence_status": "observed" if observed else "unavailable",
+                "details": {
+                    "evidence_note": (
+                        "Observed in the active warehouse inventory."
+                        if observed
+                        else "Declared in pipeline lineage but not observed in the active warehouse inventory."
+                    )
+                },
+            }
+        return node_id
+
+    def add_edge(
+        source: str,
+        target: str,
+        *,
+        kind: str,
+        label: str,
+        evidence_status: str = "declared",
+        transform_id: str | None = None,
+    ) -> None:
+        edge_id = f"{source}>{target}:{kind}:{transform_id or ''}"
+        if any(edge["id"] == edge_id for edge in edges):
+            return
+        edges.append(
+            {
+                "id": edge_id,
+                "source": source,
+                "target": target,
+                "kind": kind,
+                "label": label,
+                "evidence_status": evidence_status,
+                "transform_id": transform_id,
+            }
+        )
+
+    transform_outputs = {table for transform in TRANSFORMS for table in transform.outputs}
+    for source_id, spec in sorted(SOURCE_REGISTRY.items()):
+        source_node_id = f"source:{source_id}"
+        status, reason = _evidence_status(spec, document, latest.get(source_id))
+        nodes[source_node_id] = {
+            "id": source_node_id,
+            "label": spec.title,
+            "kind": "source",
+            "source_id": source_id,
+            "declared": True,
+            "evidence_status": status,
+            "latest_manifest": _manifest_summary(latest[source_id]) if source_id in latest else None,
+            "details": {
+                "publisher": spec.publisher.value,
+                "cadence": spec.cadence.value,
+                "discovery_mechanism": spec.discovery.value,
+                "source_period_semantics": spec.source_period_semantics,
+                "evidence_note": reason,
+            },
+        }
+
+        raw_table = raw_table_for_source(source_id)
+        declared_outputs = set(spec.downstream_tables)
+        if raw_table:
+            declared_outputs.add(raw_table)
+
+        for table in sorted(declared_outputs):
+            table_node_id = add_table(table)
+            if table == raw_table or table.startswith("raw_"):
+                source_is_observed = (
+                    status == "validated_active"
+                    and bool(nodes[table_node_id]["observed"]["table_present"])
+                )
+                add_edge(
+                    source_node_id,
+                    table_node_id,
+                    kind="lands_in",
+                    label="lands in",
+                    evidence_status="observed" if source_is_observed else "declared",
+                )
+            elif table not in transform_outputs:
+                add_edge(
+                    source_node_id,
+                    table_node_id,
+                    kind="published_surface",
+                    label="published surface",
+                )
+
+    for transform in TRANSFORMS:
+        transform_node_id = f"transform:{transform.transform_id}"
+        nodes[transform_node_id] = {
+            "id": transform_node_id,
+            "label": transform.label,
+            "kind": "transform",
+            "transform_id": transform.transform_id,
+            "declared": True,
+            "evidence_status": "declared",
+            "details": {"description": transform.description},
+        }
+        for table in transform.inputs:
+            add_edge(
+                add_table(table),
+                transform_node_id,
+                kind="reads_from",
+                label="reads",
+                transform_id=transform.transform_id,
+            )
+        for table in transform.outputs:
+            add_edge(
+                transform_node_id,
+                add_table(table),
+                kind="materializes",
+                label="materializes",
+                transform_id=transform.transform_id,
+            )
+
+    ordered_nodes = sorted(
+        nodes.values(),
+        key=lambda node: (node["kind"], node["label"].casefold()),
+    )
+    kind_counts = {
+        kind: sum(1 for node in ordered_nodes if node["kind"] == kind)
+        for kind in ("source", "raw", "transform", "bridge", "mart", "summary")
+    }
+    return {
+        "schema_version": 1,
+        "generated_at": _utc_now(),
+        "evidence_error": evidence_error,
+        "summary": {
+            **kind_counts,
+            "observed_tables": sum(
+                1
+                for node in ordered_nodes
+                if node["kind"] != "source"
+                and node.get("observed", {}).get("table_present") is True
+            ),
+            "observed_source_landings": sum(
+                1 for edge in edges if edge["evidence_status"] == "observed"
+            ),
+            "declared_edges": len(edges),
+        },
+        "nodes": ordered_nodes,
+        "edges": edges,
     }
 
 
@@ -221,6 +406,11 @@ def get_operations_router(
                 for source_id, spec in sorted(SOURCE_REGISTRY.items())
             ],
         }
+
+    @router.get("/lineage")
+    async def lineage():
+        document, evidence_error = evidence()
+        return _lineage_payload(connection=get_conn(), document=document, evidence_error=evidence_error)
 
     @router.get("/runs")
     async def runs(limit: int = Query(50, ge=1, le=200)):
