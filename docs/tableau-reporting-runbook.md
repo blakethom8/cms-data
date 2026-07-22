@@ -31,11 +31,26 @@ The `reporting` schema contains certified analytical models:
 | `fact_provider_metrics_year` | one provider NPI by Medicare metric year |
 | `fact_provider_quality_year` | one provider NPI by available QPP data year |
 | `bridge_provider_hospital` | one provider NPI by inferred hospital NPI and data year |
+| `bridge_provider_practice` | one provider NPI by group practice relationship and warehouse year |
+| `bridge_provider_taxonomy` | one provider NPI by distinct NPPES taxonomy code |
+| `fact_provider_drug_year` | one provider NPI by generic drug and Part D data year |
+| `dim_provider_order_referring` | one current provider NPI eligibility record |
+| `fact_provider_industry_payment_year` | one provider NPI by Open Payments program year and paying company |
+| `provider_industry_summary` | one provider NPI with an all-year Open Payments summary |
+| `fact_provider_radar_event` | one immutable NPPES change event |
+| `dim_provider_radar_state` | one current NPPES Radar state row per provider NPI |
 
-The `source_detail` schema preserves every column loaded in the California slice of `raw_nppes`,
-`raw_dac_national`, and `raw_physician_by_provider`. These are evidence tables, not automatically
-join-safe facts. The NPPES raw loader itself retains a selected subset of the publisher's 329 columns;
-the original downloaded artifact remains the complete source record.
+The `source_detail` schema preserves the loaded California slices of NPPES, DAC, Medicare provider,
+Part D provider and drug, DME referring-provider, QPP, PECOS, practice reassignment, Order and
+Referring, hospital enrollment, and Open Payments General, Research, and Ownership sources. These
+are evidence tables, not automatically join-safe facts. Source columns longer than PostgreSQL's
+63-byte identifier limit receive a documented Tableau-safe alias while `control.column_lineage`
+retains the exact publisher column name. The NPPES raw loader itself retains a selected subset of
+the publisher's 329 columns; the original downloaded artifact remains the complete source record.
+
+The Physician and Other Practitioners by Provider and Service source is deliberately absent from
+the replica. Its HCPCS Level I codes and descriptions remain behind the explicit AMA licensing or
+approved-filter release gate in the platform operating model.
 
 The curated location bridge includes only DAC rows whose NPI also belongs to the California provider
 dimension. California DAC rows without that relationship remain visible in
@@ -151,6 +166,14 @@ User: tableau_reader
 Use Tableau relationships on `npi` (and the applicable year), not physical joins. Adding multiple
 locations to a sheet must not multiply provider-level Medicare measures. Keep the source period or
 metric year visible in analyses that combine NPPES, Medicare, QPP, or later Open Payments data.
+
+Use `reporting.dim_provider` as the provider spine. Relate facts and bridges independently to the
+spine on `npi`; do not physically join facts to bridges or facts to each other. Use `source_detail`
+as a separate audit-oriented Tableau data source when inspecting publisher grain and fields.
+
+Tableau can display retained build schemas in its metadata navigator even though the reader has no
+direct privileges on them. Select only stable objects explicitly qualified by `reporting`,
+`source_detail`, or `control`; never build a workbook against `reporting_build_*` objects.
 
 ## Rollback
 
