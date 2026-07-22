@@ -32,6 +32,8 @@ CMS_RAW_TABLES: dict[str, str] = {
     "cms_dme_by_referring_provider": "raw_dme_by_referring_provider",
     "cms_qpp_experience": "raw_qpp_experience",
     "cms_pecos_public_provider_enrollment": "raw_pecos_enrollment",
+    "cms_pecos_reassignment": "raw_pecos_reassignment",
+    "cms_pecos_practice_location": "raw_pecos_practice_location",
     "cms_order_and_referring": "raw_order_and_referring",
     "cms_revalidation_group_reassignment": "raw_reassignment",
 }

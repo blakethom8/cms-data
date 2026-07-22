@@ -11,13 +11,15 @@ The static application lives in `dashboard/command-center/` and expects the exis
 reverse-proxy contract: browser requests use `/api`, and the proxy supplies the CMS API credential.
 The browser bundle never contains an API key.
 
-The first version provides five workspaces:
+The first version provides six workspaces:
 
 1. **Overview** summarizes the live warehouse and available operating evidence.
-2. **Data Catalog** shows each curated dataset's grain, join keys, columns, and sample rows.
-3. **Lineage** connects registered publisher sources to downstream warehouse tables.
-4. **Contracts** joins source-registry definitions to the latest local manifest evidence.
-5. **Operations** shows recorded runs and the future approval-gated refresh sequence.
+2. **Provider Evidence** follows named clinicians across raw sources and curated relationship models
+   without flattening their different grains into one ambiguous record.
+3. **Data Catalog** shows each curated dataset's grain, join keys, columns, and sample rows.
+4. **Lineage** connects registered publisher sources to downstream warehouse tables.
+5. **Contracts** joins source-registry definitions to the latest local manifest evidence.
+6. **Operations** shows recorded runs and the future approval-gated refresh sequence.
 
 The application reads these authenticated endpoints:
 
@@ -28,6 +30,7 @@ The application reads these authenticated endpoints:
 | `GET /explorer/catalog` | Curated dataset names, grain, join keys, and descriptions |
 | `GET /explorer/columns/{key}` | Full column names and DuckDB types |
 | `GET /explorer/sample/{key}` | Bound, limited sample query for one curated dataset |
+| `GET /explorer/provider-evidence` | Whitelisted raw and curated evidence for up to ten NPIs |
 | `GET /operations/overview` | Warehouse, manifest, contract, and control-plane summary |
 | `GET /operations/sources` | Source contracts plus latest recorded evidence |
 | `GET /operations/runs` | Newest-first manifest run ledger |
@@ -45,11 +48,11 @@ CMS_API_KEY=... python dashboard/command-center/dev_server.py
 ```
 
 Then open `http://127.0.0.1:4199`. The local server serves the static application and proxies only
-browser `GET` and `HEAD` requests under `/api/*` to the CMS API. For catalog sample routes, it can
-translate those browser reads into calls to the deployed API's read-only `/query` endpoint; this
-keeps a local dashboard preview usable before matching explorer routes are deployed. It adds the API
-key server-side; the credential is never returned to or stored by the browser application. Use
-`CMS_API_BASE_URL` to target a different tunnel endpoint.
+browser `GET` and `HEAD` requests under `/api/*` to the CMS API. For catalog samples and provider
+evidence, it can translate those browser reads into static, server-owned calls to the deployed API's
+read-only `/query` endpoint; this keeps a local dashboard preview usable before matching explorer
+routes are deployed. It adds the API key server-side; the credential is never returned to or stored
+by the browser application. Use `CMS_API_BASE_URL` to target a different tunnel endpoint.
 
 ## Evidence Model
 
@@ -62,7 +65,36 @@ The Command Center distinguishes facts from missing evidence:
   retrieval is recorded, and the active release ID matches the release ID;
 - a missing manifest is reported as missing evidence, never as a successful or current refresh;
 - publisher freshness still requires the separate discovery/status workflow. The request-serving API
-  does not perform live publisher discovery.
+does not perform live publisher discovery.
+
+## Provider Evidence Workspace
+
+The Provider Evidence workspace is designed to make source semantics visible rather than to invent
+a single canonical employer field. It starts with four Cedars-Sinai examples and shows a
+source-by-provider matrix. Selecting a cell opens the physical fields from each native row so that
+addresses, organization names, enrollment identifiers, source periods, and duplicate rows can be
+compared directly.
+
+The sources intentionally remain separate because they make different claims:
+
+- **NPPES** is a provider identity and registration record; its address is not necessarily a billing
+  site or employer.
+- **DAC National** is a clinician-to-practice/location assertion used by Medicare Care Compare.
+- **Revalidation Reassignment** records Medicare benefit reassignment to an organization; it does
+  not independently prove employment.
+- **PECOS Enrollment** describes an enrolled individual or organization and connects enrollment IDs
+  to organization identities.
+- **PPEF Reassignment** and **PPEF Practice Location** preserve the assignment and location rows
+  from the public PECOS files. The page reports them as unavailable until those optional tables are
+  present in the promoted warehouse.
+- **Medicare provider-year utilization** is provider-level billing evidence and does not retain a
+  provider-by-organization allocation.
+- **Practice** and **hospital bridges** are curated relationship models. Their derived or inferred
+  status is shown explicitly rather than presenting them as raw source facts.
+
+The browser cannot supply table names or SQL. `GET /explorer/provider-evidence` uses a static source
+allowlist and bound NPI parameters, returns at most 25 rows per source/provider combination, and
+reports optional missing tables instead of fabricating empty source coverage.
 
 ## Control Boundary
 

@@ -214,6 +214,83 @@ def test_cp1252_source_is_transcoded_for_strict_candidate_load(tmp_path: Path) -
     assert list((data_root / "staging" / "transcodes").glob("*.partial")) == []
 
 
+def test_ppef_relationship_subfiles_load_at_raw_grain_and_join_to_enrollment(
+    tmp_path: Path,
+) -> None:
+    data_root = tmp_path / "data"
+    enrollment = _stage(
+        data_root,
+        source_id="cms_pecos_public_provider_enrollment",
+        run_id="20990720T041000Z-pecos-enrollment",
+        payload=(
+            b"NPI,MULTIPLE_NPI_FLAG,PECOS_ASCT_CNTL_ID,ENRLMT_ID,"
+            b"PROVIDER_TYPE_CD,PROVIDER_TYPE_DESC,STATE_CD,FIRST_NAME,"
+            b"MDL_NAME,LAST_NAME,ORG_NAME\n"
+            b"1234567890,N,PAC-I,I20031103000001,14-00,Physician,CA,Jane,,Doe,\n"
+            b"1098765432,N,PAC-O,O20031216000213,12-00,Group Practice,CA,,,,Example Group\n"
+        ),
+    )
+    reassignment = _stage(
+        data_root,
+        source_id="cms_pecos_reassignment",
+        run_id="20990720T042000Z-pecos-reassignment",
+        payload=(
+            b"REASGN_BNFT_ENRLMT_ID,RCV_BNFT_ENRLMT_ID\n"
+            b"I20031103000001,O20031216000213\n"
+        ),
+    )
+    practice_location = _stage(
+        data_root,
+        source_id="cms_pecos_practice_location",
+        run_id="20990720T043000Z-pecos-location",
+        payload=(
+            b"ENRLMT_ID,CITY_NAME,STATE_CD,ZIP_CD\n"
+            b"O20031216000213,LOS ANGELES,CA,090048001\n"
+        ),
+    )
+    connection = duckdb.connect(":memory:")
+    try:
+        counts = load_cms_raw_tables(
+            connection,
+            data_root=data_root,
+            run_ids=[
+                enrollment.run_id,
+                reassignment.run_id,
+                practice_location.run_id,
+            ],
+        )
+        row = connection.execute(
+            """
+            SELECT individual.NPI, receiving.ORG_NAME, location.CITY_NAME,
+                   location.STATE_CD, location.ZIP_CD,
+                   relationship.source_data_period
+            FROM raw_pecos_reassignment relationship
+            JOIN raw_pecos_enrollment individual
+              ON individual.ENRLMT_ID = relationship.REASGN_BNFT_ENRLMT_ID
+            JOIN raw_pecos_enrollment receiving
+              ON receiving.ENRLMT_ID = relationship.RCV_BNFT_ENRLMT_ID
+            JOIN raw_pecos_practice_location location
+              ON location.ENRLMT_ID = relationship.RCV_BNFT_ENRLMT_ID
+            """
+        ).fetchone()
+    finally:
+        connection.close()
+
+    assert counts == {
+        "raw_pecos_enrollment": 2,
+        "raw_pecos_practice_location": 1,
+        "raw_pecos_reassignment": 1,
+    }
+    assert row == (
+        "1234567890",
+        "Example Group",
+        "LOS ANGELES",
+        "CA",
+        "090048001",
+        "2097-01-01/2097-12-31",
+    )
+
+
 def test_cms_loader_handles_quoted_field_after_dialect_sample(tmp_path: Path) -> None:
     data_root = tmp_path / "data"
     header = b"NPI,LAST_NAME,FIRST_NAME,PARTB,DME,HHA,PMD,HOSPICE\n"

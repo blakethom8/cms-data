@@ -27,6 +27,7 @@ from pipeline.discovery import (
     parse_cms_catalog,
     parse_nppes_index,
     parse_open_payments_index,
+    parse_ppef_resources,
 )
 from pipeline.manifests import (
     ManifestDocument,
@@ -96,7 +97,7 @@ def _manifest_for_discoveries(discoveries: dict[str, DiscoveryResult]) -> Manife
 
 
 def test_registry_covers_all_required_source_families() -> None:
-    assert len(SOURCE_REGISTRY) == 16
+    assert len(SOURCE_REGISTRY) == 18
     assert {spec.discovery for spec in SOURCE_REGISTRY.values()} == set(DiscoveryMechanism)
     assert all(spec.downstream_tables for spec in SOURCE_REGISTRY.values())
     assert all(spec.source_period_semantics for spec in SOURCE_REGISTRY.values())
@@ -128,6 +129,38 @@ def test_cms_missing_distribution_field_is_a_discovery_error() -> None:
 
     assert result.state == DiscoveryState.ERROR
     assert "resourcesAPI" in result.error_summary
+
+
+def test_ppef_resource_discovery_selects_relational_subfiles() -> None:
+    results = parse_ppef_resources(
+        (FIXTURES / "ppef-resources.json").read_bytes(),
+        sources_for(DiscoveryMechanism.CMS_DATASET_RESOURCES),
+    )
+
+    reassignment = results["cms_pecos_reassignment"].release
+    location = results["cms_pecos_practice_location"].release
+    assert reassignment.publisher_version == (
+        "cms-file:10000000-0000-4000-8000-000000000011"
+    )
+    assert reassignment.source_data_period == "2099-01-01/2099-03-31"
+    assert reassignment.byte_size == 127281801
+    assert location.publisher_version.endswith("000000000012")
+    assert location.source_url.endswith(
+        "PPEF_Practice_Location_Extract_2099.04.01.csv"
+    )
+
+
+def test_ppef_resource_discovery_rejects_missing_expected_subfile() -> None:
+    payload = json.loads((FIXTURES / "ppef-resources.json").read_text())
+    payload["data"] = [payload["data"][0]]
+
+    result = parse_ppef_resources(
+        json.dumps(payload).encode(),
+        (SOURCE_REGISTRY["cms_pecos_practice_location"],),
+    )["cms_pecos_practice_location"]
+
+    assert result.state == DiscoveryState.ERROR
+    assert "found 0" in result.error_summary
 
 
 def test_nppes_v2_monthly_and_latest_weekly_discovery() -> None:

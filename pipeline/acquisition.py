@@ -41,6 +41,7 @@ class CsvAcquisitionProfile:
     required_columns: tuple[str, ...]
     identifier_column: str
     max_download_bytes: int
+    identifier_kind: str = "npi"
     allow_invalid_identifiers: bool = False
 
 
@@ -188,6 +189,20 @@ CMS_CSV_PROFILES: dict[str, CsvAcquisitionProfile] = {
         ("NPI", "MULTIPLE_NPI_FLAG", "ENRLMT_ID", "PROVIDER_TYPE_CD"),
         "NPI",
         2 * GIB,
+    ),
+    "cms_pecos_reassignment": CsvAcquisitionProfile(
+        "PPEF Reassignment CSV",
+        ("REASGN_BNFT_ENRLMT_ID", "RCV_BNFT_ENRLMT_ID"),
+        "REASGN_BNFT_ENRLMT_ID",
+        256 * 1024 * 1024,
+        identifier_kind="pecos_enrollment",
+    ),
+    "cms_pecos_practice_location": CsvAcquisitionProfile(
+        "PPEF Practice Location CSV",
+        ("ENRLMT_ID", "CITY_NAME", "STATE_CD", "ZIP_CD"),
+        "ENRLMT_ID",
+        128 * 1024 * 1024,
+        identifier_kind="pecos_enrollment",
     ),
     "cms_order_and_referring": CsvAcquisitionProfile(
         "Order and Referring CSV",
@@ -452,6 +467,10 @@ def inspect_cms_csv(
             identifier_index = normalized_header.index(
                 _normalized_column(profile.identifier_column)
             )
+            if profile.identifier_kind not in {"npi", "pecos_enrollment"}:
+                raise AcquisitionError(
+                    f"{profile.label} has an unsupported identifier contract"
+                )
             row_count = 0
             invalid_identifier_rows = 0
             for line_number, row in enumerate(reader, start=2):
@@ -460,14 +479,25 @@ def inspect_cms_csv(
                         f"{profile.label} row {line_number} has {len(row)} fields; "
                         f"expected {len(header)}"
                     )
-                npi = row[identifier_index].strip()
-                if not (len(npi) == 10 and npi.isdigit()):
+                identifier = row[identifier_index].strip()
+                if profile.identifier_kind == "npi":
+                    valid_identifier = len(identifier) == 10 and identifier.isdigit()
+                    identifier_label = "NPI"
+                else:
+                    valid_identifier = (
+                        len(identifier) == 15
+                        and identifier[0] in {"I", "O"}
+                        and identifier[1:].isdigit()
+                    )
+                    identifier_label = "PECOS enrollment ID"
+                if not valid_identifier:
                     if profile.allow_invalid_identifiers:
                         invalid_identifier_rows += 1
                         row_count += 1
                         continue
                     raise AcquisitionError(
-                        f"{profile.label} row {line_number} has an invalid NPI"
+                        f"{profile.label} row {line_number} has an invalid "
+                        f"{identifier_label}"
                     )
                 row_count += 1
     except csv.Error as error:

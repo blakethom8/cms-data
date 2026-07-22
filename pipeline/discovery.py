@@ -11,6 +11,8 @@ import json
 import re
 import urllib.error
 import urllib.request
+import uuid
+from calendar import monthrange
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from enum import Enum
@@ -26,6 +28,10 @@ from .source_registry import (
 )
 
 CMS_CATALOG_URL = "https://data.cms.gov/data.json"
+PPEF_DATASET_UUID = "2457ea29-fc82-48b0-86ec-3b0755de7515"
+PPEF_RESOURCES_URL = (
+    f"https://data.cms.gov/data-api/v1/dataset/{PPEF_DATASET_UUID}/resources"
+)
 NPPES_INDEX_URL = "https://download.cms.gov/nppes/NPI_Files.html"
 # The download-route data is embedded in the official Dataset Explorer's compiled
 # asset. The client-side /datasets/download route currently returns 404 to direct
@@ -191,6 +197,110 @@ def parse_cms_catalog(payload: bytes, specs: tuple[SourceSpec, ...]) -> dict[str
             )
             results[spec.source_id] = DiscoveryResult(
                 spec.source_id, DiscoveryState.AVAILABLE, discovered_at, release=release
+            )
+        except DiscoveryError as error:
+            results[spec.source_id] = DiscoveryResult(
+                spec.source_id,
+                DiscoveryState.ERROR,
+                discovered_at,
+                error_summary=safe_error(error),
+            )
+    return results
+
+
+def _ppef_quarter_period(title: str) -> str:
+    match = re.search(r"\bQ([1-4])\s+(\d{4})\b", title, re.I)
+    if not match:
+        raise DiscoveryError("PPEF resource title is missing its quarter and year")
+    quarter = int(match.group(1))
+    year = int(match.group(2))
+    first_month = (quarter - 1) * 3 + 1
+    last_month = first_month + 2
+    last_day = monthrange(year, last_month)[1]
+    return (
+        f"{year:04d}-{first_month:02d}-01/"
+        f"{year:04d}-{last_month:02d}-{last_day:02d}"
+    )
+
+
+def parse_ppef_resources(
+    payload: bytes,
+    specs: tuple[SourceSpec, ...],
+) -> dict[str, DiscoveryResult]:
+    """Parse PPEF ancillary CSVs from CMS's stable dataset-resources endpoint."""
+    discovered_at = utc_now()
+    try:
+        document = json.loads(payload)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise DiscoveryError("CMS PPEF resources response is not valid JSON") from error
+    resources = document.get("data") if isinstance(document, dict) else None
+    if not isinstance(resources, list):
+        raise DiscoveryError("CMS PPEF resources response is missing the data array")
+
+    results: dict[str, DiscoveryResult] = {}
+    for spec in specs:
+        try:
+            matches = [
+                resource
+                for resource in resources
+                if isinstance(resource, dict)
+                and str(resource.get("file_name", "")).startswith(spec.discovery_key)
+                and str(resource.get("file_name", "")).lower().endswith(".csv")
+            ]
+            if len(matches) != 1:
+                raise DiscoveryError(
+                    f"Expected one current PPEF resource beginning {spec.discovery_key!r}; "
+                    f"found {len(matches)}"
+                )
+            resource = matches[0]
+            required = (
+                "title",
+                "file_uuid",
+                "file_name",
+                "file_mime",
+                "file_size",
+                "file_url",
+            )
+            missing = [
+                field for field in required if resource.get(field) in (None, "")
+            ]
+            if missing:
+                raise DiscoveryError(
+                    "CMS PPEF resource is missing required fields: "
+                    + ", ".join(missing)
+                )
+            if resource["file_mime"] != "text/csv":
+                raise DiscoveryError("CMS PPEF resource is not published as text/csv")
+            file_uuid = str(resource["file_uuid"]).lower()
+            try:
+                uuid.UUID(file_uuid)
+            except ValueError as error:
+                raise DiscoveryError("CMS PPEF resource has an invalid file UUID") from error
+            source_url = str(resource["file_url"])
+            parsed_url = urlparse(source_url)
+            if parsed_url.scheme != "https" or parsed_url.hostname != "data.cms.gov":
+                raise DiscoveryError(
+                    "CMS PPEF resource URL is outside the official CMS host"
+                )
+            try:
+                byte_size = int(resource["file_size"])
+            except (TypeError, ValueError) as error:
+                raise DiscoveryError("CMS PPEF resource has an invalid file size") from error
+            if byte_size <= 0:
+                raise DiscoveryError("CMS PPEF resource file size must be positive")
+            release = ReleaseMetadata(
+                source_id=spec.source_id,
+                publisher_version=f"cms-file:{file_uuid}",
+                source_data_period=_ppef_quarter_period(str(resource["title"])),
+                publisher_release_timestamp=None,
+                source_url=source_url,
+                byte_size=byte_size,
+            )
+            results[spec.source_id] = DiscoveryResult(
+                spec.source_id,
+                DiscoveryState.AVAILABLE,
+                discovered_at,
+                release=release,
             )
         except DiscoveryError as error:
             results[spec.source_id] = DiscoveryResult(
@@ -453,6 +563,7 @@ def parse_aact_downloads(payload: bytes, spec: SourceSpec) -> DiscoveryResult:
 
 FIXTURE_FILES = {
     DiscoveryMechanism.CMS_DATA_JSON: "cms-data.json",
+    DiscoveryMechanism.CMS_DATASET_RESOURCES: "ppef-resources.json",
     DiscoveryMechanism.NPPES_DOWNLOAD_INDEX: "nppes.html",
     DiscoveryMechanism.OPEN_PAYMENTS_DOWNLOAD_INDEX: "open-payments.html",
     DiscoveryMechanism.AACT_DOWNLOADS_PAGE: "aact.html",
@@ -525,6 +636,7 @@ def discover_all(
             else:
                 url = {
                     DiscoveryMechanism.CMS_DATA_JSON: CMS_CATALOG_URL,
+                    DiscoveryMechanism.CMS_DATASET_RESOURCES: PPEF_RESOURCES_URL,
                     DiscoveryMechanism.NPPES_DOWNLOAD_INDEX: NPPES_INDEX_URL,
                     DiscoveryMechanism.OPEN_PAYMENTS_DOWNLOAD_INDEX: OPEN_PAYMENTS_INDEX_URL,
                     DiscoveryMechanism.AACT_DOWNLOADS_PAGE: AACT_DOWNLOADS_URL,
@@ -540,6 +652,8 @@ def discover_all(
         try:
             if mechanism == DiscoveryMechanism.CMS_DATA_JSON:
                 results.update(parse_cms_catalog(payload, specs))
+            elif mechanism == DiscoveryMechanism.CMS_DATASET_RESOURCES:
+                results.update(parse_ppef_resources(payload, specs))
             elif mechanism == DiscoveryMechanism.NPPES_DOWNLOAD_INDEX:
                 results.update(parse_nppes_index(payload, specs))
             elif mechanism == DiscoveryMechanism.OPEN_PAYMENTS_DOWNLOAD_INDEX:
@@ -566,6 +680,9 @@ def discover_source(source_id: str, *, timeout: float = 30.0) -> DiscoveryResult
     if spec.discovery == DiscoveryMechanism.CMS_DATA_JSON:
         payload = fetch_metadata(CMS_CATALOG_URL, timeout=timeout)
         return parse_cms_catalog(payload, (spec,))[source_id]
+    if spec.discovery == DiscoveryMechanism.CMS_DATASET_RESOURCES:
+        payload = fetch_metadata(PPEF_RESOURCES_URL, timeout=timeout)
+        return parse_ppef_resources(payload, (spec,))[source_id]
     payload = fetch_metadata(AACT_DOWNLOADS_URL, timeout=timeout)
     return parse_aact_downloads(payload, spec)
 

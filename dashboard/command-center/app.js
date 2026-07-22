@@ -3,16 +3,23 @@
 
   const API = "/api";
 
+  const evidenceProviders = [
+    { npi: "1710390513", name: "Lauren DeStefano", specialty: "Surgical Oncology" },
+    { npi: "1962509216", name: "Robert Vescio", specialty: "Hematology / Oncology" },
+    { npi: "1740218155", name: "Joshua “Josh” Scott", specialty: "Pediatric Medicine" },
+    { npi: "1659383891", name: "Jonathan Weiner", specialty: "Internal Medicine" }
+  ];
+
   const previewCatalog = [
     { key: "dac_national", table: "raw_dac_national", title: "Doctors & Clinicians (DAC)", domain: "identity", grain: "one row per clinician × practice address", description: "CMS clinician directory connecting people, places, and organizations.", join_keys: ["NPI", "org_pac_id", "address"], row_count: 2269147, column_count: 37 },
-    { key: "nppes", table: "raw_nppes", title: "NPPES (NPI Registry)", domain: "identity", grain: "one row per NPI (individuals + organizations)", description: "The master NPI registry with taxonomy, credentials, and practice or mailing addresses.", join_keys: ["NPI"], row_count: 7144239, column_count: 34 },
+    { key: "nppes", table: "raw_nppes", title: "NPPES (NPI Registry)", domain: "identity", grain: "one row per Type 1 individual NPI in the loaded subset", description: "The loaded individual-provider subset of NPPES with taxonomy, credentials, and registered practice or mailing addresses; Type 2 organizations are not yet loaded here.", join_keys: ["NPI"], row_count: 7144239, column_count: 34 },
     { key: "physician_by_provider", table: "raw_physician_by_provider", title: "Medicare Utilization (per provider)", domain: "money", grain: "one row per NPI per year", description: "Annual Medicare volume per clinician, including services, beneficiaries, payments, demographics, and chronic conditions.", join_keys: ["Rndrng_NPI"], row_count: 1253587, column_count: 96 },
     { key: "physician_by_service", table: "raw_physician_by_provider_and_service", title: "Procedures (per provider × HCPCS)", domain: "money", grain: "one row per NPI × procedure code × place of service", description: "Procedure-level billing detail by clinician, code, volume, payment, and site of service.", join_keys: ["Rndrng_NPI", "HCPCS_Cd"], row_count: 9842784, column_count: 29 },
     { key: "part_d_by_drug", table: "raw_part_d_by_provider_and_drug", title: "Part D Prescribing (per provider × drug)", domain: "rx", grain: "one row per prescriber × drug", description: "Drug-level prescribing with claim counts, day supply, and total drug cost per prescriber.", join_keys: ["Prscrbr_NPI", "Brnd_Name/Gnrc_Name"], row_count: 26180429, column_count: 31 },
     { key: "open_payments_general", table: "raw_open_payments_general", title: "Open Payments — General", domain: "industry", grain: "one row per payment (manufacturer → clinician)", description: "Industry transfers to clinicians, including manufacturer, amount, nature, and associated product.", join_keys: ["Covered_Recipient_NPI"], row_count: 14700000, column_count: 91 },
     { key: "open_payments_research", table: "raw_open_payments_research", title: "Open Payments — Research", domain: "industry", grain: "one row per research payment", description: "Industry research funding with sponsor, study context, and principal investigators.", join_keys: ["Covered_Recipient_NPI"], row_count: 983412, column_count: 119 },
     { key: "open_payments_ownership", table: "raw_open_payments_ownership", title: "Open Payments — Ownership", domain: "industry", grain: "one row per physician ownership/investment interest", description: "Physician ownership stakes in manufacturers and group purchasing organizations.", join_keys: ["Physician_NPI"], row_count: 4818, column_count: 42 },
-    { key: "reassignment", table: "raw_reassignment", title: "Reassignment (clinician → group)", domain: "org", grain: "one row per clinician × group employment", description: "Billing reassignment relationships between individual clinicians and Medicare groups.", join_keys: ["Individual NPI", "Group PAC ID"], row_count: 2166048, column_count: 16 },
+    { key: "reassignment", table: "raw_reassignment", title: "Reassignment (clinician → group)", domain: "org", grain: "one row per clinician × group reassignment record", description: "Medicare benefit-reassignment relationships between individual clinicians and groups; ordinary reassignment records do not establish employment.", join_keys: ["Individual NPI", "Group PAC ID"], row_count: 2166048, column_count: 16 },
     { key: "mips_performance", table: "raw_mips_performance", title: "MIPS Quality Scores", domain: "quality", grain: "one row per NPI per program year", description: "Performance category scores and final MIPS score for participating clinicians.", join_keys: ["NPI", "Org_PAC_ID"], row_count: 1112032, column_count: 104 },
     { key: "dme_referring", table: "raw_dme_by_referring_provider", title: "DME Referrals", domain: "money", grain: "one row per referring provider", description: "Durable medical equipment ordering volume, suppliers, claims, and Medicare payment.", join_keys: ["Rfrg_NPI"], row_count: 391830, column_count: 22 },
     { key: "address_geocode", table: "address_geocode", title: "Address Geocodes", domain: "geo", grain: "one row per distinct practice address", description: "Derived practice-address geocodes used for proximity search and mapping.", join_keys: ["addr_key = street|zip5"], row_count: 233284, column_count: 11 }
@@ -38,7 +45,14 @@
     sampleCache: new Map(),
     sampleLimits: new Map(),
     sampleInspector: null,
-    reopenSampleInspector: false
+    reopenSampleInspector: false,
+    providerEvidence: {
+      result: null,
+      data: null,
+      focusedNpi: evidenceProviders[0].npi,
+      selectedSourceKey: null,
+      selectedRow: 0
+    }
   };
 
   const $ = (selector, root = document) => root.querySelector(selector);
@@ -135,7 +149,8 @@
       catalog: getJson("/explorer/catalog"),
       overview: getJson("/operations/overview"),
       sources: getJson("/operations/sources"),
-      runs: getJson("/operations/runs?limit=50")
+      runs: getJson("/operations/runs?limit=50"),
+      providerEvidence: getJson(`/explorer/provider-evidence?npis=${evidenceProviders.map(provider => provider.npi).join(",")}&limit=10`)
     };
 
     const entries = Object.entries(requests);
@@ -143,6 +158,12 @@
 
     results.forEach((result, index) => {
       const name = entries[index][0];
+      if (name === "providerEvidence") {
+        state.providerEvidence.result = result.status === "fulfilled"
+          ? { ok: true, data: result.value }
+          : { ok: false, error: result.reason };
+        return;
+      }
       const target = ["health", "tables", "catalog"].includes(name) ? state.core : state.operations;
       target[name] = result.status === "fulfilled" ? { ok: true, data: result.value } : { ok: false, error: result.reason };
     });
@@ -161,6 +182,7 @@
     renderLineage();
     renderContracts();
     renderOperations();
+    renderProviderEvidence();
     routeFromHash();
   }
 
@@ -733,12 +755,183 @@
     }).join("");
   }
 
+  function providerMeta(npi) {
+    return evidenceProviders.find(provider => provider.npi === npi) || { npi, name: `NPI ${npi}`, specialty: "Specialty not listed" };
+  }
+
+  function providerTable(source, npi) {
+    const table = source?.providers?.[npi];
+    return {
+      columns: Array.isArray(table?.columns) ? table.columns : [],
+      rows: Array.isArray(table?.rows) ? table.rows : []
+    };
+  }
+
+  function summaryColumnIndexes(columns) {
+    const labels = columns.map(column => String(column).toLowerCase());
+    const groups = [
+      /facility|group.*(?:name|legal)|org(?:anization)?_?name|legal.*business/,
+      /practice_address_1|adr_ln_1|address(?:_1)?$|street/,
+      /city|town/,
+      /org_pac|group pac|rcv_bnft_enrlmt_id|enrlmt_id/,
+      /sole_proprietor/
+    ];
+    const indexes = [];
+    groups.forEach(pattern => {
+      const index = labels.findIndex((label, position) => pattern.test(label) && !indexes.includes(position));
+      if (index >= 0) indexes.push(index);
+    });
+    return indexes.slice(0, 3);
+  }
+
+  function evidenceCellSummary(source, npi) {
+    if (source.availability === "unavailable") return "Required source tables are not loaded";
+    if (source.availability === "query_error") return "The source query could not be completed";
+    const table = providerTable(source, npi);
+    if (!table.rows.length) return "No source-native row returned";
+    const indexes = summaryColumnIndexes(table.columns);
+    const values = [];
+    for (const row of table.rows) {
+      for (const index of indexes) {
+        const value = row[index];
+        if (value !== null && value !== undefined && String(value).trim() && !values.includes(String(value))) values.push(String(value));
+        if (values.length === 2) return values.join(" · ");
+      }
+    }
+    return values.join(" · ") || "Open the raw fields to inspect this record";
+  }
+
+  function renderProviderCards() {
+    $$("[data-provider-npi]").forEach(button => {
+      const selected = button.dataset.providerNpi === state.providerEvidence.focusedNpi;
+      button.classList.toggle("selected", selected);
+      button.setAttribute("aria-pressed", String(selected));
+    });
+  }
+
+  function evidenceAvailability(source) {
+    if (source.availability === "available") return { status: "current", label: "Source loaded" };
+    if (source.availability === "query_error") return { status: "failed", label: "Query error" };
+    return { status: "warning", label: "Awaiting ingestion" };
+  }
+
+  function renderProviderEvidence() {
+    const matrix = $("#evidence-matrix");
+    const result = state.providerEvidence.result;
+    renderProviderCards();
+    matrix.setAttribute("aria-busy", "false");
+
+    if (!result?.ok) {
+      state.providerEvidence.data = null;
+      matrix.innerHTML = `<div class="evidence-offline">
+        <span class="evidence-offline-code">LIVE API REQUIRED</span>
+        <strong>Provider records are unavailable in offline mode.</strong>
+        <p>This page never fabricates source rows. Connect <code>/api/explorer/provider-evidence</code> to compare the four clinicians.</p>
+      </div>`;
+      $("#record-inspector").innerHTML = `<div class="record-inspector-empty"><span class="empty-glyph" aria-hidden="true">⌗</span><h2 id="record-inspector-title">Live evidence required</h2><p>The raw record inspector remains empty until the provider-evidence endpoint responds.</p></div>`;
+      return;
+    }
+
+    state.providerEvidence.data = result.data;
+    const sources = Array.isArray(result.data?.sources) ? result.data.sources : [];
+    if (!sources.length) {
+      matrix.innerHTML = '<div class="evidence-offline"><strong>No evidence sources were returned.</strong><p>The endpoint is connected but its source registry is empty.</p></div>';
+      return;
+    }
+
+    if (!state.providerEvidence.selectedSourceKey) {
+      const firstWithRows = sources.find(source => providerTable(source, state.providerEvidence.focusedNpi).rows.length);
+      state.providerEvidence.selectedSourceKey = (firstWithRows || sources[0]).key;
+    }
+
+    matrix.innerHTML = `<table class="evidence-matrix-table">
+      <thead><tr>
+        <th scope="col" class="source-column-head"><span>PUBLIC SOURCE FILE</span><small>grain / relationship claim</small></th>
+        ${evidenceProviders.map(provider => `<th scope="col" class="provider-column-head ${provider.npi === state.providerEvidence.focusedNpi ? "focused" : ""}"><strong>${escapeHtml(provider.name)}</strong><code>${escapeHtml(provider.npi)}</code></th>`).join("")}
+      </tr></thead>
+      <tbody>${sources.map((source, sourceIndex) => {
+        const availability = evidenceAvailability(source);
+        return `<tr>
+          <th scope="row" class="evidence-source-head">
+            <span class="source-order">${String(sourceIndex + 1).padStart(2, "0")}</span>
+            <strong>${escapeHtml(source.title)}</strong>
+            <code>${escapeHtml(source.table)}</code>
+            <span class="source-classifiers"><i class="source-layer layer-${source.layer === "curated" ? "curated" : "raw"}">${escapeHtml(source.layer || "raw")}</i><i class="evidence-kind">${escapeHtml(String(source.evidence_kind || "publisher_asserted").replaceAll("_", " "))}</i></span>
+            <p>${escapeHtml(source.grain)}</p>
+            ${statusChip(availability.status, availability.label)}
+          </th>
+          ${evidenceProviders.map(provider => {
+            const table = providerTable(source, provider.npi);
+            const selected = source.key === state.providerEvidence.selectedSourceKey && provider.npi === state.providerEvidence.focusedNpi;
+            const unavailable = source.availability !== "available";
+            const cellStatus = unavailable ? availability.status : (table.rows.length ? "current" : "unavailable");
+            const countLabel = unavailable ? availability.label : `${table.rows.length} ${table.rows.length === 1 ? "record" : "records"} returned`;
+            return `<td class="evidence-cell ${provider.npi === state.providerEvidence.focusedNpi ? "focused-column" : ""}">
+              <button type="button" class="evidence-cell-button ${selected ? "selected" : ""} status-${cellStatus}" data-evidence-source="${escapeHtml(source.key)}" data-evidence-npi="${escapeHtml(provider.npi)}" aria-pressed="${selected}" aria-label="Inspect ${escapeHtml(source.title)} for ${escapeHtml(provider.name)}; ${escapeHtml(countLabel)}">
+                <span class="cell-record-count"><i class="status-dot ${cellStatus}"></i><strong>${escapeHtml(countLabel)}</strong><b aria-hidden="true">↘</b></span>
+                <small>${escapeHtml(evidenceCellSummary(source, provider.npi))}</small>
+              </button>
+            </td>`;
+          }).join("")}
+        </tr>`;
+      }).join("")}</tbody>
+    </table>`;
+    renderEvidenceInspector();
+  }
+
+  function renderEvidenceInspector() {
+    const inspector = $("#record-inspector");
+    const sources = state.providerEvidence.data?.sources || [];
+    const source = sources.find(item => item.key === state.providerEvidence.selectedSourceKey);
+    const provider = providerMeta(state.providerEvidence.focusedNpi);
+    if (!source) return;
+
+    const table = providerTable(source, provider.npi);
+    const availability = evidenceAvailability(source);
+    const rowIndex = Math.min(state.providerEvidence.selectedRow, Math.max(table.rows.length - 1, 0));
+    state.providerEvidence.selectedRow = rowIndex;
+    const row = table.rows[rowIndex] || [];
+    const missing = Array.isArray(source.missing_tables) ? source.missing_tables : [];
+
+    const body = source.availability !== "available"
+      ? `<div class="inspector-unavailable"><span class="status-chip ${availability.status}"><i class="status-dot ${availability.status}"></i>${escapeHtml(availability.label)}</span><strong>These rows are part of the model, but not yet available.</strong><p>${missing.length ? `Required evidence: ${missing.map(item => `<code>${escapeHtml(item)}</code>`).join(" · ")}` : "The live source query did not complete."}</p></div>`
+      : !table.rows.length
+        ? '<div class="inspector-unavailable empty"><span class="status-chip unavailable"><i class="status-dot unavailable"></i>0 records</span><strong>No record for this provider in this source.</strong><p>An empty result is evidence too; it is not replaced with a row from another file.</p></div>'
+        : `<div class="raw-record-workbench">
+          ${table.rows.length > 1 ? `<div class="record-tabs" role="tablist" aria-label="Raw records">${table.rows.map((_, index) => `<button type="button" role="tab" aria-selected="${index === rowIndex}" class="${index === rowIndex ? "selected" : ""}" data-evidence-row="${index}"><span>${String(index + 1).padStart(2, "0")}</span>Record ${index + 1}</button>`).join("")}</div>` : '<div class="single-record-label">RAW RECORD 01</div>'}
+          <div class="raw-field-frame" tabindex="0" aria-label="Source-native field and value table">
+            <table class="raw-field-table"><thead><tr><th scope="col">Physical field</th><th scope="col">Source value</th></tr></thead><tbody>
+              ${table.columns.map((column, index) => `<tr><th scope="row"><code>${escapeHtml(column)}</code></th><td>${formatCell(row[index])}</td></tr>`).join("")}
+            </tbody></table>
+          </div>
+        </div>`;
+
+    inspector.innerHTML = `<div class="inspector-heading">
+      <div><span class="eyebrow">Selected evidence path</span><h2 id="record-inspector-title">${escapeHtml(provider.name)} <span>×</span> ${escapeHtml(source.title)}</h2><p><code>${escapeHtml(provider.npi)}</code> · <code>${escapeHtml(source.table)}</code></p></div>
+      <span class="inspector-row-count">${source.availability === "available" ? `${table.rows.length} ${table.rows.length === 1 ? "ROW" : "ROWS"} RETURNED` : availability.label.toUpperCase()}</span>
+    </div>
+    <div class="claim-ledger">
+      <article class="claim-proves"><span>What this proves</span><p>${escapeHtml(source.proves)}</p></article>
+      <article class="claim-limits"><span>What this does not prove</span><p>${escapeHtml(source.does_not_prove)}</p></article>
+      <article class="claim-grain"><span>Source relationship</span><p>${escapeHtml(source.relationship)}</p></article>
+    </div>
+    ${body}`;
+  }
+
+  function selectEvidenceCell(sourceKey, npi) {
+    state.providerEvidence.selectedSourceKey = sourceKey;
+    state.providerEvidence.focusedNpi = npi;
+    state.providerEvidence.selectedRow = 0;
+    renderProviderEvidence();
+    requestAnimationFrame(() => $("#record-inspector")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
+
   function routeFromHash() {
     closeSampleInspector({ restoreFocus: false });
     state.reopenSampleInspector = false;
     const raw = location.hash.replace(/^#/, "") || "overview";
     const [route, detail] = raw.split("/");
-    const validRoute = ["overview", "catalog", "lineage", "contracts", "operations"].includes(route) ? route : "overview";
+    const validRoute = ["overview", "provider-evidence", "catalog", "lineage", "contracts", "operations"].includes(route) ? route : "overview";
     $$(".view").forEach(view => {
       const active = view.dataset.view === validRoute;
       view.hidden = !active;
@@ -772,6 +965,19 @@
       if (flightButton) location.hash = flightButton.dataset.flightTarget;
       const lineageButton = event.target.closest("[data-lineage-index]");
       if (lineageButton) inspectLineage(Number(lineageButton.dataset.lineageIndex));
+      const providerButton = event.target.closest("[data-provider-npi]");
+      if (providerButton) {
+        state.providerEvidence.focusedNpi = providerButton.dataset.providerNpi;
+        state.providerEvidence.selectedRow = 0;
+        renderProviderEvidence();
+      }
+      const evidenceCell = event.target.closest("[data-evidence-source][data-evidence-npi]");
+      if (evidenceCell) selectEvidenceCell(evidenceCell.dataset.evidenceSource, evidenceCell.dataset.evidenceNpi);
+      const evidenceRow = event.target.closest("[data-evidence-row]");
+      if (evidenceRow) {
+        state.providerEvidence.selectedRow = Number(evidenceRow.dataset.evidenceRow);
+        renderEvidenceInspector();
+      }
     });
 
     document.addEventListener("keydown", event => {

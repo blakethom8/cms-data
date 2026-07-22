@@ -1,0 +1,27 @@
+{
+  "meta": {"success": true},
+  "data": [
+    {
+      "type": "Dataset",
+      "title": "Reassignment Sub-File Q1 2099",
+      "media_bundle": "ancillary_file",
+      "media_id": "36886",
+      "file_uuid": "10000000-0000-4000-8000-000000000011",
+      "file_name": "PPEF_Reassignment_Extract_2099.04.01.csv",
+      "file_mime": "text/csv",
+      "file_size": 127281801,
+      "file_url": "https://data.cms.gov/sites/default/files/2099-04/PPEF_Reassignment_Extract_2099.04.01.csv"
+    },
+    {
+      "type": "Dataset",
+      "title": "Address Sub-File Q1 2099",
+      "media_bundle": "ancillary_file",
+      "media_id": "36891",
+      "file_uuid": "10000000-0000-4000-8000-000000000012",
+      "file_name": "PPEF_Practice_Location_Extract_2099.04.01.csv",
+      "file_mime": "text/csv",
+      "file_size": 42959494,
+      "file_url": "https://data.cms.gov/sites/default/files/2099-04/PPEF_Practice_Location_Extract_2099.04.01.csv"
+    }
+  ]
+}

@@ -13,6 +13,7 @@ class Publisher(str, Enum):
 
 class DiscoveryMechanism(str, Enum):
     CMS_DATA_JSON = "cms_data_json"
+    CMS_DATASET_RESOURCES = "cms_dataset_resources"
     NPPES_DOWNLOAD_INDEX = "nppes_download_index"
     OPEN_PAYMENTS_DOWNLOAD_INDEX = "open_payments_download_index"
     AACT_DOWNLOADS_PAGE = "aact_downloads_page"
@@ -139,6 +140,28 @@ SOURCE_REGISTRY: dict[str, SourceSpec] = {
             Cadence.QUARTERLY,
             "Quarter-end PECOS enrollment snapshot, not an ingestion date.",
             ("core_providers",),
+            CMS_ATTRIBUTION,
+        ),
+        SourceSpec(
+            "cms_pecos_reassignment",
+            "Medicare Fee-For-Service Public Provider Enrollment - Reassignment",
+            Publisher.CMS,
+            DiscoveryMechanism.CMS_DATASET_RESOURCES,
+            "PPEF_Reassignment_Extract_",
+            Cadence.QUARTERLY,
+            "Quarter-end PECOS enrollment-pair reassignment snapshot, not an ingestion date.",
+            ("raw_pecos_reassignment",),
+            CMS_ATTRIBUTION,
+        ),
+        SourceSpec(
+            "cms_pecos_practice_location",
+            "Medicare Fee-For-Service Public Provider Enrollment - Practice Location",
+            Publisher.CMS,
+            DiscoveryMechanism.CMS_DATASET_RESOURCES,
+            "PPEF_Practice_Location_Extract_",
+            Cadence.QUARTERLY,
+            "Quarter-end PECOS enrollment practice-location snapshot, not an ingestion date.",
+            ("raw_pecos_practice_location",),
             CMS_ATTRIBUTION,
         ),
         SourceSpec(

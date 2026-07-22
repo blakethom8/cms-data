@@ -259,6 +259,51 @@ def test_reassignment_records_publisher_row_without_individual_npi(tmp_path: Pat
     assert inspection.invalid_identifier_rows == 1
 
 
+@pytest.mark.parametrize(
+    ("source_id", "payload"),
+    [
+        (
+            "cms_pecos_reassignment",
+            b"REASGN_BNFT_ENRLMT_ID,RCV_BNFT_ENRLMT_ID\n"
+            b"I20031103000001,O20031216000213\n",
+        ),
+        (
+            "cms_pecos_practice_location",
+            b"ENRLMT_ID,CITY_NAME,STATE_CD,ZIP_CD\n"
+            b"O20031216000213,LOS ANGELES,CA,90048\n",
+        ),
+    ],
+)
+def test_ppef_relational_subfiles_accept_pecos_enrollment_ids(
+    tmp_path: Path,
+    source_id: str,
+    payload: bytes,
+) -> None:
+    artifact = tmp_path / f"{source_id}.csv"
+    artifact.write_bytes(payload)
+
+    inspection = inspect_cms_csv(
+        artifact,
+        profile=CMS_CSV_PROFILES[source_id],
+    )
+
+    assert inspection.row_count == 1
+
+
+def test_ppef_relational_subfile_rejects_invalid_enrollment_id(tmp_path: Path) -> None:
+    artifact = tmp_path / "ppef-reassignment.csv"
+    artifact.write_bytes(
+        b"REASGN_BNFT_ENRLMT_ID,RCV_BNFT_ENRLMT_ID\n"
+        b"not-an-enrollment,O20031216000213\n"
+    )
+
+    with pytest.raises(AcquisitionError, match="invalid PECOS enrollment ID"):
+        inspect_cms_csv(
+            artifact,
+            profile=CMS_CSV_PROFILES["cms_pecos_reassignment"],
+        )
+
+
 def test_acquire_dry_run_uses_fixtures_and_writes_nothing(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

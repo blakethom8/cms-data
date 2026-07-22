@@ -9,12 +9,11 @@ Everything here is WHITELISTED — no arbitrary SQL crosses this boundary. The
 only user inputs are city/state and bounded sample sizes, all passed as bound
 parameters. Full-row samples can select only physical tables named in CATALOG.
 """
+import re
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
-
-router = APIRouter(prefix="/explorer", tags=["Data Explorer"])
 
 # --------------------------------------------------------------------------
 # Dataset catalog — the curated map of the warehouse.
@@ -38,9 +37,10 @@ CATALOG: list[dict] = [
         "table": "raw_nppes",
         "title": "NPPES (NPI Registry)",
         "domain": "identity",
-        "grain": "one row per NPI (individuals + organizations)",
-        "description": "The master NPI registry: 7M+ providers/orgs with taxonomy codes, "
-                       "credentials, and practice/mailing addresses. The universe of NPIs.",
+        "grain": "one row per Type 1 individual NPI in the loaded subset",
+        "description": "The loaded individual-provider subset of the NPI registry, with "
+                       "taxonomy codes, credentials, and registered practice/mailing addresses. "
+                       "Type 2 organization NPIs are not yet loaded into this table.",
         "join_keys": ["NPI"],
     },
     {
@@ -111,9 +111,10 @@ CATALOG: list[dict] = [
         "table": "raw_reassignment",
         "title": "Reassignment (clinician → group)",
         "domain": "org",
-        "grain": "one row per clinician × group employment",
-        "description": "Who bills through which group: individual NPI → group PAC ID with "
-                       "the group's legal name and total size. The org-chart of Medicare.",
+        "grain": "one row per clinician × group reassignment record",
+        "description": "Which group receives a clinician's reassigned Medicare benefits: "
+                       "individual NPI → group PAC ID with the group's legal name and size. "
+                       "Ordinary reassignment records do not establish employment.",
         "join_keys": ["Individual NPI", "Group PAC ID"],
     },
     {
@@ -245,6 +246,153 @@ SAMPLES: dict[str, str] = {
 
 # Reassignment has no city column — it binds (state, state) instead.
 STATE_ONLY_SAMPLES = {"reassignment"}
+
+
+# Provider-first source comparison. These are intentionally static, reviewed SQL
+# fragments: callers may select NPIs and a bounded row limit, but never a table,
+# column, or SQL expression.
+PROVIDER_EVIDENCE_SOURCES: tuple[dict, ...] = (
+    {
+        "key": "nppes",
+        "table": "raw_nppes",
+        "title": "NPPES registry",
+        "grain": "one row per NPI in the loaded registry subset",
+        "relationship": "provider identity and registered primary practice address",
+        "proves": "The NPI holder's registry identity, taxonomy, and registered location.",
+        "does_not_prove": "Employment, billing-group membership, or care delivered at the address.",
+        "sql": 'SELECT * FROM raw_nppes WHERE CAST(npi AS VARCHAR) = ?',
+        "required_tables": ("raw_nppes",),
+    },
+    {
+        "key": "dac_national",
+        "table": "raw_dac_national",
+        "title": "Doctors & Clinicians (DAC)",
+        "grain": "one clinician enrollment × organization × practice address",
+        "relationship": "Medicare clinician, organization, and practice-location association",
+        "proves": "CMS publishes the clinician at this enrollment, organization PAC ID, and address grain.",
+        "does_not_prove": "Employment, exclusive affiliation, or payment share by organization.",
+        "sql": 'SELECT * FROM raw_dac_national WHERE CAST("NPI" AS VARCHAR) = ?',
+        "required_tables": ("raw_dac_national",),
+    },
+    {
+        "key": "revalidation_reassignment",
+        "table": "raw_reassignment",
+        "title": "Revalidation group reassignment",
+        "grain": "one clinician × group reassignment record",
+        "relationship": "individual clinician to Medicare group receiving reassigned benefits",
+        "proves": "A published Medicare reassignment or physician-assistant employment association.",
+        "does_not_prove": "A primary employer, exclusive group, or exact practice site.",
+        "sql": 'SELECT * FROM raw_reassignment WHERE CAST("Individual NPI" AS VARCHAR) = ?',
+        "required_tables": ("raw_reassignment",),
+    },
+    {
+        "key": "pecos_enrollment",
+        "table": "raw_pecos_enrollment",
+        "title": "PECOS public enrollment",
+        "grain": "one Medicare enrollment record",
+        "relationship": "clinician or organization Medicare enrollment identity",
+        "proves": "The provider's current public Medicare enrollment identifiers and enrollment attributes.",
+        "does_not_prove": "Which organization receives this clinician's reassigned benefits.",
+        "sql": 'SELECT * FROM raw_pecos_enrollment WHERE CAST("NPI" AS VARCHAR) = ?',
+        "required_tables": ("raw_pecos_enrollment",),
+    },
+    {
+        "key": "ppef_reassignment",
+        "table": "raw_pecos_reassignment",
+        "title": "PPEF reassignment",
+        "grain": "one reassigning enrollment × receiving enrollment relationship",
+        "relationship": "clinician enrollment to organization enrollment receiving benefits",
+        "proves": "The explicit PPEF benefit-reassignment link between two Medicare enrollments.",
+        "does_not_prove": "Employment, exclusivity, or which receiving location is primary.",
+        "sql": """
+            SELECT r.*
+            FROM raw_pecos_reassignment r
+            JOIN raw_pecos_enrollment e
+              ON CAST(e.ENRLMT_ID AS VARCHAR) = CAST(r.REASGN_BNFT_ENRLMT_ID AS VARCHAR)
+            WHERE CAST(e.NPI AS VARCHAR) = ?
+        """,
+        "required_tables": ("raw_pecos_reassignment", "raw_pecos_enrollment"),
+    },
+    {
+        "key": "ppef_practice_location",
+        "table": "raw_pecos_practice_location",
+        "title": "PPEF receiving practice locations",
+        "grain": "one receiving Medicare enrollment × practice location",
+        "relationship": "practice locations attached to the organization receiving reassigned benefits",
+        "proves": "The receiving enrollment's published Medicare practice locations.",
+        "does_not_prove": "Which location the clinician personally uses most often.",
+        "sql": """
+            SELECT p.*
+            FROM raw_pecos_practice_location p
+            JOIN raw_pecos_reassignment r
+              ON CAST(r.RCV_BNFT_ENRLMT_ID AS VARCHAR) = CAST(p.ENRLMT_ID AS VARCHAR)
+            JOIN raw_pecos_enrollment e
+              ON CAST(e.ENRLMT_ID AS VARCHAR) = CAST(r.REASGN_BNFT_ENRLMT_ID AS VARCHAR)
+            WHERE CAST(e.NPI AS VARCHAR) = ?
+        """,
+        "required_tables": (
+            "raw_pecos_practice_location",
+            "raw_pecos_reassignment",
+            "raw_pecos_enrollment",
+        ),
+    },
+    {
+        "key": "medicare_provider_year",
+        "table": "raw_physician_by_provider",
+        "title": "Medicare utilization by provider",
+        "grain": "one rendering provider × source year",
+        "relationship": "provider-level Medicare services and payment totals",
+        "proves": "The clinician's published annual Medicare utilization totals.",
+        "does_not_prove": "Which organization received those dollars.",
+        "sql": 'SELECT * FROM raw_physician_by_provider WHERE CAST("Rndrng_NPI" AS VARCHAR) = ?',
+        "required_tables": ("raw_physician_by_provider",),
+    },
+    {
+        "key": "facility_affiliation",
+        "table": "raw_dac_facility_affiliations",
+        "title": "CMS facility affiliations",
+        "grain": "one clinician × facility certification relationship",
+        "relationship": "clinician affiliation to a CMS-certified facility",
+        "proves": "CMS publishes a facility affiliation for the clinician.",
+        "does_not_prove": "Billing-group membership, employment, or hospital privileges beyond the published relationship.",
+        "sql": 'SELECT * FROM raw_dac_facility_affiliations WHERE CAST("NPI" AS VARCHAR) = ?',
+        "required_tables": ("raw_dac_facility_affiliations",),
+    },
+    {
+        "key": "curated_practice_bridge",
+        "table": "practice_locations",
+        "title": "Curated provider–practice bridge",
+        "grain": "one clinician × group relationship × warehouse year",
+        "relationship": "warehouse-normalized group relationship from revalidation data",
+        "proves": "How the current datamart represents each published clinician-to-group relationship.",
+        "does_not_prove": "A true primary location; the current primary flag is a largest-group selection heuristic.",
+        "sql": "SELECT * FROM practice_locations WHERE CAST(npi AS VARCHAR) = ?",
+        "required_tables": ("practice_locations",),
+        "layer": "curated",
+        "evidence_kind": "derived",
+    },
+    {
+        "key": "curated_hospital_bridge",
+        "table": "hospital_affiliations",
+        "title": "Curated hospital-affiliation bridge",
+        "grain": "one clinician × inferred hospital relationship",
+        "relationship": "warehouse-inferred hospital association from group reassignment and hospital enrollment",
+        "proves": "That the warehouse inference rule found one unambiguous hospital match.",
+        "does_not_prove": "Publisher-asserted hospital privileges, employment, or exclusive affiliation.",
+        "sql": "SELECT * FROM hospital_affiliations WHERE CAST(npi AS VARCHAR) = ?",
+        "required_tables": ("hospital_affiliations",),
+        "layer": "curated",
+        "evidence_kind": "inferred",
+    },
+)
+
+DEFAULT_PROVIDER_EVIDENCE_NPIS: tuple[str, ...] = (
+    "1710390513",  # Lauren DeStefano
+    "1962509216",  # Robert Vescio
+    "1740218155",  # Joshua Scott
+    "1659383891",  # Jonathan Weiner
+)
+NPI_PATTERN = re.compile(r"^[0-9]{10}$")
 
 # --------------------------------------------------------------------------
 # Showcases — "what can this data answer?" for a metro.
@@ -379,6 +527,26 @@ class ShowcaseResult(BaseModel):
     data: TableData
 
 
+class ProviderEvidenceSource(BaseModel):
+    key: str
+    table: str
+    title: str
+    grain: str
+    relationship: str
+    proves: str
+    does_not_prove: str
+    layer: str
+    evidence_kind: str
+    availability: str
+    missing_tables: list[str]
+    providers: dict[str, TableData]
+
+
+class ProviderEvidenceResponse(BaseModel):
+    npis: list[str]
+    sources: list[ProviderEvidenceSource]
+
+
 def _run(conn, sql: str, params: list, limit: int = 50) -> TableData:
     bounded_sql = f"SELECT * FROM ({sql.strip().rstrip(';')}) AS sample_rows LIMIT ?"
     cur = conn.execute(bounded_sql, [*params, limit])
@@ -387,7 +555,47 @@ def _run(conn, sql: str, params: list, limit: int = 50) -> TableData:
     return TableData(columns=cols, rows=rows)
 
 
+def _quoted_identifier(value: str) -> str:
+    return '"' + value.replace('"', '""') + '"'
+
+
+def _run_json_safe(conn, sql: str, params: list, limit: int = 50) -> TableData:
+    """Return raw rows while keeping timezone values portable in minimal runtimes."""
+    schema_cursor = conn.execute(
+        f"SELECT * FROM ({sql.strip().rstrip(';')}) AS provider_rows LIMIT 0",
+        params,
+    )
+    projection = []
+    for description in schema_cursor.description:
+        name = description[0]
+        identifier = _quoted_identifier(name)
+        if "TIME ZONE" in str(description[1]).upper():
+            projection.append(f"CAST({identifier} AS VARCHAR) AS {identifier}")
+        else:
+            projection.append(identifier)
+    projected_sql = (
+        f"SELECT {', '.join(projection)} "
+        f"FROM ({sql.strip().rstrip(';')}) AS provider_rows"
+    )
+    return _run(conn, projected_sql, params, limit)
+
+
+def _physical_tables(conn) -> set[str]:
+    return {
+        str(row[0])
+        for row in conn.execute(
+            """
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = 'main' AND table_type = 'BASE TABLE'
+            """
+        ).fetchall()
+    }
+
+
 def get_explorer_router(get_conn):
+    router = APIRouter(prefix="/explorer", tags=["Data Explorer"])
+
     @router.get("/catalog", response_model=list[CatalogEntry])
     async def catalog():
         conn = get_conn()
@@ -464,5 +672,62 @@ def get_explorer_router(get_conn):
             {"key": k, "title": v["title"], "question": v["question"], "dataset": v["dataset"]}
             for k, v in SHOWCASES.items()
         ]
+
+    @router.get("/provider-evidence", response_model=ProviderEvidenceResponse)
+    async def provider_evidence(
+        npis: str = ",".join(DEFAULT_PROVIDER_EVIDENCE_NPIS),
+        limit: int = Query(10, ge=1, le=25),
+    ):
+        """Compare bounded, source-faithful rows for the same providers.
+
+        The endpoint is deliberately provider-first and read-only. Dataset SQL,
+        joins, and relationship descriptions are server-owned; the caller can
+        provide only up to ten valid NPIs and a bounded per-source row limit.
+        Missing optional source tables are reported as unavailable so a staged
+        PPEF rollout remains inspectable before and after promotion.
+        """
+        requested_npis = list(dict.fromkeys(part.strip() for part in npis.split(",") if part.strip()))
+        if not requested_npis or len(requested_npis) > 10:
+            raise HTTPException(status_code=422, detail="Provide between 1 and 10 NPIs")
+        invalid_npis = [npi for npi in requested_npis if not NPI_PATTERN.fullmatch(npi)]
+        if invalid_npis:
+            raise HTTPException(status_code=422, detail=f"Invalid NPI value: {invalid_npis[0]}")
+
+        conn = get_conn()
+        available_tables = _physical_tables(conn)
+        sources: list[ProviderEvidenceSource] = []
+
+        for source in PROVIDER_EVIDENCE_SOURCES:
+            missing_tables = [table for table in source["required_tables"] if table not in available_tables]
+            provider_rows: dict[str, TableData] = {}
+            availability = "unavailable" if missing_tables else "available"
+
+            if not missing_tables:
+                try:
+                    for npi in requested_npis:
+                        provider_rows[npi] = _run_json_safe(conn, source["sql"], [npi], limit)
+                except Exception as error:
+                    availability = "query_error"
+                    provider_rows = {}
+                    missing_tables = [f"Query failed: {error}"]
+
+            sources.append(
+                ProviderEvidenceSource(
+                    key=source["key"],
+                    table=source["table"],
+                    title=source["title"],
+                    grain=source["grain"],
+                    relationship=source["relationship"],
+                    proves=source["proves"],
+                    does_not_prove=source["does_not_prove"],
+                    layer=source.get("layer", "raw"),
+                    evidence_kind=source.get("evidence_kind", "publisher_asserted"),
+                    availability=availability,
+                    missing_tables=missing_tables,
+                    providers=provider_rows,
+                )
+            )
+
+        return ProviderEvidenceResponse(npis=requested_npis, sources=sources)
 
     return router

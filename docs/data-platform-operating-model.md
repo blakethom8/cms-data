@@ -38,7 +38,7 @@ Calendar timers are polling opportunities, not proof that a new file exists.
 | CMS annual utilization, Part D, DME, and QPP | Annual | Check metadata daily; promote within 48 hours of a new version |
 | CMS Order and Referring | About twice weekly | Check daily; promote changed versions within 48 hours |
 | CMS hospital enrollments and reassignment | Monthly | Check daily; promote changed versions within 48 hours |
-| CMS PECOS public enrollment | Quarterly | Check weekly; promote changed versions within 72 hours |
+| CMS PECOS public enrollment and relational subfiles | Quarterly | Check weekly; promote changed versions within 72 hours |
 | NPPES | Monthly full V2 plus weekly increments; registry API daily | Apply weekly increments and replace the base from every monthly V2 release |
 | Open Payments | New program year by June 30; correction refresh in January | Check weekly year-round and daily during June/July and January release windows |
 | AACT / ClinicalTrials.gov | Daily | Run the existing staged AACT refresh daily after the upstream snapshot is available |
@@ -72,7 +72,7 @@ Source-specific gates add to, and never replace, those common gates:
 | CMS Order and Referring | Snapshot interval advances; NPI shape and eligibility-domain checks pass; removal/addition deltas are reviewed because absence affects ordering/referring eligibility. |
 | CMS Hospital Enrollments | Month-end period advances; the exact canonical header, source parity, hospital NPI/name rules, ambiguity exclusions, and affiliation comparison pass. |
 | CMS Revalidation Group Reassignment | Month-end period advances; practitioner/group NPI shape, reassignment uniqueness, and practice/affiliation deltas pass without treating reassignment as asserted hospital privileges. |
-| CMS PECOS Public Provider Enrollment | Quarter-end period advances; enrollment identifiers and provider-type distributions pass bounded-delta review. |
+| CMS PECOS Public Provider Enrollment | Quarter-end period advances; enrollment identifiers and provider-type distributions pass bounded-delta review. The REASSIGNMENT subfile must be unique at reassigning-enrollment × receiving-enrollment grain; the PRACTICE_LOCATION subfile must preserve enrollment × city × state × ZIP grain; both must join to the same-period ENROLLMENT file without being presented as employment evidence. |
 | NPPES monthly V2 | A newer full V2 publisher release is present; load into a fresh staging candidate; reconcile all NPIs and prior weekly events; validate NPI uniqueness, entity/taxonomy/location coverage, deletions/deactivations, and representative API/Radar queries before it becomes the new baseline. |
 | NPPES weekly incremental V2 | The inclusive filename period follows the installed monthly/weekly watermark without an unexplained gap or overlap; apply idempotently to a fresh copy of the monthly baseline; validate changed NPIs and event counts. A weekly file never substitutes for the next monthly full reconciliation. |
 | NPPES Registry API | Use only for daily targeted verification of already selected NPIs and confidence labeling. It is not a bulk source, does not advance the installed monthly/weekly version, and must not trigger a production warehouse promotion by itself. |
@@ -89,6 +89,11 @@ The first discovery implementation lives in `pipeline/source_registry.py`,
 
 - CMS sources are matched by their stable dataset UUID in `data.json`; the newest complete CSV
   distribution supplies the version-specific resource UUID, source period, modified date, and URL.
+- PPEF relational subfiles are discovered from the official CMS dataset-resources endpoint for the
+  stable PPEF dataset UUID. The exact current `PPEF_Reassignment_Extract_*.csv` and
+  `PPEF_Practice_Location_Extract_*.csv` resources supply independent file UUIDs, quarter labels,
+  byte sizes, and same-host download URLs. A missing, duplicate, or non-CSV resource is a discovery
+  error rather than permission to reuse a dated URL.
 - NPPES monthly and weekly files are parsed from the official index and accepted only when they
   match the documented V2 filename shapes. The monthly release date comes from the publisher label;
   the weekly period comes from the filename, and no unsupported weekly release timestamp is guessed.
