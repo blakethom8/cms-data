@@ -28,6 +28,7 @@ from urllib.parse import urlsplit
 
 
 SCHEMA_VERSION = 1
+COMPARISON_SCHEMA_VERSION = 2
 RELEASE_POINTER = "release-current"
 TRANSITION_SENTINEL = "transition-pending"
 BUNDLE_CODE = "code"
@@ -461,7 +462,7 @@ def _validate_warehouse_release(
     if sha256_file(staging_database) != expected_sha:
         raise ProductionError("Warehouse SHA-256 does not match release evidence")
     comparison = _load_json(release_dir / "comparison.json", "release comparison")
-    if comparison.get("schema_version") != 1:
+    if comparison.get("schema_version") != COMPARISON_SCHEMA_VERSION:
         raise ProductionError("Unsupported release comparison schema version")
     if comparison.get("warehouse_release_id") != warehouse_release_id:
         raise ProductionError("Comparison release ID does not match")
@@ -471,12 +472,23 @@ def _validate_warehouse_release(
         raise ProductionError("Warehouse comparison has not passed")
     failed_requirements = comparison.get("failed_requirements")
     unexpected_differences = comparison.get("unexpected_differences")
+    evidence_mismatches = comparison.get("evidence_mismatches")
     if not isinstance(failed_requirements, list) or not isinstance(
         unexpected_differences, list
-    ):
+    ) or not isinstance(evidence_mismatches, list):
         raise ProductionError("Warehouse comparison safety fields are missing or malformed")
-    if failed_requirements != [] or unexpected_differences != []:
+    if (
+        failed_requirements != []
+        or unexpected_differences != []
+        or evidence_mismatches != []
+    ):
         raise ProductionError("Warehouse comparison contains failed requirements or differences")
+    if comparison.get("comparison_policy") not in {
+        "hospital_affiliations_v1",
+        "full_cms_v1",
+        "full_platform_v1",
+    }:
+        raise ProductionError("Warehouse comparison has an unsupported policy")
     comparison_candidate = comparison.get("candidate")
     if not isinstance(comparison_candidate, dict):
         raise ProductionError("Warehouse comparison candidate is missing or malformed")

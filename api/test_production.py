@@ -96,6 +96,7 @@ def _write_release(
     *,
     comparison_state: str = "passed",
     pipeline_commit: str = COMMIT,
+    comparison_schema_version: int = 2,
 ) -> None:
     release_dir = paths["data"] / "releases" / RELEASE_ID
     staging_database = _write_immutable(
@@ -114,12 +115,14 @@ def _write_release(
         },
     }
     comparison = {
-        "schema_version": 1,
+        "schema_version": comparison_schema_version,
         "warehouse_release_id": RELEASE_ID,
         "pipeline_code_commit": pipeline_commit,
         "state": comparison_state,
         "failed_requirements": [],
         "unexpected_differences": [],
+        "evidence_mismatches": [],
+        "comparison_policy": "full_platform_v1",
         "candidate": {"sha256": CANDIDATE_SHA},
     }
     (release_dir / "release.json").write_text(json.dumps(release))
@@ -393,6 +396,24 @@ def test_prepare_rejects_failed_release_comparison(
     _write_release(paths, comparison_state="failed")
 
     with pytest.raises(production.ProductionError, match="comparison has not passed"):
+        production.prepare_release(
+            paths["production"],
+            paths["artifacts"],
+            paths["data"],
+            paths["candidate_code"],
+            paths["candidate_runtime"],
+            paths["candidate_db"],
+            RELEASE_ID,
+        )
+
+
+def test_prepare_rejects_legacy_release_comparison_schema(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    paths, _ = _bootstrap_verified(tmp_path, monkeypatch)
+    _write_release(paths, comparison_schema_version=1)
+
+    with pytest.raises(production.ProductionError, match="comparison schema version"):
         production.prepare_release(
             paths["production"],
             paths["artifacts"],
