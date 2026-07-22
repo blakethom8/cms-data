@@ -49,6 +49,20 @@ def _client() -> TestClient:
             CITY_NAME VARCHAR,
             STATE_CD VARCHAR,
             ZIP_CD VARCHAR
+        );
+        CREATE TABLE pecos_provider_organizations (
+            npi VARCHAR,
+            provider_enrollment_id VARCHAR,
+            receiving_enrollment_id VARCHAR,
+            receiving_organization_name VARCHAR
+        );
+        CREATE TABLE pecos_provider_practice_locations (
+            npi VARCHAR,
+            receiving_enrollment_id VARCHAR,
+            receiving_organization_name VARCHAR,
+            city VARCHAR,
+            state VARCHAR,
+            zip_code VARCHAR
         )
         """
     )
@@ -71,6 +85,14 @@ def _client() -> TestClient:
     connection.execute("INSERT INTO raw_pecos_reassignment VALUES ('IND-1', 'ORG-ENROLL-1')")
     connection.execute(
         "INSERT INTO raw_pecos_practice_location VALUES ('ORG-ENROLL-1', 'LOS ANGELES', 'CA', '90048')"
+    )
+    connection.execute(
+        "INSERT INTO pecos_provider_organizations "
+        "VALUES ('1710390513', 'IND-1', 'ORG-ENROLL-1', 'CEDARS GROUP')"
+    )
+    connection.execute(
+        "INSERT INTO pecos_provider_practice_locations "
+        "VALUES ('1710390513', 'ORG-ENROLL-1', 'CEDARS GROUP', 'LOS ANGELES', 'CA', '90048')"
     )
     connection.execute("INSERT INTO raw_physician_by_provider VALUES ('1710390513', 125000.0)")
     connection.execute(
@@ -105,6 +127,23 @@ def test_provider_evidence_follows_one_npi_across_source_grains() -> None:
     locations = _source(payload, "ppef_practice_location")
     assert locations["providers"]["1710390513"]["rows"] == [
         ["ORG-ENROLL-1", "LOS ANGELES", "CA", "90048"]
+    ]
+
+    organization_bridge = _source(payload, "curated_pecos_organization_bridge")
+    assert organization_bridge["providers"]["1710390513"]["rows"] == [
+        ["1710390513", "IND-1", "ORG-ENROLL-1", "CEDARS GROUP"]
+    ]
+
+    location_bridge = _source(payload, "curated_pecos_location_bridge")
+    assert location_bridge["providers"]["1710390513"]["rows"] == [
+        [
+            "1710390513",
+            "ORG-ENROLL-1",
+            "CEDARS GROUP",
+            "LOS ANGELES",
+            "CA",
+            "90048",
+        ]
     ]
 
 

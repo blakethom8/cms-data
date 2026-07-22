@@ -27,6 +27,7 @@ from pipeline.releases import (
     WAREHOUSE_RELEASE_SCHEMA_VERSION,
     WarehouseReleaseStore,
     _rebuild_hospital_affiliations,
+    _validate_ppef_relationships,
     build_full_cms_warehouse_release,
     build_warehouse_release,
     compare_warehouse_release,
@@ -39,6 +40,87 @@ from pipeline.source_registry import SOURCE_REGISTRY
 SOURCE_RUN_ID = "20990720T010000Z-hospital"
 SOURCE_RELEASE_ID = "cms_hospital_enrollments-fixture"
 CODE_COMMIT = "a" * 40
+
+
+def _ppef_validation_connection() -> duckdb.DuckDBPyConnection:
+    connection = duckdb.connect(":memory:")
+    connection.execute(
+        "CREATE TABLE raw_pecos_enrollment (ENRLMT_ID VARCHAR)"
+    )
+    connection.execute(
+        "CREATE TABLE raw_pecos_reassignment "
+        "(REASGN_BNFT_ENRLMT_ID VARCHAR, RCV_BNFT_ENRLMT_ID VARCHAR)"
+    )
+    connection.execute(
+        "CREATE TABLE raw_pecos_practice_location "
+        "(ENRLMT_ID VARCHAR, CITY_NAME VARCHAR, STATE_CD VARCHAR, ZIP_CD VARCHAR)"
+    )
+    connection.execute(
+        "CREATE TABLE pecos_provider_organizations "
+        "(receiving_organization_name VARCHAR)"
+    )
+    connection.execute(
+        "CREATE TABLE pecos_provider_practice_locations (state VARCHAR)"
+    )
+    connection.execute(
+        "INSERT INTO raw_pecos_enrollment VALUES ('provider'), ('receiver')"
+    )
+    connection.execute(
+        "INSERT INTO raw_pecos_reassignment VALUES ('provider', 'receiver')"
+    )
+    connection.execute(
+        "INSERT INTO raw_pecos_practice_location "
+        "VALUES ('receiver', 'Los Angeles', 'CA', '90048')"
+    )
+    connection.execute(
+        "INSERT INTO pecos_provider_organizations VALUES ('Example Medical Group')"
+    )
+    connection.execute(
+        "INSERT INTO pecos_provider_practice_locations VALUES ('CA')"
+    )
+    return connection
+
+
+def test_validate_ppef_relationships_accepts_declared_grain_and_enrollment_keys():
+    connection = _ppef_validation_connection()
+    try:
+        details = _validate_ppef_relationships(
+            connection,
+            {
+                "raw_pecos_reassignment": 1,
+                "raw_pecos_practice_location": 1,
+                "pecos_provider_organizations": 1,
+                "pecos_provider_practice_locations": 1,
+            },
+        )
+    finally:
+        connection.close()
+
+    assert details["curated_named_organization_rate"] == 1.0
+    assert details["curated_california_location_rows"] == 1
+    assert details["orphan_receiving_enrollments"] == 0
+
+
+def test_validate_ppef_relationships_rejects_orphan_enrollment_keys():
+    connection = _ppef_validation_connection()
+    connection.execute(
+        "INSERT INTO raw_pecos_reassignment VALUES ('provider', 'missing')"
+    )
+    try:
+        with pytest.raises(
+            ReleaseError, match="orphan_receiving_enrollments=1"
+        ):
+            _validate_ppef_relationships(
+                connection,
+                {
+                    "raw_pecos_reassignment": 2,
+                    "raw_pecos_practice_location": 1,
+                    "pecos_provider_organizations": 1,
+                    "pecos_provider_practice_locations": 1,
+                },
+            )
+    finally:
+        connection.close()
 
 
 def _hospital_csv(

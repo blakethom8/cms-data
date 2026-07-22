@@ -164,6 +164,41 @@ def _warehouse(path: Path) -> Path:
             (3, '1000000003', 'PAC3', 'GE3', 'Texas Group', 'TX', 4,
              NULL, NULL, 'TX', NULL, NULL, NULL, NULL, TRUE, NULL, 2024);
 
+        CREATE TABLE pecos_provider_organizations (
+            relationship_key VARCHAR, npi VARCHAR, provider_enrollment_id VARCHAR,
+            receiving_enrollment_id VARCHAR, receiving_npi VARCHAR,
+            receiving_organization_name VARCHAR, receiving_entity_kind VARCHAR,
+            receiving_provider_type_code VARCHAR, receiving_provider_type_desc VARCHAR,
+            receiving_state VARCHAR, source_data_period VARCHAR,
+            relationship_source_run_id VARCHAR, enrollment_source_run_id VARCHAR
+        );
+        INSERT INTO pecos_provider_organizations VALUES
+            ('rel1', '1000000001', 'E1', 'O1', '2000000001', 'Alpha Group',
+             'organization', '12-00', 'Group Practice', 'CA', '2026-01-01/2026-03-31', 'r1', 'e1'),
+            ('rel2', '1000000002', 'E2', 'O2', '2000000002', 'Beta Group',
+             'organization', '12-00', 'Group Practice', 'CA', '2026-01-01/2026-03-31', 'r1', 'e1'),
+            ('rel3', '1000000003', 'E3', 'O3', '2000000003', 'Texas Group',
+             'organization', '12-00', 'Group Practice', 'TX', '2026-01-01/2026-03-31', 'r1', 'e1');
+
+        CREATE TABLE pecos_provider_practice_locations (
+            location_key VARCHAR, npi VARCHAR, provider_enrollment_id VARCHAR,
+            receiving_enrollment_id VARCHAR, receiving_npi VARCHAR,
+            receiving_organization_name VARCHAR, receiving_entity_kind VARCHAR,
+            city VARCHAR, state VARCHAR, zip_code VARCHAR, zip5 VARCHAR,
+            source_data_period VARCHAR, relationship_source_run_id VARCHAR,
+            location_source_run_id VARCHAR, enrollment_source_run_id VARCHAR
+        );
+        INSERT INTO pecos_provider_practice_locations VALUES
+            ('loc1', '1000000001', 'E1', 'O1', '2000000001', 'Alpha Group',
+             'organization', 'Los Angeles', 'CA', '900010001', '90001',
+             '2026-01-01/2026-03-31', 'r1', 'l1', 'e1'),
+            ('loc2', '1000000002', 'E2', 'O2', '2000000002', 'Beta Group',
+             'organization', 'Pasadena', 'CA', '911010001', '91101',
+             '2026-01-01/2026-03-31', 'r1', 'l1', 'e1'),
+            ('loc3', '1000000003', 'E3', 'O3', '2000000003', 'Texas Group',
+             'organization', 'Austin', 'TX', '733010001', '73301',
+             '2026-01-01/2026-03-31', 'r1', 'l1', 'e1');
+
         CREATE TABLE nppes_radar_provider_state (
             npi VARCHAR, first_name VARCHAR, last_name VARCHAR, credentials VARCHAR,
             enumeration_date DATE, source_last_updated_date DATE,
@@ -298,10 +333,32 @@ def _warehouse(path: Path) -> Path:
             ('1000000001', 'CA', 90, 'keep'), ('1000000003', 'TX', 80, 'exclude');
 
         CREATE TABLE raw_pecos_enrollment (
-            NPI VARCHAR, STATE_CD VARCHAR, ENRLMT_ID VARCHAR, source_only_field VARCHAR
+            NPI VARCHAR, STATE_CD VARCHAR, ENRLMT_ID VARCHAR, ORG_NAME VARCHAR,
+            source_only_field VARCHAR
         );
         INSERT INTO raw_pecos_enrollment VALUES
-            ('1000000001', 'CA', 'E1', 'keep'), ('1000000003', 'TX', 'E3', 'exclude');
+            ('1000000001', 'CA', 'E1', NULL, 'keep'),
+            ('1000000002', 'CA', 'E2', NULL, 'keep'),
+            ('1000000003', 'TX', 'E3', NULL, 'exclude'),
+            ('2000000001', 'CA', 'O1', 'Alpha Group', 'keep'),
+            ('2000000002', 'CA', 'O2', 'Beta Group', 'keep'),
+            ('2000000003', 'TX', 'O3', 'Texas Group', 'exclude');
+
+        CREATE TABLE raw_pecos_reassignment (
+            REASGN_BNFT_ENRLMT_ID VARCHAR, RCV_BNFT_ENRLMT_ID VARCHAR,
+            source_only_field VARCHAR
+        );
+        INSERT INTO raw_pecos_reassignment VALUES
+            ('E1', 'O1', 'keep'), ('E2', 'O2', 'keep'), ('E3', 'O3', 'exclude');
+
+        CREATE TABLE raw_pecos_practice_location (
+            ENRLMT_ID VARCHAR, CITY_NAME VARCHAR, STATE_CD VARCHAR, ZIP_CD VARCHAR,
+            source_only_field VARCHAR
+        );
+        INSERT INTO raw_pecos_practice_location VALUES
+            ('O1', 'Los Angeles', 'CA', '900010001', 'keep'),
+            ('O2', 'Pasadena', 'CA', '911010001', 'keep'),
+            ('O3', 'Austin', 'TX', '733010001', 'exclude');
 
         CREATE TABLE raw_open_payments_general (
             Covered_Recipient_NPI VARCHAR, Recipient_State VARCHAR,
@@ -378,6 +435,8 @@ def test_profile_preserves_grain_and_source_detail(tmp_path: Path) -> None:
     assert counts[("reporting", "fact_provider_quality_year")] == 1
     assert counts[("reporting", "bridge_provider_hospital")] == 1
     assert counts[("reporting", "bridge_provider_practice")] == 2
+    assert counts[("reporting", "bridge_provider_pecos_organization")] == 2
+    assert counts[("reporting", "bridge_provider_pecos_location")] == 2
     assert counts[("reporting", "bridge_provider_taxonomy")] == 3
     assert counts[("reporting", "fact_provider_drug_year")] == 2
     assert counts[("reporting", "dim_provider_order_referring")] == 2
@@ -388,6 +447,8 @@ def test_profile_preserves_grain_and_source_detail(tmp_path: Path) -> None:
     assert counts[("source_detail", "source_nppes_provider")] == 2
     assert counts[("source_detail", "source_dac_clinician_location")] == 2
     assert counts[("source_detail", "source_medicare_provider_year")] == 2
+    assert counts[("source_detail", "source_pecos_reassignment")] == 2
+    assert counts[("source_detail", "source_pecos_practice_location")] == 2
     assert (database.stat().st_size, database.stat().st_mtime_ns) == before
 
 
@@ -457,6 +518,8 @@ def test_source_detail_contracts_are_explicitly_scoped() -> None:
         "raw_hospital_enrollments",
         "raw_qpp_experience",
         "raw_pecos_enrollment",
+        "raw_pecos_reassignment",
+        "raw_pecos_practice_location",
         "raw_open_payments_general",
         "raw_open_payments_research",
         "raw_open_payments_ownership",

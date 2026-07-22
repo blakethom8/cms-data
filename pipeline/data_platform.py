@@ -342,7 +342,7 @@ def _parser() -> argparse.ArgumentParser:
     build.add_argument("--json", action="store_true")
     build_cms = subparsers.add_parser(
         "build-cms-release",
-        help="Build all ten validated CMS source runs into one staging candidate",
+        help="Build all twelve validated CMS source runs into one staging candidate",
     )
     build_cms.add_argument("--source-run-id", action="append", required=True)
     build_cms.add_argument("--backup-manifest", required=True, type=Path)

@@ -70,6 +70,57 @@ CREATE INDEX IF NOT EXISTS idx_practice_locations_group ON practice_locations(gr
 
 
 ------------------------------------------------------------
+-- Tables 2b/2c: PECOS benefit-reassignment relationships
+-- Sources: PPEF enrollment + reassignment + practice location
+------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS pecos_provider_organizations (
+    relationship_key             VARCHAR       PRIMARY KEY,
+    npi                          VARCHAR(10)   NOT NULL,
+    provider_enrollment_id       VARCHAR(20)   NOT NULL,
+    receiving_enrollment_id      VARCHAR(20)   NOT NULL,
+    receiving_npi                VARCHAR(10),
+    receiving_organization_name  VARCHAR(255),
+    receiving_entity_kind        VARCHAR(30)   NOT NULL,
+    receiving_provider_type_code VARCHAR(30),
+    receiving_provider_type_desc VARCHAR(255),
+    receiving_state              VARCHAR(2),
+    source_data_period           VARCHAR       NOT NULL,
+    relationship_source_run_id   VARCHAR       NOT NULL,
+    enrollment_source_run_id     VARCHAR       NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_pecos_provider_org_npi
+    ON pecos_provider_organizations(npi);
+CREATE INDEX IF NOT EXISTS idx_pecos_provider_org_receiving
+    ON pecos_provider_organizations(receiving_enrollment_id);
+
+CREATE TABLE IF NOT EXISTS pecos_provider_practice_locations (
+    location_key                 VARCHAR       PRIMARY KEY,
+    npi                          VARCHAR(10)   NOT NULL,
+    provider_enrollment_id       VARCHAR(20)   NOT NULL,
+    receiving_enrollment_id      VARCHAR(20)   NOT NULL,
+    receiving_npi                VARCHAR(10),
+    receiving_organization_name  VARCHAR(255),
+    receiving_entity_kind        VARCHAR(30)   NOT NULL,
+    city                         VARCHAR(100),
+    state                        VARCHAR(2),
+    zip_code                     VARCHAR(20),
+    zip5                         VARCHAR(5),
+    source_data_period           VARCHAR       NOT NULL,
+    relationship_source_run_id   VARCHAR       NOT NULL,
+    location_source_run_id       VARCHAR       NOT NULL,
+    enrollment_source_run_id     VARCHAR       NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_pecos_provider_location_npi
+    ON pecos_provider_practice_locations(npi);
+CREATE INDEX IF NOT EXISTS idx_pecos_provider_location_receiving
+    ON pecos_provider_practice_locations(receiving_enrollment_id);
+CREATE INDEX IF NOT EXISTS idx_pecos_provider_location_state
+    ON pecos_provider_practice_locations(state);
+
+
+------------------------------------------------------------
 -- Table 3: utilization_metrics
 -- Sources: by_provider (Part B) + part_d_by_provider (Rx)
 --          + dme_by_referring_provider

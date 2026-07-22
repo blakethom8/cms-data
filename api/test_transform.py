@@ -7,6 +7,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from pipeline.transform import (
+    build_pecos_provider_relationships,
     build_practice_locations,
     build_provider_drug_detail,
     build_provider_quality_scores,
@@ -173,3 +174,77 @@ def test_practice_transform_matches_numeric_raw_npi_to_text_core_npi() -> None:
 
     assert count == 1
     assert row == ("1234567890", "Example Group", 8)
+
+
+def test_pecos_relationship_transform_preserves_assignment_and_location_grains() -> None:
+    connection = _connection()
+    try:
+        connection.execute(
+            """
+            CREATE TABLE raw_pecos_enrollment (
+                NPI VARCHAR, ENRLMT_ID VARCHAR, ORG_NAME VARCHAR,
+                PROVIDER_TYPE_CD VARCHAR, PROVIDER_TYPE_DESC VARCHAR,
+                STATE_CD VARCHAR, source_run_id VARCHAR,
+                source_data_period VARCHAR
+            );
+            INSERT INTO raw_pecos_enrollment VALUES
+                ('1234567890', 'I20031103000001', NULL, '14-00', 'Physician',
+                 'CA', 'enrollment-run', '2026-01-01/2026-03-31'),
+                ('1098765432', 'O20031216000213', 'Example Group', '12-00',
+                 'Group Practice', 'CA', 'enrollment-run', '2026-01-01/2026-03-31');
+
+            CREATE TABLE raw_pecos_reassignment (
+                REASGN_BNFT_ENRLMT_ID VARCHAR, RCV_BNFT_ENRLMT_ID VARCHAR,
+                source_run_id VARCHAR, source_data_period VARCHAR
+            );
+            INSERT INTO raw_pecos_reassignment VALUES
+                ('I20031103000001', 'O20031216000213', 'relationship-run',
+                 '2026-01-01/2026-03-31');
+
+            CREATE TABLE raw_pecos_practice_location (
+                ENRLMT_ID VARCHAR, CITY_NAME VARCHAR, STATE_CD VARCHAR,
+                ZIP_CD VARCHAR, source_run_id VARCHAR,
+                source_data_period VARCHAR
+            );
+            INSERT INTO raw_pecos_practice_location VALUES
+                ('O20031216000213', 'LOS ANGELES', 'CA', '900480001',
+                 'location-run', '2026-01-01/2026-03-31');
+            """
+        )
+
+        counts = build_pecos_provider_relationships(connection)
+        organization = connection.execute(
+            """
+            SELECT npi, provider_enrollment_id, receiving_enrollment_id,
+                   receiving_organization_name, receiving_entity_kind
+            FROM pecos_provider_organizations
+            """
+        ).fetchone()
+        location = connection.execute(
+            """
+            SELECT npi, receiving_enrollment_id, city, state, zip_code, zip5
+            FROM pecos_provider_practice_locations
+            """
+        ).fetchone()
+    finally:
+        connection.close()
+
+    assert counts == {
+        "pecos_provider_organizations": 1,
+        "pecos_provider_practice_locations": 1,
+    }
+    assert organization == (
+        "1234567890",
+        "I20031103000001",
+        "O20031216000213",
+        "Example Group",
+        "organization",
+    )
+    assert location == (
+        "1234567890",
+        "O20031216000213",
+        "LOS ANGELES",
+        "CA",
+        "900480001",
+        "90048",
+    )

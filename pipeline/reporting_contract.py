@@ -13,7 +13,7 @@ from .source_registry import CMS_ATTRIBUTION, NPPES_ATTRIBUTION, SOURCE_REGISTRY
 
 REPORTING_SCOPE = "California"
 REPORTING_STATE = "CA"
-REPORTING_CONTRACT_VERSION = 2
+REPORTING_CONTRACT_VERSION = 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -326,6 +326,66 @@ REPORTING_MODELS: tuple[ReportingModel, ...] = (
         ),
     ),
     ReportingModel(
+        name="bridge_provider_pecos_organization",
+        grain="one provider enrollment by receiving benefit enrollment",
+        scope_rule="provider NPI belongs to core_providers.state = 'CA'",
+        source_tables=("pecos_provider_organizations", "core_providers"),
+        key_columns=("relationship_key",),
+        from_sql=(
+            "FROM pecos_provider_organizations p "
+            "JOIN core_providers cp ON cp.npi = p.npi "
+            "WHERE UPPER(cp.state) = 'CA'"
+        ),
+        notes=(
+            "PPEF benefit-reassignment bridge. The receiving enrollment is the entity "
+            "receiving reassigned Medicare benefits; this does not prove employment, "
+            "exclusivity, or a primary organization."
+        ),
+        fields=(
+            _field("relationship_key", "p.relationship_key", "cms_pecos_reassignment", "pecos_provider_organizations", "relationship_key", "Stable hash of both enrollment IDs", derived=True),
+            _field("npi", "p.npi", "cms_pecos_public_provider_enrollment", "pecos_provider_organizations", "npi"),
+            _field("provider_enrollment_id", "p.provider_enrollment_id", "cms_pecos_reassignment", "pecos_provider_organizations", "provider_enrollment_id"),
+            _field("receiving_enrollment_id", "p.receiving_enrollment_id", "cms_pecos_reassignment", "pecos_provider_organizations", "receiving_enrollment_id"),
+            _field("receiving_npi", "p.receiving_npi", "cms_pecos_public_provider_enrollment", "pecos_provider_organizations", "receiving_npi"),
+            _field("receiving_organization_name", "p.receiving_organization_name", "cms_pecos_public_provider_enrollment", "pecos_provider_organizations", "receiving_organization_name"),
+            _field("receiving_entity_kind", "p.receiving_entity_kind", "cms_pecos_public_provider_enrollment", "pecos_provider_organizations", "receiving_entity_kind", "Derived from organization-name presence", derived=True),
+            _field("receiving_provider_type_code", "p.receiving_provider_type_code", "cms_pecos_public_provider_enrollment", "pecos_provider_organizations", "receiving_provider_type_code"),
+            _field("receiving_provider_type_desc", "p.receiving_provider_type_desc", "cms_pecos_public_provider_enrollment", "pecos_provider_organizations", "receiving_provider_type_desc"),
+            _field("receiving_state", "p.receiving_state", "cms_pecos_public_provider_enrollment", "pecos_provider_organizations", "receiving_state"),
+            _field("source_data_period", "p.source_data_period", "cms_pecos_reassignment", "pecos_provider_organizations", "source_data_period"),
+        ),
+    ),
+    ReportingModel(
+        name="bridge_provider_pecos_location",
+        grain="one provider benefit reassignment by receiving-enrollment practice location",
+        scope_rule="provider NPI belongs to core_providers.state = 'CA'",
+        source_tables=("pecos_provider_practice_locations", "core_providers"),
+        key_columns=("location_key",),
+        from_sql=(
+            "FROM pecos_provider_practice_locations p "
+            "JOIN core_providers cp ON cp.npi = p.npi "
+            "WHERE UPPER(cp.state) = 'CA'"
+        ),
+        notes=(
+            "Locations belong to the receiving PECOS enrollment. They are not claim-level "
+            "service sites and no location is labeled primary by this source."
+        ),
+        fields=(
+            _field("location_key", "p.location_key", "cms_pecos_practice_location", "pecos_provider_practice_locations", "location_key", "Stable hash of relationship and location fields", derived=True),
+            _field("npi", "p.npi", "cms_pecos_public_provider_enrollment", "pecos_provider_practice_locations", "npi"),
+            _field("provider_enrollment_id", "p.provider_enrollment_id", "cms_pecos_reassignment", "pecos_provider_practice_locations", "provider_enrollment_id"),
+            _field("receiving_enrollment_id", "p.receiving_enrollment_id", "cms_pecos_reassignment", "pecos_provider_practice_locations", "receiving_enrollment_id"),
+            _field("receiving_npi", "p.receiving_npi", "cms_pecos_public_provider_enrollment", "pecos_provider_practice_locations", "receiving_npi"),
+            _field("receiving_organization_name", "p.receiving_organization_name", "cms_pecos_public_provider_enrollment", "pecos_provider_practice_locations", "receiving_organization_name"),
+            _field("receiving_entity_kind", "p.receiving_entity_kind", "cms_pecos_public_provider_enrollment", "pecos_provider_practice_locations", "receiving_entity_kind", "Derived from organization-name presence", derived=True),
+            _field("city", "p.city", "cms_pecos_practice_location", "pecos_provider_practice_locations", "city"),
+            _field("state", "p.state", "cms_pecos_practice_location", "pecos_provider_practice_locations", "state"),
+            _field("zip_code", "p.zip_code", "cms_pecos_practice_location", "pecos_provider_practice_locations", "zip_code"),
+            _field("zip5", "p.zip5", "cms_pecos_practice_location", "pecos_provider_practice_locations", "zip5", "Five-digit ZIP projection", derived=True),
+            _field("source_data_period", "p.source_data_period", "cms_pecos_reassignment", "pecos_provider_practice_locations", "source_data_period"),
+        ),
+    ),
+    ReportingModel(
         name="bridge_provider_taxonomy",
         grain="one provider NPI by distinct NPPES taxonomy code",
         scope_rule="provider NPI belongs to core_providers.state = 'CA'",
@@ -609,6 +669,34 @@ SOURCE_DETAIL_MODELS: tuple[SourceDetailModel, ...] = (
         predicate_sql="UPPER(STATE_CD) = 'CA'",
         source_period_semantics=SOURCE_REGISTRY["cms_pecos_public_provider_enrollment"].source_period_semantics,
         attribution=CMS_ATTRIBUTION,
+    ),
+    SourceDetailModel(
+        name="source_pecos_reassignment",
+        source_dataset_id="cms_pecos_reassignment",
+        source_table="raw_pecos_reassignment",
+        grain="one reassigning enrollment by receiving enrollment",
+        scope_rule="reassigning enrollment belongs to raw_pecos_enrollment.STATE_CD = 'CA'",
+        predicate_sql=(
+            "REASGN_BNFT_ENRLMT_ID IN "
+            "(SELECT ENRLMT_ID FROM raw_pecos_enrollment WHERE UPPER(STATE_CD) = 'CA')"
+        ),
+        source_period_semantics=SOURCE_REGISTRY["cms_pecos_reassignment"].source_period_semantics,
+        attribution=CMS_ATTRIBUTION,
+        notes="Benefit reassignment is not proof of employment or exclusivity.",
+    ),
+    SourceDetailModel(
+        name="source_pecos_practice_location",
+        source_dataset_id="cms_pecos_practice_location",
+        source_table="raw_pecos_practice_location",
+        grain="one enrollment by city, state, and ZIP",
+        scope_rule="raw_pecos_practice_location.STATE_CD = 'CA'",
+        predicate_sql="UPPER(STATE_CD) = 'CA'",
+        source_period_semantics=SOURCE_REGISTRY["cms_pecos_practice_location"].source_period_semantics,
+        attribution=CMS_ATTRIBUTION,
+        notes=(
+            "Enrollment location rows do not identify claim service sites or a primary "
+            "provider location."
+        ),
     ),
     SourceDetailModel(
         name="source_open_payments_general",

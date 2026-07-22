@@ -49,6 +49,8 @@ FULL_CMS_SOURCE_IDS = frozenset(
         "cms_dme_by_referring_provider",
         "cms_qpp_experience",
         "cms_pecos_public_provider_enrollment",
+        "cms_pecos_reassignment",
+        "cms_pecos_practice_location",
         "cms_order_and_referring",
         HOSPITAL_SOURCE_ID,
         "cms_revalidation_group_reassignment",
@@ -80,6 +82,10 @@ FULL_PLATFORM_SMOKE_TABLES = (
     "raw_dme_by_referring_provider",
     "raw_qpp_experience",
     "raw_pecos_enrollment",
+    "raw_pecos_reassignment",
+    "raw_pecos_practice_location",
+    "pecos_provider_organizations",
+    "pecos_provider_practice_locations",
     "raw_order_and_referring",
     "raw_hospital_enrollments",
     "raw_reassignment",
@@ -114,6 +120,10 @@ FULL_CMS_CHANGED_TABLES = frozenset(
         "raw_dme_by_referring_provider",
         "raw_qpp_experience",
         "raw_pecos_enrollment",
+        "raw_pecos_reassignment",
+        "raw_pecos_practice_location",
+        "pecos_provider_organizations",
+        "pecos_provider_practice_locations",
         "raw_order_and_referring",
         "raw_hospital_enrollments",
         "raw_reassignment",
@@ -1097,6 +1107,114 @@ def _resolve_exact_source_set(
     return by_source_id
 
 
+def _validate_ppef_relationships(
+    connection: duckdb.DuckDBPyConnection,
+    table_counts: dict[str, int],
+) -> dict[str, object]:
+    """Validate PPEF grain and enrollment-key integrity in a candidate."""
+    duplicate_reassignment_pairs = int(
+        connection.execute(
+            """
+            SELECT count(*) FROM (
+                SELECT REASGN_BNFT_ENRLMT_ID, RCV_BNFT_ENRLMT_ID
+                FROM raw_pecos_reassignment
+                GROUP BY 1, 2 HAVING count(*) > 1
+            ) duplicates
+            """
+        ).fetchone()[0]
+    )
+    duplicate_practice_locations = int(
+        connection.execute(
+            """
+            SELECT count(*) FROM (
+                SELECT ENRLMT_ID, CITY_NAME, STATE_CD, ZIP_CD
+                FROM raw_pecos_practice_location
+                GROUP BY 1, 2, 3, 4 HAVING count(*) > 1
+            ) duplicates
+            """
+        ).fetchone()[0]
+    )
+    orphan_reassigning_enrollments = int(
+        connection.execute(
+            """
+            SELECT count(*)
+            FROM raw_pecos_reassignment relationship
+            LEFT JOIN raw_pecos_enrollment enrollment
+              ON enrollment.ENRLMT_ID = relationship.REASGN_BNFT_ENRLMT_ID
+            WHERE enrollment.ENRLMT_ID IS NULL
+            """
+        ).fetchone()[0]
+    )
+    orphan_receiving_enrollments = int(
+        connection.execute(
+            """
+            SELECT count(*)
+            FROM raw_pecos_reassignment relationship
+            LEFT JOIN raw_pecos_enrollment enrollment
+              ON enrollment.ENRLMT_ID = relationship.RCV_BNFT_ENRLMT_ID
+            WHERE enrollment.ENRLMT_ID IS NULL
+            """
+        ).fetchone()[0]
+    )
+    orphan_location_enrollments = int(
+        connection.execute(
+            """
+            SELECT count(*)
+            FROM raw_pecos_practice_location location
+            LEFT JOIN raw_pecos_enrollment enrollment
+              ON enrollment.ENRLMT_ID = location.ENRLMT_ID
+            WHERE enrollment.ENRLMT_ID IS NULL
+            """
+        ).fetchone()[0]
+    )
+    failing_checks = {
+        "duplicate_reassignment_pairs": duplicate_reassignment_pairs,
+        "duplicate_practice_location_grains": duplicate_practice_locations,
+        "orphan_reassigning_enrollments": orphan_reassigning_enrollments,
+        "orphan_receiving_enrollments": orphan_receiving_enrollments,
+        "orphan_location_enrollments": orphan_location_enrollments,
+    }
+    failures = [name for name, count in failing_checks.items() if count != 0]
+    if failures:
+        raise ReleaseError(
+            "PPEF relationship validation failed: "
+            + ", ".join(f"{name}={failing_checks[name]}" for name in failures)
+        )
+
+    organization_rows = int(table_counts["pecos_provider_organizations"])
+    location_rows = int(table_counts["pecos_provider_practice_locations"])
+    organization_named_rows = int(
+        connection.execute(
+            """
+            SELECT count(*) FROM pecos_provider_organizations
+            WHERE receiving_organization_name IS NOT NULL
+            """
+        ).fetchone()[0]
+    )
+    ca_location_rows = int(
+        connection.execute(
+            """
+            SELECT count(*) FROM pecos_provider_practice_locations
+            WHERE state = 'CA'
+            """
+        ).fetchone()[0]
+    )
+    return {
+        **failing_checks,
+        "raw_reassignment_rows": int(table_counts["raw_pecos_reassignment"]),
+        "raw_practice_location_rows": int(
+            table_counts["raw_pecos_practice_location"]
+        ),
+        "curated_provider_organization_rows": organization_rows,
+        "curated_provider_location_rows": location_rows,
+        "curated_named_organization_rows": organization_named_rows,
+        "curated_named_organization_rate": (
+            organization_named_rows / organization_rows if organization_rows else 0.0
+        ),
+        "curated_california_location_rows": ca_location_rows,
+    }
+
+
 def _load_full_cms_content(
     connection: duckdb.DuckDBPyConnection,
     *,
@@ -1105,6 +1223,20 @@ def _load_full_cms_content(
 ) -> tuple[dict[str, int], dict[str, object]]:
     from .candidate_sources import load_cms_raw_tables
     from .transform import clear_refresh_targets, transform_all
+
+    ppef_source_ids = (
+        "cms_pecos_public_provider_enrollment",
+        "cms_pecos_reassignment",
+        "cms_pecos_practice_location",
+    )
+    ppef_periods = {
+        by_source_id[source_id].source_data_period for source_id in ppef_source_ids
+    }
+    if len(ppef_periods) != 1:
+        raise ReleaseError(
+            "PPEF enrollment, reassignment, and practice-location runs must use "
+            "the same source period"
+        )
 
     hospital_manifest = _source_manifest(
         data_root, by_source_id[HOSPITAL_SOURCE_ID].run_id
@@ -1165,6 +1297,8 @@ def _load_full_cms_content(
         "core_providers",
         "utilization_metrics",
         "practice_locations",
+        "pecos_provider_organizations",
+        "pecos_provider_practice_locations",
         "provider_quality_scores",
         "provider_service_detail",
         "provider_drug_detail",
@@ -1176,9 +1310,11 @@ def _load_full_cms_content(
         raise ReleaseError(
             "Full CMS candidate has empty required tables: " + ", ".join(empty)
         )
+    ppef_quality = _validate_ppef_relationships(connection, table_counts)
     details = {
         "affiliation_match_policy": AFFILIATION_MATCH_POLICY,
         "affiliation_counts": affiliation_counts,
+        "ppef_relationship_quality": ppef_quality,
     }
     return table_counts, details
 
@@ -1190,7 +1326,7 @@ def build_full_cms_warehouse_release(
     backup_manifest_path: Path,
     code_commit: str | None = None,
 ) -> BuildResult:
-    """Build all ten CMS sources into a new immutable warehouse candidate."""
+    """Build all twelve CMS sources into a new immutable warehouse candidate."""
     by_source_id = _resolve_exact_source_set(
         data_root,
         source_run_ids,

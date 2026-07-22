@@ -32,6 +32,8 @@ The `reporting` schema contains certified analytical models:
 | `fact_provider_quality_year` | one provider NPI by available QPP data year |
 | `bridge_provider_hospital` | one provider NPI by inferred hospital NPI and data year |
 | `bridge_provider_practice` | one provider NPI by group practice relationship and warehouse year |
+| `bridge_provider_pecos_organization` | one provider enrollment by receiving PECOS enrollment |
+| `bridge_provider_pecos_location` | one provider-to-receiving-enrollment relationship by receiving enrollment location |
 | `bridge_provider_taxonomy` | one provider NPI by distinct NPPES taxonomy code |
 | `fact_provider_drug_year` | one provider NPI by generic drug and Part D data year |
 | `dim_provider_order_referring` | one current provider NPI eligibility record |
@@ -41,8 +43,9 @@ The `reporting` schema contains certified analytical models:
 | `dim_provider_radar_state` | one current NPPES Radar state row per provider NPI |
 
 The `source_detail` schema preserves the loaded California slices of NPPES, DAC, Medicare provider,
-Part D provider and drug, DME referring-provider, QPP, PECOS, practice reassignment, Order and
-Referring, hospital enrollment, and Open Payments General, Research, and Ownership sources. These
+Part D provider and drug, DME referring-provider, QPP, PECOS enrollment, PECOS benefit
+reassignment, PECOS practice location, revalidation practice reassignment, Order and Referring,
+hospital enrollment, and Open Payments General, Research, and Ownership sources. These
 are evidence tables, not automatically join-safe facts. Source columns longer than PostgreSQL's
 63-byte identifier limit receive a documented Tableau-safe alias while `control.column_lineage`
 retains the exact publisher column name. The NPPES raw loader itself retains a selected subset of
@@ -55,6 +58,12 @@ approved-filter release gate in the platform operating model.
 The curated location bridge includes only DAC rows whose NPI also belongs to the California provider
 dimension. California DAC rows without that relationship remain visible in
 `source_detail.source_dac_clinician_location` instead of becoming orphan bridge records.
+
+The two PECOS bridges intentionally preserve a two-step relationship: provider enrollment to the
+enrollment receiving reassigned Medicare benefits, then receiving enrollment to its published
+practice locations. They are useful organization and location evidence, but neither bridge asserts
+employment, exclusivity, a primary billing organization, a clinician's primary site, or a claim
+service location. Tableau users can inspect the matching raw PPEF rows beside the curated bridges.
 
 The `control` schema exposes the active release, model catalog, declared grain, source period
 semantics, and column-level lineage. Every curated column identifies its source table/column,

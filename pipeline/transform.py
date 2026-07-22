@@ -200,6 +200,158 @@ def build_practice_locations(con: duckdb.DuckDBPyConnection, data_year: int):
     return count
 
 
+def _ensure_pecos_relationship_tables(con: duckdb.DuckDBPyConnection) -> None:
+    """Create the curated PPEF relationship tables in copied legacy warehouses."""
+    con.execute(
+        """
+        CREATE TABLE IF NOT EXISTS pecos_provider_organizations (
+            relationship_key VARCHAR PRIMARY KEY,
+            npi VARCHAR(10) NOT NULL,
+            provider_enrollment_id VARCHAR(20) NOT NULL,
+            receiving_enrollment_id VARCHAR(20) NOT NULL,
+            receiving_npi VARCHAR(10),
+            receiving_organization_name VARCHAR(255),
+            receiving_entity_kind VARCHAR(30) NOT NULL,
+            receiving_provider_type_code VARCHAR(30),
+            receiving_provider_type_desc VARCHAR(255),
+            receiving_state VARCHAR(2),
+            source_data_period VARCHAR NOT NULL,
+            relationship_source_run_id VARCHAR NOT NULL,
+            enrollment_source_run_id VARCHAR NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_pecos_provider_org_npi
+            ON pecos_provider_organizations(npi);
+        CREATE INDEX IF NOT EXISTS idx_pecos_provider_org_receiving
+            ON pecos_provider_organizations(receiving_enrollment_id);
+
+        CREATE TABLE IF NOT EXISTS pecos_provider_practice_locations (
+            location_key VARCHAR PRIMARY KEY,
+            npi VARCHAR(10) NOT NULL,
+            provider_enrollment_id VARCHAR(20) NOT NULL,
+            receiving_enrollment_id VARCHAR(20) NOT NULL,
+            receiving_npi VARCHAR(10),
+            receiving_organization_name VARCHAR(255),
+            receiving_entity_kind VARCHAR(30) NOT NULL,
+            city VARCHAR(100),
+            state VARCHAR(2),
+            zip_code VARCHAR(20),
+            zip5 VARCHAR(5),
+            source_data_period VARCHAR NOT NULL,
+            relationship_source_run_id VARCHAR NOT NULL,
+            location_source_run_id VARCHAR NOT NULL,
+            enrollment_source_run_id VARCHAR NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_pecos_provider_location_npi
+            ON pecos_provider_practice_locations(npi);
+        CREATE INDEX IF NOT EXISTS idx_pecos_provider_location_receiving
+            ON pecos_provider_practice_locations(receiving_enrollment_id);
+        CREATE INDEX IF NOT EXISTS idx_pecos_provider_location_state
+            ON pecos_provider_practice_locations(state);
+        """
+    )
+
+
+def build_pecos_provider_relationships(
+    con: duckdb.DuckDBPyConnection,
+) -> dict[str, int]:
+    """Build provider-to-receiving-enrollment and location bridges from PPEF.
+
+    These models describe benefit reassignment, not employment. Practice
+    locations belong to the receiving enrollment and are not claim sites.
+    """
+    logger.info("Building curated PPEF provider relationship bridges")
+    _ensure_pecos_relationship_tables(con)
+    con.execute("DELETE FROM pecos_provider_practice_locations")
+    con.execute("DELETE FROM pecos_provider_organizations")
+
+    con.execute(
+        """
+        INSERT INTO pecos_provider_organizations (
+            relationship_key, npi, provider_enrollment_id,
+            receiving_enrollment_id, receiving_npi,
+            receiving_organization_name, receiving_entity_kind,
+            receiving_provider_type_code, receiving_provider_type_desc,
+            receiving_state, source_data_period,
+            relationship_source_run_id, enrollment_source_run_id
+        )
+        SELECT
+            MD5(CONCAT_WS('|', r.REASGN_BNFT_ENRLMT_ID, r.RCV_BNFT_ENRLMT_ID)),
+            CAST(provider.NPI AS VARCHAR),
+            r.REASGN_BNFT_ENRLMT_ID,
+            r.RCV_BNFT_ENRLMT_ID,
+            CAST(receiver.NPI AS VARCHAR),
+            NULLIF(TRIM(receiver.ORG_NAME), ''),
+            CASE
+                WHEN NULLIF(TRIM(receiver.ORG_NAME), '') IS NOT NULL
+                    THEN 'organization'
+                ELSE 'individual_or_unknown'
+            END,
+            receiver.PROVIDER_TYPE_CD,
+            receiver.PROVIDER_TYPE_DESC,
+            UPPER(receiver.STATE_CD),
+            r.source_data_period,
+            r.source_run_id,
+            provider.source_run_id
+        FROM raw_pecos_reassignment r
+        JOIN raw_pecos_enrollment provider
+          ON provider.ENRLMT_ID = r.REASGN_BNFT_ENRLMT_ID
+        JOIN raw_pecos_enrollment receiver
+          ON receiver.ENRLMT_ID = r.RCV_BNFT_ENRLMT_ID
+        WHERE LENGTH(TRIM(CAST(provider.NPI AS VARCHAR))) = 10
+          AND CAST(provider.NPI AS VARCHAR) ~ '^[0-9]{10}$'
+        """
+    )
+
+    con.execute(
+        """
+        INSERT INTO pecos_provider_practice_locations (
+            location_key, npi, provider_enrollment_id,
+            receiving_enrollment_id, receiving_npi,
+            receiving_organization_name, receiving_entity_kind,
+            city, state, zip_code, zip5, source_data_period,
+            relationship_source_run_id, location_source_run_id,
+            enrollment_source_run_id
+        )
+        SELECT
+            MD5(CONCAT_WS('|', relationship.provider_enrollment_id,
+                relationship.receiving_enrollment_id,
+                COALESCE(location.CITY_NAME, ''),
+                COALESCE(location.STATE_CD, ''),
+                COALESCE(location.ZIP_CD, ''))),
+            relationship.npi,
+            relationship.provider_enrollment_id,
+            relationship.receiving_enrollment_id,
+            relationship.receiving_npi,
+            relationship.receiving_organization_name,
+            relationship.receiving_entity_kind,
+            location.CITY_NAME,
+            UPPER(location.STATE_CD),
+            location.ZIP_CD,
+            LEFT(CAST(location.ZIP_CD AS VARCHAR), 5),
+            relationship.source_data_period,
+            relationship.relationship_source_run_id,
+            location.source_run_id,
+            relationship.enrollment_source_run_id
+        FROM pecos_provider_organizations relationship
+        JOIN raw_pecos_practice_location location
+          ON location.ENRLMT_ID = relationship.receiving_enrollment_id
+        """
+    )
+
+    counts = {
+        "pecos_provider_organizations": int(
+            con.execute("SELECT COUNT(*) FROM pecos_provider_organizations").fetchone()[0]
+        ),
+        "pecos_provider_practice_locations": int(
+            con.execute(
+                "SELECT COUNT(*) FROM pecos_provider_practice_locations"
+            ).fetchone()[0]
+        ),
+    }
+    logger.info("Curated PPEF relationship counts: %s", counts)
+    return counts
+
+
 def build_hospital_affiliations(con: duckdb.DuckDBPyConnection, data_year: int):
     """Populate hospital_affiliations by joining reassignment -> hospital_enrollments.
 
@@ -442,6 +594,7 @@ def transform_all(
     results["practice_locations"] = build_practice_locations(
         con, practice_year or data_year
     )
+    results.update(build_pecos_provider_relationships(con))
     if include_hospital_affiliations:
         results["hospital_affiliations"] = build_hospital_affiliations(
             con, practice_year or data_year
