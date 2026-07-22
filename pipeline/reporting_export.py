@@ -184,7 +184,7 @@ def profile_database(database_path: Path) -> ReportingProfile:
                 raise ReportingError(
                     f"Required source-detail table is missing: {model.source_table}"
                 )
-            query = f'SELECT * FROM "{model.source_table}" WHERE {model.predicate_sql}'
+            query = model.query
             columns, _ = _describe_query(connection, query)
             profiles.append(
                 ModelProfile(
@@ -643,7 +643,7 @@ def _insert_source_metadata(
                     position,
                     model.source_dataset_id,
                     model.source_table,
-                    column,
+                    model.source_column(column),
                     model.grain,
                     model.scope_rule,
                     model.source_period_semantics,
@@ -934,9 +934,7 @@ def _publish_release_unlocked(
                     raise ReportingError(
                         f"Required source-detail table is missing: {model.source_table}"
                     )
-                query = (
-                    f'SELECT * FROM "{model.source_table}" WHERE {model.predicate_sql}'
-                )
+                query = model.query
                 extracted = _extract_query(
                     duckdb_connection,
                     layer="source_detail",

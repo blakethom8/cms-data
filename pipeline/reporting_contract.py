@@ -13,7 +13,7 @@ from .source_registry import CMS_ATTRIBUTION, NPPES_ATTRIBUTION, SOURCE_REGISTRY
 
 REPORTING_SCOPE = "California"
 REPORTING_STATE = "CA"
-REPORTING_CONTRACT_VERSION = 1
+REPORTING_CONTRACT_VERSION = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +58,19 @@ class SourceDetailModel:
     source_period_semantics: str
     attribution: str
     notes: str = ""
+    projection_sql: str = "*"
+    column_aliases: tuple[tuple[str, str], ...] = ()
+
+    @property
+    def query(self) -> str:
+        return (
+            f'SELECT {self.projection_sql} FROM "{self.source_table}" '
+            f"WHERE {self.predicate_sql}"
+        )
+
+    def source_column(self, output_column: str) -> str:
+        aliases = dict(self.column_aliases)
+        return aliases.get(output_column, output_column)
 
 
 def _field(
@@ -80,6 +93,19 @@ def _field(
         transformation=transformation,
         derived=derived,
         inferred=inferred,
+    )
+
+
+def _direct_fields(
+    source_dataset_id: str,
+    source_table: str,
+    columns: tuple[str, ...],
+    source_alias: str | None = None,
+) -> tuple[FieldContract, ...]:
+    alias = source_alias or source_table[0]
+    return tuple(
+        _field(column, f"{alias}.{column}", source_dataset_id, source_table, column)
+        for column in columns
     )
 
 
@@ -271,6 +297,198 @@ REPORTING_MODELS: tuple[ReportingModel, ...] = (
             ),
         ),
     ),
+    ReportingModel(
+        name="bridge_provider_practice",
+        grain="one provider NPI by group practice relationship and warehouse year",
+        scope_rule="provider NPI belongs to core_providers.state = 'CA'",
+        source_tables=("practice_locations", "core_providers"),
+        key_columns=("location_id",),
+        from_sql=(
+            "FROM practice_locations p JOIN core_providers cp ON cp.npi = p.npi "
+            "WHERE UPPER(cp.state) = 'CA'"
+        ),
+        notes=(
+            "Curated provider-to-group relationship. A provider can have several rows; "
+            "relate this bridge to dim_provider rather than physically joining it to facts."
+        ),
+        fields=(
+            _field("location_id", "p.location_id", "cms_revalidation_group_reassignment", "practice_locations", "location_id", "Warehouse surrogate relationship key", derived=True),
+            *_direct_fields(
+                "cms_revalidation_group_reassignment",
+                "practice_locations",
+                (
+                    "npi", "group_pac_id", "group_enrollment_id", "group_legal_name",
+                    "group_state", "group_practice_size", "street_address_1", "city",
+                    "state", "zip5", "google_place_id", "latitude", "longitude",
+                    "is_primary_location", "location_type", "data_year",
+                ),
+            ),
+        ),
+    ),
+    ReportingModel(
+        name="bridge_provider_taxonomy",
+        grain="one provider NPI by distinct NPPES taxonomy code",
+        scope_rule="provider NPI belongs to core_providers.state = 'CA'",
+        source_tables=("nppes_radar_provider_state", "core_providers"),
+        key_columns=("npi", "taxonomy_code"),
+        from_sql=(
+            "FROM nppes_radar_provider_state r "
+            "JOIN core_providers cp ON cp.npi = r.npi "
+            "CROSS JOIN UNNEST(list_distinct(r.taxonomy_codes)) AS t(taxonomy_code) "
+            "WHERE UPPER(cp.state) = 'CA'"
+        ),
+        notes=(
+            "All taxonomy codes retained by NPPES Radar. is_primary identifies the current "
+            "primary code; an NPI can legitimately have several taxonomy rows."
+        ),
+        fields=(
+            _field("npi", "CAST(r.npi AS VARCHAR)", "nppes_monthly_v2", "nppes_radar_provider_state", "npi"),
+            _field("taxonomy_code", "CAST(t.taxonomy_code AS VARCHAR)", "nppes_monthly_v2", "nppes_radar_provider_state", "taxonomy_codes", "Unnest distinct NPPES taxonomy list", derived=True),
+            _field("is_primary", "CAST(t.taxonomy_code AS VARCHAR) = r.primary_taxonomy_code", "nppes_monthly_v2", "nppes_radar_provider_state", "primary_taxonomy_code", "Compare taxonomy code to current primary taxonomy", derived=True),
+            _field("source_release_id", "r.source_release_id", "nppes_monthly_v2", "nppes_radar_provider_state", "source_release_id"),
+            _field("source_data_period", "r.source_data_period", "nppes_monthly_v2", "nppes_radar_provider_state", "source_data_period"),
+        ),
+    ),
+    ReportingModel(
+        name="fact_provider_drug_year",
+        grain="one provider NPI by generic drug and Part D data year",
+        scope_rule="provider NPI belongs to core_providers.state = 'CA'",
+        source_tables=("provider_drug_detail", "core_providers"),
+        key_columns=("npi", "generic_name", "data_year"),
+        from_sql=(
+            "FROM provider_drug_detail d JOIN core_providers cp ON cp.npi = d.npi "
+            "WHERE UPPER(cp.state) = 'CA'"
+        ),
+        fields=_direct_fields(
+            "cms_part_d_by_provider_and_drug",
+            "provider_drug_detail",
+            (
+                "npi", "brand_name", "generic_name", "tot_claims", "tot_30day_fills",
+                "tot_day_supply", "tot_drug_cost", "tot_beneficiaries", "ge65_tot_claims",
+                "ge65_tot_drug_cost", "ge65_tot_benes", "data_year",
+            ),
+            "d",
+        ),
+    ),
+    ReportingModel(
+        name="dim_provider_order_referring",
+        grain="one current provider NPI eligibility record",
+        scope_rule="provider NPI belongs to core_providers.state = 'CA'",
+        source_tables=("order_referring_eligibility", "core_providers"),
+        key_columns=("npi",),
+        from_sql=(
+            "FROM order_referring_eligibility o JOIN core_providers cp ON cp.npi = o.npi "
+            "WHERE UPPER(cp.state) = 'CA'"
+        ),
+        notes="Current publisher eligibility flags; this source is a snapshot rather than a historical fact.",
+        fields=_direct_fields(
+            "cms_order_and_referring",
+            "order_referring_eligibility",
+            ("npi", "last_name", "first_name", "partb", "dme", "hha", "pmd", "hospice"),
+        ),
+    ),
+    ReportingModel(
+        name="fact_provider_industry_payment_year",
+        grain="one provider NPI by program year and paying company",
+        scope_rule="provider NPI belongs to core_providers.state = 'CA'",
+        source_tables=("industry_relationships", "core_providers"),
+        key_columns=("npi", "payment_year", "paying_company_name"),
+        from_sql=(
+            "FROM industry_relationships i JOIN core_providers cp ON cp.npi = i.npi "
+            "WHERE UPPER(cp.state) = 'CA'"
+        ),
+        notes=(
+            "Reported Open Payments transfers of value. These records do not establish "
+            "endorsement, causation, or misconduct."
+        ),
+        fields=_direct_fields(
+            "open_payments_general",
+            "industry_relationships",
+            (
+                "npi", "payment_year", "paying_company_name", "total_amount_received",
+                "payment_count", "nature_of_payments", "top_paying_company_flag",
+            ),
+        ),
+    ),
+    ReportingModel(
+        name="provider_industry_summary",
+        grain="one provider NPI with all-year Open Payments summary",
+        scope_rule="provider NPI belongs to core_providers.state = 'CA'",
+        source_tables=("kol_summary", "core_providers"),
+        key_columns=("npi",),
+        from_sql=(
+            "FROM kol_summary k JOIN core_providers cp ON cp.npi = k.npi "
+            "WHERE UPPER(cp.state) = 'CA'"
+        ),
+        notes=(
+            "Derived Open Payments summary for exploration. KOL tier is an internal analytical "
+            "classification, not a publisher designation."
+        ),
+        fields=tuple(
+            _field(
+                column,
+                f"k.{column}",
+                "open_payments_general",
+                "kol_summary",
+                column,
+                "Derived all-year Open Payments summary",
+                derived=True,
+            )
+            for column in (
+                "npi", "first_name", "last_name", "specialty", "state", "city",
+                "unique_companies", "total_payments_all_years", "total_payment_count",
+                "most_recent_year", "top_3_payers", "payment_natures", "kol_tier",
+            )
+        ),
+    ),
+    ReportingModel(
+        name="fact_provider_radar_event",
+        grain="one immutable NPPES change event",
+        scope_rule="event NPI belongs to core_providers.state = 'CA'",
+        source_tables=("nppes_radar_events", "core_providers"),
+        key_columns=("event_id",),
+        from_sql=(
+            "FROM nppes_radar_events e JOIN core_providers cp ON cp.npi = e.npi "
+            "WHERE UPPER(cp.state) = 'CA'"
+        ),
+        notes="Events are detected from NPPES releases and do not independently prove licensure or practice status.",
+        fields=_direct_fields(
+            "nppes_weekly_incremental_v2",
+            "nppes_radar_events",
+            (
+                "event_id", "npi", "event_type", "effective_date", "detected_at",
+                "source_release_id", "source_data_period", "old_zip5", "new_zip5",
+                "old_primary_taxonomy_code", "new_primary_taxonomy_code",
+                "source_last_updated_date", "deactivation_date", "reactivation_date",
+            ),
+            "e",
+        ),
+    ),
+    ReportingModel(
+        name="dim_provider_radar_state",
+        grain="one current NPPES Radar state row per provider NPI",
+        scope_rule="provider NPI belongs to core_providers.state = 'CA'",
+        source_tables=("nppes_radar_provider_state", "core_providers"),
+        key_columns=("npi",),
+        from_sql=(
+            "FROM nppes_radar_provider_state r JOIN core_providers cp ON cp.npi = r.npi "
+            "WHERE UPPER(cp.state) = 'CA'"
+        ),
+        notes="Current reconciled NPPES state; monthly snapshots establish the baseline and weekly files advance it.",
+        fields=_direct_fields(
+            "nppes_monthly_v2",
+            "nppes_radar_provider_state",
+            (
+                "npi", "first_name", "last_name", "credentials", "enumeration_date",
+                "source_last_updated_date", "deactivation_date", "reactivation_date",
+                "primary_taxonomy_code", "taxonomy_codes", "practice_address_1",
+                "practice_address_2", "practice_city", "practice_state", "practice_zip5",
+                "practice_phone", "record_fingerprint", "source_release_id",
+                "source_data_period", "first_seen_at", "last_seen_at",
+            ),
+            "r",
+        ),
+    ),
 )
 
 
@@ -308,6 +526,151 @@ SOURCE_DETAIL_MODELS: tuple[SourceDetailModel, ...] = (
             "cms_physician_by_provider"
         ].source_period_semantics,
         attribution=CMS_ATTRIBUTION,
+    ),
+    SourceDetailModel(
+        name="source_practice_reassignment",
+        source_dataset_id="cms_revalidation_group_reassignment",
+        source_table="raw_reassignment",
+        grain="one publisher reassignment record",
+        scope_rule='raw_reassignment."Individual State Code" = \'CA\'',
+        predicate_sql='UPPER("Individual State Code") = \'CA\'',
+        source_period_semantics=SOURCE_REGISTRY["cms_revalidation_group_reassignment"].source_period_semantics,
+        attribution=CMS_ATTRIBUTION,
+    ),
+    SourceDetailModel(
+        name="source_part_d_provider_year",
+        source_dataset_id="cms_part_d_by_provider",
+        source_table="raw_part_d_by_provider",
+        grain="one prescriber NPI by annual Part D source record",
+        scope_rule="raw_part_d_by_provider.Prscrbr_State_Abrvtn = 'CA'",
+        predicate_sql="UPPER(Prscrbr_State_Abrvtn) = 'CA'",
+        source_period_semantics=SOURCE_REGISTRY["cms_part_d_by_provider"].source_period_semantics,
+        attribution=CMS_ATTRIBUTION,
+    ),
+    SourceDetailModel(
+        name="source_part_d_provider_drug_year",
+        source_dataset_id="cms_part_d_by_provider_and_drug",
+        source_table="raw_part_d_by_provider_and_drug",
+        grain="one prescriber NPI by drug annual source record",
+        scope_rule="raw_part_d_by_provider_and_drug.Prscrbr_State_Abrvtn = 'CA'",
+        predicate_sql="UPPER(Prscrbr_State_Abrvtn) = 'CA'",
+        source_period_semantics=SOURCE_REGISTRY["cms_part_d_by_provider_and_drug"].source_period_semantics,
+        attribution=CMS_ATTRIBUTION,
+    ),
+    SourceDetailModel(
+        name="source_dme_referring_provider_year",
+        source_dataset_id="cms_dme_by_referring_provider",
+        source_table="raw_dme_by_referring_provider",
+        grain="one referring provider NPI by annual DME source record",
+        scope_rule="raw_dme_by_referring_provider.Rfrg_Prvdr_State_Abrvtn = 'CA'",
+        predicate_sql="UPPER(Rfrg_Prvdr_State_Abrvtn) = 'CA'",
+        source_period_semantics=SOURCE_REGISTRY["cms_dme_by_referring_provider"].source_period_semantics,
+        attribution=CMS_ATTRIBUTION,
+    ),
+    SourceDetailModel(
+        name="source_order_referring",
+        source_dataset_id="cms_order_and_referring",
+        source_table="raw_order_and_referring",
+        grain="one publisher eligibility row per NPI",
+        scope_rule="source NPI belongs to core_providers.state = 'CA'",
+        predicate_sql=(
+            "CAST(NPI AS VARCHAR) IN "
+            "(SELECT CAST(npi AS VARCHAR) FROM core_providers WHERE UPPER(state) = 'CA')"
+        ),
+        source_period_semantics=SOURCE_REGISTRY["cms_order_and_referring"].source_period_semantics,
+        attribution=CMS_ATTRIBUTION,
+    ),
+    SourceDetailModel(
+        name="source_hospital_enrollment",
+        source_dataset_id="cms_hospital_enrollments",
+        source_table="raw_hospital_enrollments",
+        grain="one publisher hospital enrollment record",
+        scope_rule="raw_hospital_enrollments.state = 'CA'",
+        predicate_sql="UPPER(state) = 'CA'",
+        source_period_semantics=SOURCE_REGISTRY["cms_hospital_enrollments"].source_period_semantics,
+        attribution=CMS_ATTRIBUTION,
+    ),
+    SourceDetailModel(
+        name="source_qpp_experience",
+        source_dataset_id="cms_qpp_experience",
+        source_table="raw_qpp_experience",
+        grain="one provider key by QPP performance-year source record",
+        scope_rule='raw_qpp_experience."practice state or us territory" = \'CA\'',
+        predicate_sql='UPPER("practice state or us territory") = \'CA\'',
+        source_period_semantics=SOURCE_REGISTRY["cms_qpp_experience"].source_period_semantics,
+        attribution=CMS_ATTRIBUTION,
+    ),
+    SourceDetailModel(
+        name="source_pecos_enrollment",
+        source_dataset_id="cms_pecos_public_provider_enrollment",
+        source_table="raw_pecos_enrollment",
+        grain="one PECOS public enrollment source record",
+        scope_rule="raw_pecos_enrollment.STATE_CD = 'CA'",
+        predicate_sql="UPPER(STATE_CD) = 'CA'",
+        source_period_semantics=SOURCE_REGISTRY["cms_pecos_public_provider_enrollment"].source_period_semantics,
+        attribution=CMS_ATTRIBUTION,
+    ),
+    SourceDetailModel(
+        name="source_open_payments_general",
+        source_dataset_id="open_payments_general",
+        source_table="raw_open_payments_general",
+        grain="one Open Payments General transaction record",
+        scope_rule="raw_open_payments_general.Recipient_State = 'CA'",
+        predicate_sql="UPPER(Recipient_State) = 'CA'",
+        source_period_semantics=SOURCE_REGISTRY["open_payments_general"].source_period_semantics,
+        attribution=SOURCE_REGISTRY["open_payments_general"].licensing_notes,
+        notes="Reported transfers of value; do not imply endorsement, causation, or misconduct.",
+        projection_sql=(
+            '* RENAME ('
+            '"Applicable_Manufacturer_or_Applicable_GPO_Making_Payment_Country" '
+            'AS payment_maker_country, '
+            '"Name_of_Third_Party_Entity_Receiving_Payment_or_Transfer_of_Value" '
+            'AS third_party_recipient_name)'
+        ),
+        column_aliases=(
+            ("payment_maker_country", "Applicable_Manufacturer_or_Applicable_GPO_Making_Payment_Country"),
+            ("third_party_recipient_name", "Name_of_Third_Party_Entity_Receiving_Payment_or_Transfer_of_Value"),
+        ),
+    ),
+    SourceDetailModel(
+        name="source_open_payments_research",
+        source_dataset_id="open_payments_research",
+        source_table="raw_open_payments_research",
+        grain="one Open Payments Research transaction record",
+        scope_rule="recipient or principal investigator state = 'CA'",
+        predicate_sql=(
+            "UPPER(Recipient_State) = 'CA' OR UPPER(Principal_Investigator_1_State) = 'CA' "
+            "OR UPPER(Principal_Investigator_2_State) = 'CA' "
+            "OR UPPER(Principal_Investigator_3_State) = 'CA' "
+            "OR UPPER(Principal_Investigator_4_State) = 'CA' "
+            "OR UPPER(Principal_Investigator_5_State) = 'CA'"
+        ),
+        source_period_semantics=SOURCE_REGISTRY["open_payments_research"].source_period_semantics,
+        attribution=SOURCE_REGISTRY["open_payments_research"].licensing_notes,
+        notes="Reported research payments; do not imply endorsement, causation, or misconduct.",
+        projection_sql=(
+            '* RENAME ('
+            '"Applicable_Manufacturer_or_Applicable_GPO_Making_Payment_Country" '
+            'AS payment_maker_country)'
+        ),
+        column_aliases=(("payment_maker_country", "Applicable_Manufacturer_or_Applicable_GPO_Making_Payment_Country"),),
+    ),
+    SourceDetailModel(
+        name="source_open_payments_ownership",
+        source_dataset_id="open_payments_ownership",
+        source_table="raw_open_payments_ownership",
+        grain="one Open Payments Ownership and Investment Interest record",
+        scope_rule="raw_open_payments_ownership.Recipient_State = 'CA'",
+        predicate_sql="UPPER(Recipient_State) = 'CA'",
+        source_period_semantics=SOURCE_REGISTRY["open_payments_ownership"].source_period_semantics,
+        attribution=SOURCE_REGISTRY["open_payments_ownership"].licensing_notes,
+        notes="Reported ownership interests; do not imply endorsement, causation, or misconduct.",
+        projection_sql=(
+            '* RENAME ('
+            '"Applicable_Manufacturer_or_Applicable_GPO_Making_Payment_Country" '
+            'AS payment_maker_country)'
+        ),
+        column_aliases=(("payment_maker_country", "Applicable_Manufacturer_or_Applicable_GPO_Making_Payment_Country"),),
     ),
 )
 

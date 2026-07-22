@@ -147,6 +147,196 @@ def _warehouse(path: Path) -> Path:
             ('1000000001', 'CA', 100, 999),
             ('1000000002', 'ca', 25, 888),
             ('1000000003', 'TX', 60, 777);
+
+        CREATE TABLE practice_locations (
+            location_id INTEGER, npi VARCHAR, group_pac_id VARCHAR,
+            group_enrollment_id VARCHAR, group_legal_name VARCHAR,
+            group_state VARCHAR, group_practice_size INTEGER,
+            street_address_1 VARCHAR, city VARCHAR, state VARCHAR, zip5 VARCHAR,
+            google_place_id VARCHAR, latitude DOUBLE, longitude DOUBLE,
+            is_primary_location BOOLEAN, location_type VARCHAR, data_year INTEGER
+        );
+        INSERT INTO practice_locations VALUES
+            (1, '1000000001', 'PAC1', 'GE1', 'Alpha Group', 'CA', 10,
+             '1 Main', 'Los Angeles', 'CA', '90001', NULL, NULL, NULL, TRUE, NULL, 2024),
+            (2, '1000000002', 'PAC2', 'GE2', 'Beta Group', 'CA', 2,
+             NULL, NULL, 'CA', NULL, NULL, NULL, NULL, TRUE, NULL, 2024),
+            (3, '1000000003', 'PAC3', 'GE3', 'Texas Group', 'TX', 4,
+             NULL, NULL, 'TX', NULL, NULL, NULL, NULL, TRUE, NULL, 2024);
+
+        CREATE TABLE nppes_radar_provider_state (
+            npi VARCHAR, first_name VARCHAR, last_name VARCHAR, credentials VARCHAR,
+            enumeration_date DATE, source_last_updated_date DATE,
+            deactivation_date DATE, reactivation_date DATE,
+            primary_taxonomy_code VARCHAR, taxonomy_codes VARCHAR[],
+            practice_address_1 VARCHAR, practice_address_2 VARCHAR,
+            practice_city VARCHAR, practice_state VARCHAR, practice_zip5 VARCHAR,
+            practice_phone VARCHAR, record_fingerprint VARCHAR,
+            source_release_id VARCHAR, source_data_period VARCHAR,
+            first_seen_at TIMESTAMPTZ, last_seen_at TIMESTAMPTZ
+        );
+        INSERT INTO nppes_radar_provider_state VALUES
+            ('1000000001', 'Ana', 'Alpha', 'MD', '2010-01-01', '2026-07-01',
+             NULL, NULL, '207RC0000X', ['207RC0000X', '207R00000X'], '1 Main', NULL,
+             'Los Angeles', 'CA', '90001', '555', 'fp1', 'rel1', '2026-07', NOW(), NOW()),
+            ('1000000002', 'Ben', 'Beta', 'DO', '2011-01-01', '2026-07-01',
+             NULL, NULL, '207R00000X', ['207R00000X'], '2 Main', NULL,
+             'Pasadena', 'CA', '91101', '556', 'fp2', 'rel1', '2026-07', NOW(), NOW()),
+            ('1000000003', 'Tia', 'Texas', 'MD', '2012-01-01', '2026-07-01',
+             NULL, NULL, '207RC0000X', ['207RC0000X'], '3 Main', NULL,
+             'Austin', 'TX', '73301', '557', 'fp3', 'rel1', '2026-07', NOW(), NOW());
+
+        CREATE TABLE provider_drug_detail (
+            npi VARCHAR, brand_name VARCHAR, generic_name VARCHAR,
+            tot_claims INTEGER, tot_30day_fills DECIMAL(15,2), tot_day_supply INTEGER,
+            tot_drug_cost DECIMAL(15,2), tot_beneficiaries INTEGER,
+            ge65_tot_claims INTEGER, ge65_tot_drug_cost DECIMAL(15,2),
+            ge65_tot_benes INTEGER, data_year INTEGER
+        );
+        INSERT INTO provider_drug_detail VALUES
+            ('1000000001', 'Brand A', 'Drug A', 10, 11, 300, 1000, 8, 4, 300, 3, 2024),
+            ('1000000002', NULL, 'Drug B', 5, 5, 120, 400, 4, 2, 150, 2, 2024),
+            ('1000000003', NULL, 'Drug C', 7, 7, 200, 500, 6, 3, 200, 2, 2024);
+
+        CREATE TABLE order_referring_eligibility (
+            npi VARCHAR, last_name VARCHAR, first_name VARCHAR,
+            partb VARCHAR, dme VARCHAR, hha VARCHAR, pmd VARCHAR, hospice VARCHAR
+        );
+        INSERT INTO order_referring_eligibility VALUES
+            ('1000000001', 'Alpha', 'Ana', 'Y', 'Y', 'N', 'N', 'Y'),
+            ('1000000002', 'Beta', 'Ben', 'Y', 'N', 'N', 'N', 'N'),
+            ('1000000003', 'Texas', 'Tia', 'Y', 'Y', 'Y', 'N', 'N');
+
+        CREATE TABLE industry_relationships (
+            npi VARCHAR, payment_year INTEGER, paying_company_name VARCHAR,
+            total_amount_received DECIMAL(15,2), payment_count INTEGER,
+            nature_of_payments VARCHAR, top_paying_company_flag BOOLEAN
+        );
+        INSERT INTO industry_relationships VALUES
+            ('1000000001', 2025, 'Company A', 100, 2, 'food', TRUE),
+            ('1000000002', 2025, 'Company B', 50, 1, 'education', TRUE),
+            ('1000000003', 2025, 'Company C', 75, 1, 'food', TRUE);
+
+        CREATE TABLE kol_summary (
+            npi VARCHAR, first_name VARCHAR, last_name VARCHAR, specialty VARCHAR,
+            state VARCHAR, city VARCHAR, unique_companies INTEGER,
+            total_payments_all_years DECIMAL(15,2), total_payment_count INTEGER,
+            most_recent_year INTEGER, top_3_payers VARCHAR, payment_natures VARCHAR,
+            kol_tier VARCHAR
+        );
+        INSERT INTO kol_summary VALUES
+            ('1000000001', 'Ana', 'Alpha', 'Cardiology', 'CA', 'Los Angeles',
+             1, 100, 2, 2025, 'Company A', 'food', 'emerging'),
+            ('1000000003', 'Tia', 'Texas', 'Cardiology', 'TX', 'Austin',
+             1, 75, 1, 2025, 'Company C', 'food', 'emerging');
+
+        CREATE TABLE nppes_radar_events (
+            event_id VARCHAR, npi VARCHAR, event_type VARCHAR, effective_date DATE,
+            detected_at TIMESTAMPTZ, source_release_id VARCHAR,
+            source_data_period VARCHAR, old_zip5 VARCHAR, new_zip5 VARCHAR,
+            old_primary_taxonomy_code VARCHAR, new_primary_taxonomy_code VARCHAR,
+            source_last_updated_date DATE, deactivation_date DATE, reactivation_date DATE
+        );
+        INSERT INTO nppes_radar_events VALUES
+            ('event1', '1000000001', 'practice_location_changed', '2026-07-01', NOW(),
+             'rel1', '2026-07', '90002', '90001', NULL, NULL, '2026-07-01', NULL, NULL),
+            ('event2', '1000000003', 'newly_enumerated', '2026-07-01', NOW(),
+             'rel1', '2026-07', NULL, '73301', NULL, '207RC0000X', '2026-07-01', NULL, NULL);
+
+        CREATE TABLE raw_reassignment (
+            "Individual NPI" VARCHAR, "Individual State Code" VARCHAR,
+            "Group PAC ID" VARCHAR, source_only_field VARCHAR
+        );
+        INSERT INTO raw_reassignment VALUES
+            ('1000000001', 'CA', 'PAC1', 'keep'),
+            ('1000000003', 'TX', 'PAC3', 'exclude');
+
+        CREATE TABLE raw_part_d_by_provider (
+            PRSCRBR_NPI VARCHAR, Prscrbr_State_Abrvtn VARCHAR,
+            Tot_Clms INTEGER, source_only_field VARCHAR
+        );
+        INSERT INTO raw_part_d_by_provider VALUES
+            ('1000000001', 'CA', 10, 'keep'), ('1000000003', 'TX', 7, 'exclude');
+
+        CREATE TABLE raw_part_d_by_provider_and_drug (
+            Prscrbr_NPI VARCHAR, Prscrbr_State_Abrvtn VARCHAR,
+            Gnrc_Name VARCHAR, Tot_Clms INTEGER, source_only_field VARCHAR
+        );
+        INSERT INTO raw_part_d_by_provider_and_drug VALUES
+            ('1000000001', 'CA', 'Drug A', 10, 'keep'),
+            ('1000000003', 'TX', 'Drug C', 7, 'exclude');
+
+        CREATE TABLE raw_dme_by_referring_provider (
+            Rfrg_NPI VARCHAR, Rfrg_Prvdr_State_Abrvtn VARCHAR,
+            Tot_Suplr_Clms INTEGER, source_only_field VARCHAR
+        );
+        INSERT INTO raw_dme_by_referring_provider VALUES
+            ('1000000001', 'CA', 5, 'keep'), ('1000000003', 'TX', 2, 'exclude');
+
+        CREATE TABLE raw_order_and_referring (
+            NPI VARCHAR, LAST_NAME VARCHAR, FIRST_NAME VARCHAR, PARTB VARCHAR,
+            DME VARCHAR, HHA VARCHAR, PMD VARCHAR, HOSPICE VARCHAR,
+            source_only_field VARCHAR
+        );
+        INSERT INTO raw_order_and_referring VALUES
+            ('1000000001', 'Alpha', 'Ana', 'Y', 'Y', 'N', 'N', 'Y', 'keep'),
+            ('1000000003', 'Texas', 'Tia', 'Y', 'Y', 'Y', 'N', 'N', 'exclude');
+
+        CREATE TABLE raw_hospital_enrollments (
+            enrollment_id VARCHAR, npi VARCHAR, organization_name VARCHAR,
+            state VARCHAR, source_only_field VARCHAR
+        );
+        INSERT INTO raw_hospital_enrollments VALUES
+            ('H1', '2000000001', 'Alpha Hospital', 'CA', 'keep'),
+            ('H2', '2000000002', 'Texas Hospital', 'TX', 'exclude');
+
+        CREATE TABLE raw_qpp_experience (
+            npi VARCHAR, "practice state or us territory" VARCHAR,
+            "final score" DECIMAL(7,2), source_only_field VARCHAR
+        );
+        INSERT INTO raw_qpp_experience VALUES
+            ('1000000001', 'CA', 90, 'keep'), ('1000000003', 'TX', 80, 'exclude');
+
+        CREATE TABLE raw_pecos_enrollment (
+            NPI VARCHAR, STATE_CD VARCHAR, ENRLMT_ID VARCHAR, source_only_field VARCHAR
+        );
+        INSERT INTO raw_pecos_enrollment VALUES
+            ('1000000001', 'CA', 'E1', 'keep'), ('1000000003', 'TX', 'E3', 'exclude');
+
+        CREATE TABLE raw_open_payments_general (
+            Covered_Recipient_NPI VARCHAR, Recipient_State VARCHAR,
+            Total_Amount_of_Payment_USDollars DECIMAL(15,2),
+            "Applicable_Manufacturer_or_Applicable_GPO_Making_Payment_Country" VARCHAR,
+            "Name_of_Third_Party_Entity_Receiving_Payment_or_Transfer_of_Value" VARCHAR,
+            source_only_field VARCHAR
+        );
+        INSERT INTO raw_open_payments_general VALUES
+            ('1000000001', 'CA', 100, 'US', 'Recipient A', 'keep'),
+            ('1000000003', 'TX', 75, 'US', 'Recipient C', 'exclude');
+
+        CREATE TABLE raw_open_payments_research (
+            Covered_Recipient_NPI VARCHAR, Recipient_State VARCHAR,
+            Principal_Investigator_1_State VARCHAR,
+            Principal_Investigator_2_State VARCHAR,
+            Principal_Investigator_3_State VARCHAR,
+            Principal_Investigator_4_State VARCHAR,
+            Principal_Investigator_5_State VARCHAR,
+            "Applicable_Manufacturer_or_Applicable_GPO_Making_Payment_Country" VARCHAR,
+            source_only_field VARCHAR
+        );
+        INSERT INTO raw_open_payments_research VALUES
+            ('1000000001', 'CA', NULL, NULL, NULL, NULL, NULL, 'US', 'keep'),
+            ('1000000003', 'TX', NULL, NULL, NULL, NULL, NULL, 'US', 'exclude');
+
+        CREATE TABLE raw_open_payments_ownership (
+            Physician_NPI VARCHAR, Recipient_State VARCHAR,
+            Value_of_Interest DECIMAL(15,2),
+            "Applicable_Manufacturer_or_Applicable_GPO_Making_Payment_Country" VARCHAR,
+            source_only_field VARCHAR
+        );
+        INSERT INTO raw_open_payments_ownership VALUES
+            ('1000000001', 'CA', 1000, 'US', 'keep'),
+            ('1000000003', 'TX', 500, 'US', 'exclude');
         """
     )
     connection.close()
@@ -187,6 +377,14 @@ def test_profile_preserves_grain_and_source_detail(tmp_path: Path) -> None:
     assert counts[("reporting", "fact_provider_metrics_year")] == 2
     assert counts[("reporting", "fact_provider_quality_year")] == 1
     assert counts[("reporting", "bridge_provider_hospital")] == 1
+    assert counts[("reporting", "bridge_provider_practice")] == 2
+    assert counts[("reporting", "bridge_provider_taxonomy")] == 3
+    assert counts[("reporting", "fact_provider_drug_year")] == 2
+    assert counts[("reporting", "dim_provider_order_referring")] == 2
+    assert counts[("reporting", "fact_provider_industry_payment_year")] == 2
+    assert counts[("reporting", "provider_industry_summary")] == 1
+    assert counts[("reporting", "fact_provider_radar_event")] == 1
+    assert counts[("reporting", "dim_provider_radar_state")] == 2
     assert counts[("source_detail", "source_nppes_provider")] == 2
     assert counts[("source_detail", "source_dac_clinician_location")] == 2
     assert counts[("source_detail", "source_medicare_provider_year")] == 2
@@ -251,8 +449,33 @@ def test_source_detail_contracts_are_explicitly_scoped() -> None:
         "raw_nppes",
         "raw_dac_national",
         "raw_physician_by_provider",
+        "raw_reassignment",
+        "raw_part_d_by_provider",
+        "raw_part_d_by_provider_and_drug",
+        "raw_dme_by_referring_provider",
+        "raw_order_and_referring",
+        "raw_hospital_enrollments",
+        "raw_qpp_experience",
+        "raw_pecos_enrollment",
+        "raw_open_payments_general",
+        "raw_open_payments_research",
+        "raw_open_payments_ownership",
     }
     assert all("CA" in model.scope_rule for model in SOURCE_DETAIL_MODELS)
+
+
+def test_source_detail_aliases_preserve_upstream_lineage() -> None:
+    general = next(
+        model for model in SOURCE_DETAIL_MODELS
+        if model.name == "source_open_payments_general"
+    )
+    assert general.source_column("payment_maker_country") == (
+        "Applicable_Manufacturer_or_Applicable_GPO_Making_Payment_Country"
+    )
+    assert general.source_column("third_party_recipient_name") == (
+        "Name_of_Third_Party_Entity_Receiving_Payment_or_Transfer_of_Value"
+    )
+    assert general.source_column("Covered_Recipient_NPI") == "Covered_Recipient_NPI"
 
 
 def test_release_resolution_requires_active_checksum_matched_release(
@@ -423,6 +646,29 @@ def test_postgres_publish_keeps_curated_and_source_layers_queryable(
                 "ORDER BY npi LIMIT 1"
             )
             assert cursor.fetchone()[0] == "keep"
+            cursor.execute("SELECT COUNT(*) FROM reporting.bridge_provider_practice")
+            assert cursor.fetchone()[0] == 2
+            cursor.execute("SELECT COUNT(*) FROM reporting.bridge_provider_taxonomy")
+            assert cursor.fetchone()[0] == 3
+            cursor.execute("SELECT COUNT(*) FROM reporting.fact_provider_drug_year")
+            assert cursor.fetchone()[0] == 2
+            cursor.execute(
+                "SELECT payment_maker_country, third_party_recipient_name "
+                "FROM source_detail.source_open_payments_general"
+            )
+            assert cursor.fetchone() == ("US", "Recipient A")
+            cursor.execute(
+                "SELECT source_column FROM control.column_lineage "
+                "WHERE snapshot_id = %s AND model_name = %s AND model_column = %s",
+                (
+                    result.snapshot_id,
+                    "source_open_payments_general",
+                    "payment_maker_country",
+                ),
+            )
+            assert cursor.fetchone()[0] == (
+                "Applicable_Manufacturer_or_Applicable_GPO_Making_Payment_Country"
+            )
             cursor.execute(
                 "SELECT COUNT(*) FROM control.column_lineage "
                 "WHERE snapshot_id = %s AND layer = 'reporting'",
