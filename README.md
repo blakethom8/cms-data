@@ -19,6 +19,12 @@ see [`docs/data-platform-operating-model.md`](docs/data-platform-operating-model
 examples below describe planned directories or commands; verify operational behavior against the
 current `pipeline/`, `schema/`, and `api/` code.
 
+For an accessible, presentation-ready explanation of the current platform, see the
+**[Provider Intelligence Data Platform overview](docs/platform-overview.md)** or its
+**[styled PDF edition](output/pdf/cms-data-platform-overview.pdf)**. It summarizes the curated data
+marts, all 16 registered sources, update cadence, system architecture, release flow, and production
+rollback model.
+
 The product and data contract for weekly NPPES change detection is documented in
 [`docs/new-provider-radar.md`](docs/new-provider-radar.md).
 
