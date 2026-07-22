@@ -1,5 +1,7 @@
 # Provider Data Platform Operating Model
 
+> **Last reviewed: 2026-07-22** · **Status: canonical operating policy**
+
 ## Decision
 
 This repository is the canonical public-data plane for Provider Search. It owns source discovery,
@@ -43,6 +45,44 @@ Calendar timers are polling opportunities, not proof that a new file exists.
 
 Official discovery should use `https://data.cms.gov/data.json`, the NPPES download index, the Open
 Payments dataset-download index, and the AACT downloads page. Do not hard-code dated archive URLs.
+
+### Operational refresh gates
+
+A timer may discover metadata, but it must never start a refresh merely because a calendar boundary
+was reached. Every source must pass these common gates before it can enter a production candidate:
+
+1. **Version gate:** primary-publisher discovery returns a parseable version different from the
+   deployment-scoped production manifest. `unknown`, `unavailable`, and `discovery_error` require
+   operator review and never authorize acquisition.
+2. **Acquisition gate:** the immutable source run records its publisher URL and version, source
+   period, retrieval time, byte size, SHA-256, schema fingerprint, code commit, and row counts.
+3. **Validation gate:** required columns, period semantics, row bounds, identifiers, uniqueness,
+   referential integrity, and source-specific invariants pass against the staged artifact.
+4. **Comparison gate:** a complete candidate DuckDB is compared with the selected production
+   baseline. Only intended tables may change, and the Provider Search API contract suite must pass.
+5. **Promotion gate:** the candidate has immutable code, runtime, DuckDB, and source-manifest
+   evidence; a verified predecessor remains available; selection changes only `release-current`;
+   and the bounded smoke/automatic rollback path is ready.
+
+Source-specific gates add to, and never replace, those common gates:
+
+| Source family | Required source-specific gate before candidate build |
+| --- | --- |
+| CMS annual utilization, Part D, DME, and QPP | Stable CMS dataset UUID resolves to a new complete CSV resource; calendar-year/performance-year semantics parse; required tables retain schema and bounded row-count deltas. HCPCS Level I content remains blocked unless the licensing gate is satisfied. |
+| CMS Order and Referring | Snapshot interval advances; NPI shape and eligibility-domain checks pass; removal/addition deltas are reviewed because absence affects ordering/referring eligibility. |
+| CMS Hospital Enrollments | Month-end period advances; the exact canonical header, source parity, hospital NPI/name rules, ambiguity exclusions, and affiliation comparison pass. |
+| CMS Revalidation Group Reassignment | Month-end period advances; practitioner/group NPI shape, reassignment uniqueness, and practice/affiliation deltas pass without treating reassignment as asserted hospital privileges. |
+| CMS PECOS Public Provider Enrollment | Quarter-end period advances; enrollment identifiers and provider-type distributions pass bounded-delta review. |
+| NPPES monthly V2 | A newer full V2 publisher release is present; load into a fresh staging candidate; reconcile all NPIs and prior weekly events; validate NPI uniqueness, entity/taxonomy/location coverage, deletions/deactivations, and representative API/Radar queries before it becomes the new baseline. |
+| NPPES weekly incremental V2 | The inclusive filename period follows the installed monthly/weekly watermark without an unexplained gap or overlap; apply idempotently to a fresh copy of the monthly baseline; validate changed NPIs and event counts. A weekly file never substitutes for the next monthly full reconciliation. |
+| NPPES Registry API | Use only for daily targeted verification of already selected NPIs and confidence labeling. It is not a bulk source, does not advance the installed monthly/weekly version, and must not trigger a production warehouse promotion by itself. |
+| Open Payments general, research, and ownership | Official index exposes a newer program-year/correction release; category and program year parse explicitly; duplicate/payment/provider identifiers and category row deltas pass. Preserve the three category versions independently while validating their shared publication cycle. |
+| AACT / ClinicalTrials.gov | Export date advances monotonically; restore succeeds in isolated staging; required AACT tables, study identifiers, source date, counts, research endpoints, and clinical-trials version checks pass. |
+
+NPPES therefore operates as weekly change detection plus monthly authoritative reconciliation, with
+daily Registry API verification only for targeted product evidence. Weekly increments should be
+processed in publisher-period order; a missing interval blocks the incremental chain until it is
+resolved or the next full monthly snapshot establishes a new baseline.
 
 The first discovery implementation lives in `pipeline/source_registry.py`,
 `pipeline/discovery.py`, and `pipeline/data_platform.py`. It makes these concrete choices:
@@ -105,17 +145,29 @@ The status command only reads this file. A manifest proves an installed version 
 passed, promotion state is active, retrieval is recorded, and `release_id` equals
 `active_release_id`; file modification time is never provenance.
 
-## First Immutable Acquisition
+Legacy files that predate this manifest contract may be assessed with
+`python -m pipeline.provenance_backfill`. A retrospective record is generated only when an explicit
+evidence document identifies the exact publisher version and URL, retained artifact size and
+SHA-256, immutable target-warehouse SHA-256, and exact read-only table counts. AACT additionally
+requires a read-only PostgreSQL connection. The evidence document plus any existing selected
+manifest must account for every registry source; sources that cannot be proved are recorded as
+`unresolved` or `not_installed` and do not receive an active manifest. The command writes candidate
+evidence only and never changes a warehouse, deployment pointer, or selected deployment evidence.
 
-`pipeline/acquisition.py` makes lifecycle steps 2 and 3 concrete for CMS Hospital Enrollments. The
-`pipeline.data_platform acquire cms_hospital_enrollments` command:
+## Immutable Acquisition and Complete Candidate Builds
+
+`pipeline/acquisition.py` and `pipeline/archive_acquisition.py` make lifecycle steps 2 and 3
+concrete for every registered source. CMS CSVs use source-specific column, identifier, encoding,
+row, and byte contracts. NPPES, Open Payments, and AACT archives use publisher-discovered URLs and
+enforce safe member paths, required member patterns, CRC checks, encryption rejection, expansion
+ceilings, and member-list fingerprints. The
+`pipeline.data_platform acquire <source-id>` command:
 
 - resolves the current CSV through live `data.json` discovery instead of a dated URL in code;
 - accepts only HTTPS artifacts on `data.cms.gov` and rejects cross-host redirects;
-- enforces a 100 MiB default transfer ceiling while streaming to `source.csv.partial`;
+- enforces a source-specific transfer ceiling while streaming to a `.partial` artifact;
 - atomically renames the artifact only after the response completes and the file is flushed;
-- validates a non-empty UTF-8 or Windows-1252 CSV, records the detected encoding, and checks unique
-  column names, required enrollment/NPI/organization fields, exact row widths, and ten-digit NPIs;
+- validates the source-specific CSV or archive contract and records its encoding or archive shape;
 - records actual bytes, SHA-256, an ordered-header schema fingerprint, source row count, discovery and
   retrieval timestamps, source period, publisher release/version, and Git commit; and
 - writes a per-run manifest plus the local versioned manifest store with validation state `passed`
@@ -126,6 +178,14 @@ overwritten. Failed retrieval or validation runs retain a safe failed manifest a
 warehouse unchanged. `--dry-run` performs discovery and path planning without creating the data
 root. Fixture metadata is deliberately accepted only with `--dry-run`, so fixture-derived publisher
 versions cannot be acquired as promotion candidates.
+
+`build-platform-release --environment staging` requires exactly the ten CMS, two NPPES, and three
+Open Payments runs. It copies a checksum-verified baseline to a new candidate, strictly replaces raw
+tables, rebuilds derived data, applies monthly NPPES before the weekly overlay, rebuilds Radar and
+Open Payments summaries, and records exact counts for every table required by production smoke.
+`prepare-aact-release --environment staging` revalidates the AACT archive and seals its PostgreSQL
+custom dump and data dictionary as a separate immutable restore artifact. Neither operation opens or
+overwrites the selected production DuckDB.
 
 ## Production Model
 
@@ -183,9 +243,54 @@ references this staging root, and no production database pointer or service was 
   journal blocks further transitions for operator review.
 
 Warehouse release records live in `data/warehouse-releases.json`, per-release evidence lives beside
-each immutable database, and transition evidence lives in `data/promotion-journal.json`. Production
-is not an accepted CLI environment. A production promotion command, systemd integration, and active
-service change remain a separate approval-gated milestone.
+each immutable database, and transition evidence lives in `data/promotion-journal.json`. Those
+records remain staging-specific; production state is not written back into a source manifest or
+guessed from the staging pointer.
+
+`pipeline.production` implements the independent production-serving control plane. Its versioned
+deployment ledger records code, warehouse, and Python-runtime targets and fingerprints; its separate
+journal makes a pending or interrupted pointer transaction explicit. Bootstrap captures an immutable
+legacy rollback release. Prepare validates a clean, read-only Git checkout, the warehouse release and
+comparison evidence, the complete database checksum, and the runtime package fingerprint without
+changing the serving selector. Activate and rollback atomically replace one `release-current` bundle
+pointer under one lock, restore the complete prior ledger and selector on a handled failure, and never
+open DuckDB. `pipeline.production_smoke` records bounded authenticated API and process-identity checks
+before a release may be marked verified. `pipeline.production_cutover` owns the one restart and
+automatically restarts and re-verifies the predecessor after a candidate failure.
+
+The checked-in systemd definition under `deploy/systemd/` uses only the selected production bundle and
+refuses startup while a transition sentinel or blocking journal event exists. It reads control logic
+from a separate immutable operations package so rollback does not depend on candidate code, and it
+loads secrets only from stable protected environment files. Staging and production therefore have
+independent active states and rollback histories. This establishes reproducible serving and
+promotion; refresh remains operator-triggered, and future timers must still build and validate in
+staging before an explicitly approved production promotion.
+
+`deploy/systemd/cms-data-status.timer` schedules live publisher-metadata discovery daily at 06:15
+UTC with a randomized delay. Its oneshot validates the production control plane first, runs from the
+immutable operations package with the selected runtime, and reads provenance only from
+`production/evidence/<selected-deployment-id>/source-manifests.json`. The selected deployment ID is
+derived from `release-current`; there is no second production selector. If that immutable snapshot
+is absent, installed provenance remains `unknown`. Output and semantic exit status are retained by
+the systemd journal: `0` is current, `1` is stale/unknown, and `2` is discovery or control-plane
+failure. This monitor downloads no dataset, opens no DuckDB file, and never launches a refresh.
+
+Before activating every future candidate, write a root-owned `root:dataops` mode `0440`
+source-manifest snapshot into a root-owned `root:dataops` mode `0750` deployment evidence
+directory. It must contain only validated active source
+versions actually present in the candidate warehouse. Copying the mutable staging manifest without
+reconciling it to the candidate is prohibited. Rollback automatically selects the predecessor's
+deployment-scoped snapshot because it restores the complete bundle pointer.
+
+The name/state affiliation rule is intentionally incomplete. The current `practice_locations`
+snapshot has no populated city or ZIP values, so it cannot safely disambiguate a health system with
+multiple hospital NPIs in one state. Those keys remain excluded until a higher-quality linkage key
+is acquired and separately validated. The API and downstream product must present these rows as
+inferred affiliations with their confidence level, not as publisher-asserted clinician privileges.
+
+DuckDB is pinned to `1.4.4`, matching the runtime already used by the Hetzner API and the staging
+release rehearsal. Candidate builds record that version so runtime drift is visible in release
+evidence.
 
 The name/state affiliation rule is intentionally incomplete. The current `practice_locations`
 snapshot has no populated city or ZIP values, so it cannot safely disambiguate a health system with

@@ -14,13 +14,18 @@ from enum import Enum
 from pathlib import Path
 
 from .acquisition import (
-    DEFAULT_MAX_DOWNLOAD_BYTES,
     SUPPORTED_ACQUISITION_SOURCES,
     AcquisitionError,
     acquire_release,
     make_run_id,
     release_id,
 )
+from .archive_acquisition import (
+    SUPPORTED_ARCHIVE_ACQUISITION_SOURCES,
+    acquire_archive_release,
+)
+from .aact_releases import prepare_aact_release
+from .aact_staging import stage_aact_database, write_stage_evidence
 from .discovery import (
     DiscoveryResult,
     DiscoveryState,
@@ -33,6 +38,8 @@ from .manifests import ManifestDocument, ManifestStore
 from .releases import (
     STAGING_ENVIRONMENT,
     ReleaseError,
+    build_full_cms_warehouse_release,
+    build_full_platform_warehouse_release,
     build_warehouse_release,
     compare_warehouse_release,
     promote_staging_release,
@@ -284,7 +291,12 @@ def _parser() -> argparse.ArgumentParser:
         "acquire",
         help="Discover and immutably acquire a supported source into staging",
     )
-    acquire.add_argument("source_id", choices=sorted(SUPPORTED_ACQUISITION_SOURCES))
+    acquire.add_argument(
+        "source_id",
+        choices=sorted(
+            SUPPORTED_ACQUISITION_SOURCES | SUPPORTED_ARCHIVE_ACQUISITION_SOURCES
+        ),
+    )
     acquire.add_argument(
         "--data-root",
         type=Path,
@@ -313,8 +325,7 @@ def _parser() -> argparse.ArgumentParser:
     acquire.add_argument(
         "--max-bytes",
         type=int,
-        default=DEFAULT_MAX_DOWNLOAD_BYTES,
-        help="Hard transfer limit; defaults to 100 MiB",
+        help="Optional hard transfer limit; defaults to the source-specific safety ceiling",
     )
     build = subparsers.add_parser(
         "build-release",
@@ -329,6 +340,57 @@ def _parser() -> argparse.ArgumentParser:
         "--environment", choices=[STAGING_ENVIRONMENT], required=True
     )
     build.add_argument("--json", action="store_true")
+    build_cms = subparsers.add_parser(
+        "build-cms-release",
+        help="Build all ten validated CMS source runs into one staging candidate",
+    )
+    build_cms.add_argument("--source-run-id", action="append", required=True)
+    build_cms.add_argument("--backup-manifest", required=True, type=Path)
+    build_cms.add_argument(
+        "--data-root", type=Path, default=DEFAULT_MANIFEST_PATH.parent
+    )
+    build_cms.add_argument(
+        "--environment", choices=[STAGING_ENVIRONMENT], required=True
+    )
+    build_cms.add_argument("--json", action="store_true")
+    build_platform = subparsers.add_parser(
+        "build-platform-release",
+        help="Build all CMS, NPPES, and Open Payments runs into one staging candidate",
+    )
+    build_platform.add_argument("--source-run-id", action="append", required=True)
+    build_platform.add_argument("--backup-manifest", required=True, type=Path)
+    build_platform.add_argument(
+        "--data-root", type=Path, default=DEFAULT_MANIFEST_PATH.parent
+    )
+    build_platform.add_argument(
+        "--environment", choices=[STAGING_ENVIRONMENT], required=True
+    )
+    build_platform.add_argument("--json", action="store_true")
+    prepare_aact = subparsers.add_parser(
+        "prepare-aact-release",
+        help="Prepare a sealed AACT PostgreSQL restore artifact in staging",
+    )
+    prepare_aact.add_argument("--source-run-id", required=True)
+    prepare_aact.add_argument("--output-root", required=True, type=Path)
+    prepare_aact.add_argument(
+        "--data-root", type=Path, default=DEFAULT_MANIFEST_PATH.parent
+    )
+    prepare_aact.add_argument(
+        "--environment", choices=[STAGING_ENVIRONMENT], required=True
+    )
+    prepare_aact.add_argument("--json", action="store_true")
+    stage_aact = subparsers.add_parser(
+        "stage-aact-database",
+        help="Restore a sealed AACT artifact into a new validated PostgreSQL candidate",
+    )
+    stage_aact.add_argument("--release-manifest", required=True, type=Path)
+    stage_aact.add_argument("--restore-log", required=True, type=Path)
+    stage_aact.add_argument("--evidence", required=True, type=Path)
+    stage_aact.add_argument("--minimum-study-count", type=int, default=500_000)
+    stage_aact.add_argument(
+        "--environment", choices=[STAGING_ENVIRONMENT], required=True
+    )
+    stage_aact.add_argument("--json", action="store_true")
     compare = subparsers.add_parser(
         "compare-release",
         help="Compare a validated staging candidate with its immutable baseline",
@@ -407,7 +469,16 @@ def _render_acquisition(payload: dict, *, dry_run: bool) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
-    if args.command in {"build-release", "compare-release", "promote", "rollback"}:
+    if args.command in {
+        "build-release",
+        "build-cms-release",
+        "build-platform-release",
+        "prepare-aact-release",
+        "stage-aact-database",
+        "compare-release",
+        "promote",
+        "rollback",
+    }:
         try:
             if args.command == "build-release":
                 payload = build_warehouse_release(
@@ -416,6 +487,40 @@ def main(argv: list[str] | None = None) -> int:
                     backup_manifest_path=args.backup_manifest,
                 ).to_dict()
                 heading = "Staging warehouse release built"
+            elif args.command == "build-cms-release":
+                payload = build_full_cms_warehouse_release(
+                    data_root=args.data_root,
+                    source_run_ids=tuple(args.source_run_id),
+                    backup_manifest_path=args.backup_manifest,
+                ).to_dict()
+                heading = "Full CMS staging warehouse release built"
+            elif args.command == "build-platform-release":
+                payload = build_full_platform_warehouse_release(
+                    data_root=args.data_root,
+                    source_run_ids=tuple(args.source_run_id),
+                    backup_manifest_path=args.backup_manifest,
+                ).to_dict()
+                heading = "Full platform staging warehouse release built"
+            elif args.command == "prepare-aact-release":
+                payload = prepare_aact_release(
+                    data_root=args.data_root,
+                    source_run_id=args.source_run_id,
+                    output_root=args.output_root,
+                ).to_dict()
+                heading = "AACT staging restore release prepared"
+            elif args.command == "stage-aact-database":
+                result = stage_aact_database(
+                    release_manifest_path=args.release_manifest,
+                    restore_log_path=args.restore_log,
+                    minimum_study_count=args.minimum_study_count,
+                )
+                write_stage_evidence(args.evidence, result)
+                payload = {
+                    "result": result.to_dict(),
+                    "evidence": str(args.evidence),
+                    "restore_log": str(args.restore_log),
+                }
+                heading = "AACT PostgreSQL candidate restored and validated"
             elif args.command == "compare-release":
                 payload = compare_warehouse_release(
                     data_root=args.data_root,
@@ -508,7 +613,12 @@ def main(argv: list[str] | None = None) -> int:
             return EXIT_HEALTHY
 
         try:
-            result = acquire_release(
+            acquire_function = (
+                acquire_archive_release
+                if release.source_id in SUPPORTED_ARCHIVE_ACQUISITION_SOURCES
+                else acquire_release
+            )
+            result = acquire_function(
                 release,
                 discovery_timestamp=discovery.discovered_at,
                 data_root=args.data_root,

@@ -27,7 +27,7 @@ def build_core_providers(con: duckdb.DuckDBPyConnection, data_year: int):
             pecos_enrollment_id, multiple_npi_flag, data_year
         )
         SELECT
-            p.rndrng_npi,
+            CAST(p.rndrng_npi AS VARCHAR),
             p.rndrng_prvdr_last_org_name,
             p.rndrng_prvdr_first_name,
             p.rndrng_prvdr_mi,
@@ -46,7 +46,16 @@ def build_core_providers(con: duckdb.DuckDBPyConnection, data_year: int):
             e.multiple_npi_flag,
             ?
         FROM raw_physician_by_provider p
-        LEFT JOIN raw_pecos_enrollment e ON p.rndrng_npi = e.npi
+        LEFT JOIN (
+            SELECT * EXCLUDE (preferred)
+            FROM (
+                SELECT *, row_number() OVER (
+                    PARTITION BY npi ORDER BY enrlmt_id NULLS LAST
+                ) AS preferred
+                FROM raw_pecos_enrollment
+            )
+            WHERE preferred = 1
+        ) e ON p.rndrng_npi = e.npi
         WHERE p.rndrng_prvdr_ent_cd = 'I'
     """, [data_year])
 
@@ -86,7 +95,7 @@ def build_utilization_metrics(con: duckdb.DuckDBPyConnection, data_year: int):
             cc_stroke_tia_pct
         )
         SELECT
-            p.rndrng_npi,
+            CAST(p.rndrng_npi AS VARCHAR),
             ?,
             -- Part B
             TRY_CAST(p.tot_hcpcs_cds AS INTEGER),
@@ -153,7 +162,7 @@ def build_practice_locations(con: duckdb.DuckDBPyConnection, data_year: int):
             group_state, group_practice_size, state, data_year
         )
         SELECT
-            r."individual npi",
+            CAST(r."individual npi" AS VARCHAR),
             r."group pac id",
             r."group enrollment id",
             r."group legal business name",
@@ -162,7 +171,9 @@ def build_practice_locations(con: duckdb.DuckDBPyConnection, data_year: int):
             r."individual state code",
             ?
         FROM raw_reassignment r
-        WHERE r."individual npi" IN (SELECT npi FROM core_providers)
+        WHERE CAST(r."individual npi" AS VARCHAR) IN (
+            SELECT npi FROM core_providers
+        )
     """, [data_year])
 
     count = con.execute("SELECT COUNT(*) FROM practice_locations WHERE data_year = ?", [data_year]).fetchone()[0]
@@ -207,7 +218,7 @@ def build_hospital_affiliations(con: duckdb.DuckDBPyConnection, data_year: int):
             affiliation_source, confidence_level, group_pac_id, data_year
         )
         SELECT DISTINCT
-            r."individual npi" AS npi,
+            CAST(r."individual npi" AS VARCHAR) AS npi,
             h.npi AS hospital_npi,
             h.ccn AS hospital_ccn,
             h."organization name" AS hospital_name,
@@ -231,7 +242,9 @@ def build_hospital_affiliations(con: duckdb.DuckDBPyConnection, data_year: int):
         INNER JOIN raw_hospital_enrollments h
             ON r."group legal business name" = h."organization name"
             AND r."group state code" = h.state
-        WHERE r."individual npi" IN (SELECT npi FROM core_providers)
+        WHERE CAST(r."individual npi" AS VARCHAR) IN (
+            SELECT npi FROM core_providers
+        )
     """, [data_year])
 
     count = con.execute("SELECT COUNT(*) FROM hospital_affiliations WHERE data_year = ?", [data_year]).fetchone()[0]
@@ -257,18 +270,23 @@ def build_provider_quality_scores(con: duckdb.DuckDBPyConnection, data_year: int
             data_year
         )
         SELECT
-            q.npi,
+            CAST(q.npi AS VARCHAR),
             q."practice state or us territory",
             q."practice size",
             q."clinician type",
             q."clinician specialty",
             q."years in medicare",
             q."participation option",
-            CASE WHEN LOWER(q."small practice status") = 'y' THEN TRUE ELSE FALSE END,
-            CASE WHEN LOWER(q."rural status") = 'y' THEN TRUE ELSE FALSE END,
-            CASE WHEN LOWER(q."health professional shortage area status") = 'y' THEN TRUE ELSE FALSE END,
-            CASE WHEN LOWER(q."hospital-based status") = 'y' THEN TRUE ELSE FALSE END,
-            CASE WHEN LOWER(q."facility-based status") = 'y' THEN TRUE ELSE FALSE END,
+            lower(trim(CAST(q."small practice status" AS VARCHAR)))
+                IN ('y', 'yes', 'true', '1'),
+            lower(trim(CAST(q."rural status" AS VARCHAR)))
+                IN ('y', 'yes', 'true', '1'),
+            lower(trim(CAST(q."health professional shortage area status" AS VARCHAR)))
+                IN ('y', 'yes', 'true', '1'),
+            lower(trim(CAST(q."hospital-based status" AS VARCHAR)))
+                IN ('y', 'yes', 'true', '1'),
+            lower(trim(CAST(q."facility-based status" AS VARCHAR)))
+                IN ('y', 'yes', 'true', '1'),
             TRY_CAST(q."dual eligibility ratio" AS DECIMAL(5,3)),
             TRY_CAST(q."final score" AS DECIMAL(7,2)),
             TRY_CAST(q."payment adjustment percentage" AS DECIMAL(7,4)),
@@ -283,7 +301,13 @@ def build_provider_quality_scores(con: duckdb.DuckDBPyConnection, data_year: int
             TRY_CAST(q."cost category weight" AS DECIMAL(5,2)),
             ?
         FROM raw_qpp_experience q
-        WHERE q.npi IN (SELECT npi FROM core_providers)
+        WHERE CAST(q.npi AS VARCHAR) IN (SELECT npi FROM core_providers)
+          AND length(trim(CAST(q.npi AS VARCHAR))) = 10
+        QUALIFY row_number() OVER (
+            PARTITION BY CAST(q.npi AS VARCHAR)
+            ORDER BY TRY_CAST(q."final score" AS DECIMAL(7,2)) DESC NULLS LAST,
+                     q."provider key" NULLS LAST
+        ) = 1
     """, [data_year])
 
     count = con.execute("SELECT COUNT(*) FROM provider_quality_scores WHERE data_year = ?", [data_year]).fetchone()[0]
@@ -305,7 +329,7 @@ def build_provider_service_detail(con: duckdb.DuckDBPyConnection, data_year: int
             avg_medicare_standardized, data_year
         )
         SELECT
-            s.rndrng_npi,
+            CAST(s.rndrng_npi AS VARCHAR),
             s.hcpcs_cd,
             s.hcpcs_desc,
             s.hcpcs_drug_ind,
@@ -320,11 +344,53 @@ def build_provider_service_detail(con: duckdb.DuckDBPyConnection, data_year: int
             ?
         FROM raw_physician_by_provider_and_service s
         WHERE s.rndrng_prvdr_ent_cd = 'I'
-          AND s.rndrng_npi IN (SELECT npi FROM core_providers)
+          AND CAST(s.rndrng_npi AS VARCHAR) IN (SELECT npi FROM core_providers)
+        QUALIFY row_number() OVER (
+            PARTITION BY CAST(s.rndrng_npi AS VARCHAR), s.hcpcs_cd, s.place_of_srvc
+            ORDER BY TRY_CAST(s.tot_srvcs AS DECIMAL(15,2)) DESC NULLS LAST
+        ) = 1
     """, [data_year])
 
     count = con.execute("SELECT COUNT(*) FROM provider_service_detail WHERE data_year = ?", [data_year]).fetchone()[0]
     logger.info("provider_service_detail: %d rows loaded", count)
+    return count
+
+
+def build_provider_drug_detail(con: duckdb.DuckDBPyConnection, data_year: int):
+    """Populate provider_drug_detail with one row per NPI and generic drug."""
+    logger.info("Building provider_drug_detail (data_year=%d)", data_year)
+    con.execute("DELETE FROM provider_drug_detail WHERE data_year = ?", [data_year])
+    con.execute(
+        """
+        INSERT INTO provider_drug_detail (
+            npi, brand_name, generic_name, tot_claims, tot_30day_fills,
+            tot_day_supply, tot_drug_cost, tot_beneficiaries, ge65_tot_claims,
+            ge65_tot_drug_cost, ge65_tot_benes, data_year
+        )
+        SELECT
+            CAST(d.prscrbr_npi AS VARCHAR),
+            min(d.brnd_name),
+            trim(d.gnrc_name),
+            sum(TRY_CAST(d.tot_clms AS INTEGER)),
+            sum(TRY_CAST(d.tot_30day_fills AS DECIMAL(15,2))),
+            sum(TRY_CAST(d.tot_day_suply AS INTEGER)),
+            sum(TRY_CAST(d.tot_drug_cst AS DECIMAL(15,2))),
+            sum(TRY_CAST(d.tot_benes AS INTEGER)),
+            sum(TRY_CAST(d.ge65_tot_clms AS INTEGER)),
+            sum(TRY_CAST(d.ge65_tot_drug_cst AS DECIMAL(15,2))),
+            sum(TRY_CAST(d.ge65_tot_benes AS INTEGER)),
+            ?
+        FROM raw_part_d_by_provider_and_drug d
+        WHERE CAST(d.prscrbr_npi AS VARCHAR) IN (SELECT npi FROM core_providers)
+          AND nullif(trim(d.gnrc_name), '') IS NOT NULL
+        GROUP BY CAST(d.prscrbr_npi AS VARCHAR), trim(d.gnrc_name)
+        """,
+        [data_year],
+    )
+    count = con.execute(
+        "SELECT COUNT(*) FROM provider_drug_detail WHERE data_year = ?", [data_year]
+    ).fetchone()[0]
+    logger.info("provider_drug_detail: %d rows loaded", count)
     return count
 
 
@@ -337,7 +403,7 @@ def build_order_referring_eligibility(con: duckdb.DuckDBPyConnection):
     con.execute("""
         INSERT INTO order_referring_eligibility (npi, last_name, first_name, partb, dme, hha, pmd, hospice)
         SELECT
-            o.npi,
+            CAST(o.npi AS VARCHAR),
             o.last_name,
             o.first_name,
             o.partb,
@@ -346,7 +412,10 @@ def build_order_referring_eligibility(con: duckdb.DuckDBPyConnection):
             o.pmd,
             o.hospice
         FROM raw_order_and_referring o
-        WHERE o.npi IN (SELECT npi FROM core_providers)
+        WHERE CAST(o.npi AS VARCHAR) IN (SELECT npi FROM core_providers)
+        QUALIFY row_number() OVER (
+            PARTITION BY CAST(o.npi AS VARCHAR) ORDER BY o.npi
+        ) = 1
     """)
 
     count = con.execute("SELECT COUNT(*) FROM order_referring_eligibility").fetchone()[0]
@@ -354,7 +423,14 @@ def build_order_referring_eligibility(con: duckdb.DuckDBPyConnection):
     return count
 
 
-def transform_all(con: duckdb.DuckDBPyConnection, data_year: int) -> dict[str, int]:
+def transform_all(
+    con: duckdb.DuckDBPyConnection,
+    data_year: int,
+    *,
+    practice_year: int | None = None,
+    quality_year: int | None = None,
+    include_hospital_affiliations: bool = True,
+) -> dict[str, int]:
     """Run all transforms in dependency order. Returns {table: row_count}."""
     results = {}
 
@@ -363,16 +439,50 @@ def transform_all(con: duckdb.DuckDBPyConnection, data_year: int) -> dict[str, i
 
     # 2. Tables that depend on core_providers (can conceptually run in parallel)
     results["utilization_metrics"] = build_utilization_metrics(con, data_year)
-    results["practice_locations"] = build_practice_locations(con, data_year)
-    results["hospital_affiliations"] = build_hospital_affiliations(con, data_year)
-    results["provider_quality_scores"] = build_provider_quality_scores(con, data_year)
+    results["practice_locations"] = build_practice_locations(
+        con, practice_year or data_year
+    )
+    if include_hospital_affiliations:
+        results["hospital_affiliations"] = build_hospital_affiliations(
+            con, practice_year or data_year
+        )
+    results["provider_quality_scores"] = build_provider_quality_scores(
+        con, quality_year or data_year
+    )
     results["order_referring_eligibility"] = build_order_referring_eligibility(con)
 
     # 3. Service detail (large table, run last)
     results["provider_service_detail"] = build_provider_service_detail(con, data_year)
+    results["provider_drug_detail"] = build_provider_drug_detail(con, data_year)
 
     # 4. Dedup (must run after core_providers + utilization_metrics)
     from .dedup import flag_group_only_billers
     results["group_only_flagged"] = flag_group_only_billers(con, data_year)
 
     return results
+
+
+def clear_refresh_targets(
+    con: duckdb.DuckDBPyConnection,
+    *,
+    include_core_providers: bool = True,
+) -> None:
+    """Clear CMS-derived rows in foreign-key-safe order inside a candidate only.
+
+    DuckDB cannot always delete referenced parent rows in the same transaction
+    that deleted their children. Complete release builds therefore clear the
+    dependent tables, commit, and delete ``core_providers`` separately.
+    """
+    for table in (
+        "hospital_affiliations",
+        "practice_locations",
+        "utilization_metrics",
+        "industry_relationships",
+        "provider_service_detail",
+        "provider_drug_detail",
+        "provider_quality_scores",
+        "order_referring_eligibility",
+    ):
+        con.execute(f"DELETE FROM {table}")
+    if include_core_providers:
+        con.execute("DELETE FROM core_providers")

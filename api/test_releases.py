@@ -20,10 +20,14 @@ from pipeline.manifests import (
     ValidationState,
 )
 from pipeline.releases import (
+    FULL_PLATFORM_SMOKE_TABLES,
+    FULL_PLATFORM_WAREHOUSE_SOURCE_IDS,
     HOSPITAL_COLUMN_MAP,
     ReleaseError,
     WAREHOUSE_RELEASE_SCHEMA_VERSION,
     WarehouseReleaseStore,
+    _rebuild_hospital_affiliations,
+    build_full_cms_warehouse_release,
     build_warehouse_release,
     compare_warehouse_release,
     promote_staging_release,
@@ -267,6 +271,19 @@ def test_build_release_copies_baseline_loads_source_and_records_provenance(
     assert per_release["release"] == result.release.to_dict()
 
 
+def test_affiliation_rebuild_returns_the_final_table_count(tmp_path: Path) -> None:
+    _, _, _, result = _build(tmp_path)
+    result.database_path.chmod(0o640)
+    connection = duckdb.connect(str(result.database_path))
+    try:
+        counts = _rebuild_hospital_affiliations(connection, data_year=2099)
+    finally:
+        connection.close()
+        result.database_path.chmod(0o440)
+
+    assert counts["hospital_affiliations"] == 1
+
+
 def test_schema_ddl_matches_canonical_raw_hospital_loader() -> None:
     connection = duckdb.connect(":memory:")
     try:
@@ -287,6 +304,19 @@ def test_schema_ddl_matches_canonical_raw_hospital_loader() -> None:
         "source_data_period",
         "ingested_at",
     ]
+
+
+def test_full_cms_build_refuses_an_incomplete_source_set(tmp_path: Path) -> None:
+    data_root = tmp_path / "data"
+    manifest = _stage_source(data_root)
+
+    with pytest.raises(ReleaseError, match="source set is incomplete: missing="):
+        build_full_cms_warehouse_release(
+            data_root=data_root,
+            source_run_ids=(manifest.run_id,),
+            backup_manifest_path=tmp_path / "unused-backup.json",
+            code_commit=CODE_COMMIT,
+        )
 
 
 def test_affiliation_transform_excludes_ambiguous_names_and_labels_dba_matches(
@@ -393,6 +423,7 @@ def test_release_comparison_is_read_only_and_records_evidence(tmp_path: Path) ->
     )
 
     assert comparison["state"] == "passed"
+    assert comparison["comparison_policy"] == "hospital_affiliations_v1"
     assert comparison["unexpected_differences"] == []
     assert comparison["changed_tables"]["hospital_affiliations"] == {
         "baseline_rows": 0,
@@ -402,6 +433,82 @@ def test_release_comparison_is_read_only_and_records_evidence(tmp_path: Path) ->
     assert Path(comparison["comparison_path"]).is_file()
     for path, identity in before.items():
         assert (path.stat().st_size, path.stat().st_mtime_ns, sha256_file(path)) == identity
+
+
+def test_full_platform_comparison_allows_only_source_owned_tables(
+    tmp_path: Path,
+) -> None:
+    data_root, _, _, result = _build(tmp_path)
+    result.database_path.chmod(0o640)
+    connection = duckdb.connect(str(result.database_path))
+    try:
+        existing = {
+            row[0]
+            for row in connection.execute(
+                "SELECT table_name FROM information_schema.tables "
+                "WHERE table_schema = 'main' AND table_type = 'BASE TABLE'"
+            ).fetchall()
+        }
+        for table in FULL_PLATFORM_SMOKE_TABLES:
+            if table not in existing:
+                connection.execute(f'CREATE TABLE "{table}" (value INTEGER)')
+                connection.execute(f'INSERT INTO "{table}" VALUES (1)')
+        connection.execute("CHECKPOINT")
+        smoke_counts = {
+            table: connection.execute(
+                f'SELECT count(*) FROM "{table}"'
+            ).fetchone()[0]
+            for table in FULL_PLATFORM_SMOKE_TABLES
+        }
+    finally:
+        connection.close()
+    result.database_path.chmod(0o440)
+
+    store = WarehouseReleaseStore(data_root / "warehouse-releases.json")
+    document = store.load()
+    release = document.releases[0]
+    release.sha256 = sha256_file(result.database_path)
+    release.byte_size = result.database_path.stat().st_size
+    release.validation_details["source_periods"] = {
+        source_id: "2099" for source_id in FULL_PLATFORM_WAREHOUSE_SOURCE_IDS
+    }
+    release.validation_details["smoke_table_counts"] = smoke_counts
+    store.save(document)
+
+    comparison = compare_warehouse_release(
+        data_root=data_root,
+        warehouse_release_id=result.release.warehouse_release_id,
+        backup_manifest_path=tmp_path / "backup" / "backup-manifest.json",
+    )
+
+    assert comparison["state"] == "passed"
+    assert comparison["comparison_policy"] == "full_platform_v1"
+    assert comparison["evidence_mismatches"] == []
+    assert "practice_locations" in comparison["changed_tables"]
+    assert "baseline_marker" not in comparison["changed_tables"]
+
+
+def test_full_platform_comparison_rejects_stale_count_evidence(
+    tmp_path: Path,
+) -> None:
+    data_root, _, _, result = _build(tmp_path)
+    store = WarehouseReleaseStore(data_root / "warehouse-releases.json")
+    document = store.load()
+    release = document.releases[0]
+    release.validation_details["source_periods"] = {
+        source_id: "2099" for source_id in FULL_PLATFORM_WAREHOUSE_SOURCE_IDS
+    }
+    release.validation_details["smoke_table_counts"] = {
+        table: 1 for table in FULL_PLATFORM_SMOKE_TABLES
+    }
+    store.save(document)
+
+    with pytest.raises(ReleaseError, match="evidence_mismatches"):
+        compare_warehouse_release(
+            data_root=data_root,
+            warehouse_release_id=result.release.warehouse_release_id,
+            backup_manifest_path=tmp_path / "backup" / "backup-manifest.json",
+        )
 
 
 def test_build_release_fails_closed_on_publisher_header_change(tmp_path: Path) -> None:

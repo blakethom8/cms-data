@@ -36,14 +36,90 @@ from .manifests import (
 WAREHOUSE_RELEASE_SCHEMA_VERSION = 2
 SUPPORTED_WAREHOUSE_RELEASE_SCHEMA_VERSIONS = frozenset({1, 2})
 PROMOTION_JOURNAL_SCHEMA_VERSION = 1
-COMPARISON_SCHEMA_VERSION = 1
+COMPARISON_SCHEMA_VERSION = 2
 COPY_CHUNK_BYTES = 8 * 1024 * 1024
 STAGING_ENVIRONMENT = "staging"
 HOSPITAL_SOURCE_ID = "cms_hospital_enrollments"
+FULL_CMS_SOURCE_IDS = frozenset(
+    {
+        "cms_physician_by_provider",
+        "cms_physician_by_provider_and_service",
+        "cms_part_d_by_provider",
+        "cms_part_d_by_provider_and_drug",
+        "cms_dme_by_referring_provider",
+        "cms_qpp_experience",
+        "cms_pecos_public_provider_enrollment",
+        "cms_order_and_referring",
+        HOSPITAL_SOURCE_ID,
+        "cms_revalidation_group_reassignment",
+    }
+)
+FULL_PLATFORM_WAREHOUSE_SOURCE_IDS = FULL_CMS_SOURCE_IDS | frozenset(
+    {
+        "nppes_monthly_v2",
+        "nppes_weekly_incremental_v2",
+        "open_payments_general",
+        "open_payments_research",
+        "open_payments_ownership",
+    }
+)
+FULL_PLATFORM_SMOKE_TABLES = (
+    "core_providers",
+    "practice_locations",
+    "utilization_metrics",
+    "industry_relationships",
+    "hospital_affiliations",
+    "provider_service_detail",
+    "provider_drug_detail",
+    "provider_quality_scores",
+    "order_referring_eligibility",
+    "raw_physician_by_provider",
+    "raw_physician_by_provider_and_service",
+    "raw_part_d_by_provider",
+    "raw_part_d_by_provider_and_drug",
+    "raw_dme_by_referring_provider",
+    "raw_qpp_experience",
+    "raw_pecos_enrollment",
+    "raw_order_and_referring",
+    "raw_hospital_enrollments",
+    "raw_reassignment",
+    "raw_nppes",
+    "nppes_radar_provider_state",
+    "nppes_radar_events",
+    "nppes_radar_releases",
+    "raw_open_payments_general",
+    "raw_open_payments_research",
+    "raw_open_payments_ownership",
+    "kol_summary",
+)
 AFFILIATION_MATCH_POLICY = "normalized_name_and_state_unique_hospital_npi_v1"
 AFFILIATION_CHANGED_TABLES = frozenset(
     {"raw_hospital_enrollments", "hospital_affiliations"}
 )
+FULL_CMS_CHANGED_TABLES = frozenset(
+    {
+        "core_providers",
+        "practice_locations",
+        "utilization_metrics",
+        "industry_relationships",
+        "hospital_affiliations",
+        "provider_service_detail",
+        "provider_drug_detail",
+        "provider_quality_scores",
+        "order_referring_eligibility",
+        "raw_physician_by_provider",
+        "raw_physician_by_provider_and_service",
+        "raw_part_d_by_provider",
+        "raw_part_d_by_provider_and_drug",
+        "raw_dme_by_referring_provider",
+        "raw_qpp_experience",
+        "raw_pecos_enrollment",
+        "raw_order_and_referring",
+        "raw_hospital_enrollments",
+        "raw_reassignment",
+    }
+)
+FULL_PLATFORM_CHANGED_TABLES = frozenset(FULL_PLATFORM_SMOKE_TABLES)
 
 HOSPITAL_COLUMN_MAP: tuple[tuple[str, str], ...] = (
     ("ENROLLMENT ID", "enrollment_id"),
@@ -705,7 +781,11 @@ def _rebuild_hospital_affiliations(
         FROM hospital_affiliation_match_keys
         """
     ).fetchone()
+    affiliation_count = connection.execute(
+        "SELECT count(*) FROM hospital_affiliations"
+    ).fetchone()[0]
     return {
+        "hospital_affiliations": int(affiliation_count),
         "baseline_hospital_affiliations": int(baseline_count),
         "unambiguous_hospital_name_state_keys": int(stats[0]),
         "ambiguous_hospital_name_state_keys": int(stats[1]),
@@ -978,6 +1058,364 @@ def build_warehouse_release(
     )
 
 
+def _period_year(manifest: RunManifest) -> int:
+    value = manifest.source_data_period[:4]
+    if len(value) != 4 or not value.isdigit():
+        raise ReleaseError(
+            f"Source {manifest.source_id} period does not begin with a four-digit year"
+        )
+    return int(value)
+
+
+def _resolve_exact_source_set(
+    data_root: Path,
+    source_run_ids: tuple[str, ...],
+    expected_source_ids: frozenset[str],
+    *,
+    label: str,
+) -> dict[str, RunManifest]:
+    if len(source_run_ids) != len(set(source_run_ids)):
+        raise ReleaseError(f"{label} source run IDs must be unique")
+    source_document = ManifestStore(data_root / "manifests.json").load()
+    by_run_id = {manifest.run_id: manifest for manifest in source_document.manifests}
+    try:
+        manifests = tuple(by_run_id[run_id] for run_id in source_run_ids)
+    except KeyError as error:
+        raise ReleaseError(f"Source manifest is missing for run {error.args[0]}") from error
+    by_source_id = {manifest.source_id: manifest for manifest in manifests}
+    if len(by_source_id) != len(manifests):
+        raise ReleaseError(f"{label} contains multiple runs for one source")
+    missing = sorted(expected_source_ids - set(by_source_id))
+    unexpected = sorted(set(by_source_id) - expected_source_ids)
+    if missing or unexpected:
+        detail = []
+        if missing:
+            detail.append("missing=" + ",".join(missing))
+        if unexpected:
+            detail.append("unexpected=" + ",".join(unexpected))
+        raise ReleaseError(f"{label} source set is incomplete: " + "; ".join(detail))
+    return by_source_id
+
+
+def _load_full_cms_content(
+    connection: duckdb.DuckDBPyConnection,
+    *,
+    data_root: Path,
+    by_source_id: dict[str, RunManifest],
+) -> tuple[dict[str, int], dict[str, object]]:
+    from .candidate_sources import load_cms_raw_tables
+    from .transform import clear_refresh_targets, transform_all
+
+    hospital_manifest = _source_manifest(
+        data_root, by_source_id[HOSPITAL_SOURCE_ID].run_id
+    )
+    hospital_artifact = _verified_source_artifact(data_root, hospital_manifest)
+    non_hospital_run_ids = tuple(
+        manifest.run_id
+        for manifest in by_source_id.values()
+        if manifest.source_id in FULL_CMS_SOURCE_IDS
+        and manifest.source_id != HOSPITAL_SOURCE_ID
+    )
+    raw_counts = load_cms_raw_tables(
+        connection,
+        data_root=data_root,
+        run_ids=non_hospital_run_ids,
+    )
+    connection.execute("BEGIN TRANSACTION")
+    try:
+        _create_raw_hospital_table(connection)
+        hospital_rows = _load_hospital_rows(
+            connection, hospital_artifact, hospital_manifest
+        )
+        clear_refresh_targets(connection, include_core_providers=False)
+        connection.execute("COMMIT")
+    except Exception:
+        connection.execute("ROLLBACK")
+        raise
+
+    # DuckDB's foreign-key indexes are updated only at the transaction boundary.
+    # Delete the now-unreferenced parents separately before rebuilding children.
+    connection.execute("DELETE FROM core_providers")
+    connection.execute("BEGIN TRANSACTION")
+    try:
+        transform_counts = transform_all(
+            connection,
+            _period_year(by_source_id["cms_physician_by_provider"]),
+            practice_year=_period_year(
+                by_source_id["cms_revalidation_group_reassignment"]
+            ),
+            quality_year=_period_year(by_source_id["cms_qpp_experience"]),
+            include_hospital_affiliations=False,
+        )
+        affiliation_counts = _rebuild_hospital_affiliations(
+            connection,
+            data_year=_period_year(hospital_manifest),
+        )
+        connection.execute("COMMIT")
+    except Exception:
+        connection.execute("ROLLBACK")
+        raise
+    table_counts = {
+        **raw_counts,
+        "raw_hospital_enrollments": hospital_rows,
+        **transform_counts,
+        "hospital_affiliations": affiliation_counts["hospital_affiliations"],
+    }
+    required_nonempty = (
+        "core_providers",
+        "utilization_metrics",
+        "practice_locations",
+        "provider_quality_scores",
+        "provider_service_detail",
+        "provider_drug_detail",
+        "order_referring_eligibility",
+        "hospital_affiliations",
+    )
+    empty = [name for name in required_nonempty if table_counts.get(name, 0) <= 0]
+    if empty:
+        raise ReleaseError(
+            "Full CMS candidate has empty required tables: " + ", ".join(empty)
+        )
+    details = {
+        "affiliation_match_policy": AFFILIATION_MATCH_POLICY,
+        "affiliation_counts": affiliation_counts,
+    }
+    return table_counts, details
+
+
+def build_full_cms_warehouse_release(
+    *,
+    data_root: Path,
+    source_run_ids: tuple[str, ...],
+    backup_manifest_path: Path,
+    code_commit: str | None = None,
+) -> BuildResult:
+    """Build all ten CMS sources into a new immutable warehouse candidate."""
+    by_source_id = _resolve_exact_source_set(
+        data_root,
+        source_run_ids,
+        FULL_CMS_SOURCE_IDS,
+        label="Full CMS build",
+    )
+    baseline, baseline_sha, baseline_bytes = _load_backup_manifest(backup_manifest_path)
+    commit = code_commit or pipeline_commit()
+    if commit is None:
+        raise ReleaseError("A full pipeline Git commit is required to build a release")
+    identity = hashlib.sha256("\0".join(sorted(source_run_ids)).encode()).hexdigest()
+    warehouse_release_id = make_warehouse_release_id(identity, commit)
+    release_dir = data_root / "releases" / warehouse_release_id
+    database_path = release_dir / "warehouse.duckdb"
+    partial_path = release_dir / "warehouse.duckdb.partial"
+    release_store_path = _release_store_path(data_root)
+
+    with _exclusive_lock(data_root / "locks" / "build.lock"):
+        release_dir.mkdir(parents=True, exist_ok=False)
+        document = WarehouseReleaseStore(release_store_path).load()
+        release = WarehouseRelease(
+            warehouse_release_id=warehouse_release_id,
+            created_at=utc_now(),
+            source_run_ids=tuple(sorted(source_run_ids)),
+            pipeline_code_commit=commit,
+            baseline_path=str(baseline),
+            baseline_sha256=baseline_sha,
+            database_path=str(database_path.relative_to(data_root)),
+            duckdb_version=duckdb.__version__,
+        )
+        document.releases.append(release)
+        _save_release_document(data_root, document)
+        try:
+            _copy_verified_baseline(
+                baseline,
+                partial_path,
+                expected_sha256=baseline_sha,
+                expected_bytes=baseline_bytes,
+            )
+            connection = duckdb.connect(str(partial_path), read_only=False)
+            try:
+                table_counts, cms_details = _load_full_cms_content(
+                    connection, data_root=data_root, by_source_id=by_source_id
+                )
+                release.validation_details = {
+                    "source_periods": {
+                        source_id: manifest.source_data_period
+                        for source_id, manifest in sorted(by_source_id.items())
+                    },
+                    **cms_details,
+                }
+                connection.execute("CHECKPOINT")
+            except Exception:
+                raise
+            finally:
+                connection.close()
+
+            release.byte_size = partial_path.stat().st_size
+            release.sha256 = sha256_file(partial_path)
+            release.table_counts = dict(sorted(table_counts.items()))
+            release.validation_state = ValidationState.PASSED
+            release.validation_timestamp = utc_now()
+            os.replace(partial_path, database_path)
+            os.chmod(database_path, 0o440)
+            _save_release_document(data_root, document)
+        except Exception as error:
+            release.validation_state = ValidationState.FAILED
+            release.error_summary = safe_error(error)
+            _save_release_document(data_root, document)
+            raise ReleaseError(release.error_summary) from error
+
+    return BuildResult(
+        release=release,
+        database_path=database_path,
+        release_manifest_path=_release_manifest_path(data_root, warehouse_release_id),
+        release_store_path=release_store_path,
+    )
+
+
+def build_full_platform_warehouse_release(
+    *,
+    data_root: Path,
+    source_run_ids: tuple[str, ...],
+    backup_manifest_path: Path,
+    code_commit: str | None = None,
+) -> BuildResult:
+    """Build all DuckDB-backed registered sources into one immutable candidate.
+
+    AACT is prepared and restored as a separate PostgreSQL release because it is
+    not a DuckDB source. Its run ID must therefore not be passed to this builder.
+    """
+    from .archive_sources import load_nppes_sources, load_open_payments_sources
+    by_source_id = _resolve_exact_source_set(
+        data_root,
+        source_run_ids,
+        FULL_PLATFORM_WAREHOUSE_SOURCE_IDS,
+        label="Full platform warehouse build",
+    )
+    baseline, baseline_sha, baseline_bytes = _load_backup_manifest(backup_manifest_path)
+    commit = code_commit or pipeline_commit()
+    if commit is None:
+        raise ReleaseError("A full pipeline Git commit is required to build a release")
+    identity = hashlib.sha256("\0".join(sorted(source_run_ids)).encode()).hexdigest()
+    warehouse_release_id = make_warehouse_release_id(identity, commit)
+    release_dir = data_root / "releases" / warehouse_release_id
+    database_path = release_dir / "warehouse.duckdb"
+    partial_path = release_dir / "warehouse.duckdb.partial"
+    release_store_path = _release_store_path(data_root)
+
+    with _exclusive_lock(data_root / "locks" / "build.lock"):
+        release_dir.mkdir(parents=True, exist_ok=False)
+        document = WarehouseReleaseStore(release_store_path).load()
+        release = WarehouseRelease(
+            warehouse_release_id=warehouse_release_id,
+            created_at=utc_now(),
+            source_run_ids=tuple(sorted(source_run_ids)),
+            pipeline_code_commit=commit,
+            baseline_path=str(baseline),
+            baseline_sha256=baseline_sha,
+            database_path=str(database_path.relative_to(data_root)),
+            duckdb_version=duckdb.__version__,
+        )
+        document.releases.append(release)
+        _save_release_document(data_root, document)
+        try:
+            _copy_verified_baseline(
+                baseline,
+                partial_path,
+                expected_sha256=baseline_sha,
+                expected_bytes=baseline_bytes,
+            )
+            connection = duckdb.connect(str(partial_path), read_only=False)
+            try:
+                cms_counts, cms_details = _load_full_cms_content(
+                    connection, data_root=data_root, by_source_id=by_source_id
+                )
+                nppes_counts, nppes_details = load_nppes_sources(
+                    connection,
+                    data_root=data_root,
+                    monthly_run_id=by_source_id["nppes_monthly_v2"].run_id,
+                    weekly_run_id=by_source_id[
+                        "nppes_weekly_incremental_v2"
+                    ].run_id,
+                )
+                payments_counts, payments_details = load_open_payments_sources(
+                    connection,
+                    data_root=data_root,
+                    run_ids=tuple(
+                        by_source_id[source_id].run_id
+                        for source_id in sorted(
+                            {
+                                "open_payments_general",
+                                "open_payments_research",
+                                "open_payments_ownership",
+                            }
+                        )
+                    ),
+                )
+                table_counts = {**cms_counts, **nppes_counts, **payments_counts}
+                required_nonempty = (
+                    "raw_nppes",
+                    "nppes_radar_provider_state",
+                    "nppes_radar_releases",
+                    "raw_open_payments_general",
+                    "raw_open_payments_research",
+                    "raw_open_payments_ownership",
+                    "industry_relationships",
+                    "kol_summary",
+                )
+                empty = [
+                    name for name in required_nonempty if table_counts.get(name, 0) <= 0
+                ]
+                if empty:
+                    raise ReleaseError(
+                        "Full platform candidate has empty required tables: "
+                        + ", ".join(empty)
+                    )
+                smoke_table_counts = {
+                    table: int(
+                        connection.execute(
+                            f'SELECT count(*) FROM "{table}"'
+                        ).fetchone()[0]
+                    )
+                    for table in FULL_PLATFORM_SMOKE_TABLES
+                }
+                release.validation_details = {
+                    "source_periods": {
+                        source_id: manifest.source_data_period
+                        for source_id, manifest in sorted(by_source_id.items())
+                    },
+                    **cms_details,
+                    "nppes": nppes_details,
+                    "open_payments": payments_details,
+                    "smoke_table_counts": smoke_table_counts,
+                    "aact": {
+                        "state": "external_postgresql_release_required",
+                        "reason": "AACT is not stored in the DuckDB warehouse.",
+                    },
+                }
+                connection.execute("CHECKPOINT")
+            finally:
+                connection.close()
+
+            release.byte_size = partial_path.stat().st_size
+            release.sha256 = sha256_file(partial_path)
+            release.table_counts = dict(sorted(table_counts.items()))
+            release.validation_state = ValidationState.PASSED
+            release.validation_timestamp = utc_now()
+            os.replace(partial_path, database_path)
+            os.chmod(database_path, 0o440)
+            _save_release_document(data_root, document)
+        except Exception as error:
+            release.validation_state = ValidationState.FAILED
+            release.error_summary = safe_error(error)
+            _save_release_document(data_root, document)
+            raise ReleaseError(release.error_summary) from error
+
+    return BuildResult(
+        release=release,
+        database_path=database_path,
+        release_manifest_path=_release_manifest_path(data_root, warehouse_release_id),
+        release_store_path=release_store_path,
+    )
+
+
 def _database_table_counts(
     connection: duckdb.DuckDBPyConnection,
 ) -> dict[str, int]:
@@ -1001,6 +1439,42 @@ def _database_table_counts(
     return counts
 
 
+def _comparison_policy(
+    release: WarehouseRelease,
+) -> tuple[str, frozenset[str], dict[str, int]]:
+    """Select the exact source-owned table set for a release comparison."""
+    source_periods = release.validation_details.get("source_periods")
+    source_ids = set(source_periods) if isinstance(source_periods, dict) else set()
+    if source_ids == FULL_PLATFORM_WAREHOUSE_SOURCE_IDS:
+        evidence = release.validation_details.get("smoke_table_counts")
+        if not isinstance(evidence, dict):
+            raise ReleaseError(
+                "Full platform release is missing exact smoke table-count evidence"
+            )
+        missing = sorted(set(FULL_PLATFORM_SMOKE_TABLES) - set(evidence))
+        unexpected = sorted(set(evidence) - set(FULL_PLATFORM_SMOKE_TABLES))
+        if missing or unexpected:
+            raise ReleaseError(
+                "Full platform smoke table-count evidence has the wrong table set: "
+                f"missing={','.join(missing) or 'none'}; "
+                f"unexpected={','.join(unexpected) or 'none'}"
+            )
+        try:
+            expected_counts = {name: int(evidence[name]) for name in evidence}
+        except (TypeError, ValueError) as error:
+            raise ReleaseError(
+                "Full platform smoke table-count evidence contains a non-integer count"
+            ) from error
+        if any(count < 0 for count in expected_counts.values()):
+            raise ReleaseError(
+                "Full platform smoke table-count evidence contains a negative count"
+            )
+        return "full_platform_v1", FULL_PLATFORM_CHANGED_TABLES, expected_counts
+    if source_ids == FULL_CMS_SOURCE_IDS:
+        return "full_cms_v1", FULL_CMS_CHANGED_TABLES, {}
+    return "hospital_affiliations_v1", AFFILIATION_CHANGED_TABLES, {}
+
+
 def compare_warehouse_release(
     *,
     data_root: Path,
@@ -1012,6 +1486,9 @@ def compare_warehouse_release(
         document = WarehouseReleaseStore(_release_store_path(data_root)).load()
         release = _find_release(document, warehouse_release_id)
         candidate = _verify_promotable(data_root, release)
+        policy_name, allowed_changed_tables, expected_counts = _comparison_policy(
+            release
+        )
         baseline, baseline_sha, baseline_bytes = _load_backup_manifest(
             backup_manifest_path
         )
@@ -1050,7 +1527,7 @@ def compare_warehouse_release(
             raise ReleaseError("Comparison candidate changed during its read-only inspection")
 
         table_names = set(baseline_counts) | set(candidate_counts)
-        invariant_tables = sorted(table_names - AFFILIATION_CHANGED_TABLES)
+        invariant_tables = sorted(table_names - allowed_changed_tables)
         unexpected_differences = [
             {
                 "table": table,
@@ -1065,7 +1542,7 @@ def compare_warehouse_release(
                 "baseline_rows": baseline_counts.get(table),
                 "candidate_rows": candidate_counts.get(table),
             }
-            for table in sorted(AFFILIATION_CHANGED_TABLES)
+            for table in sorted(allowed_changed_tables)
         }
         required_counts = {
             "core_providers": candidate_counts.get("core_providers", 0),
@@ -1078,9 +1555,20 @@ def compare_warehouse_release(
         failed_requirements = [
             table for table, count in required_counts.items() if count <= 0
         ]
+        evidence_mismatches = [
+            {
+                "table": table,
+                "expected_rows": expected,
+                "candidate_rows": candidate_counts.get(table),
+            }
+            for table, expected in sorted(expected_counts.items())
+            if candidate_counts.get(table) != expected
+        ]
         state = (
             "passed"
-            if not unexpected_differences and not failed_requirements
+            if not unexpected_differences
+            and not failed_requirements
+            and not evidence_mismatches
             else "failed"
         )
         payload = {
@@ -1090,6 +1578,7 @@ def compare_warehouse_release(
             "warehouse_release_id": warehouse_release_id,
             "pipeline_code_commit": release.pipeline_code_commit,
             "duckdb_version": release.duckdb_version,
+            "comparison_policy": policy_name,
             "baseline": {
                 "database_path": str(baseline),
                 "sha256": baseline_sha,
@@ -1105,6 +1594,7 @@ def compare_warehouse_release(
             "required_candidate_counts": required_counts,
             "unexpected_differences": unexpected_differences,
             "failed_requirements": failed_requirements,
+            "evidence_mismatches": evidence_mismatches,
             "representative_affiliations": [
                 {
                     "npi": row[0],
@@ -1126,7 +1616,8 @@ def compare_warehouse_release(
             raise ReleaseError(
                 "Candidate comparison failed: "
                 f"unexpected_differences={len(unexpected_differences)}, "
-                f"failed_requirements={','.join(failed_requirements) or 'none'}"
+                f"failed_requirements={','.join(failed_requirements) or 'none'}, "
+                f"evidence_mismatches={len(evidence_mismatches)}"
             )
         return payload
 
