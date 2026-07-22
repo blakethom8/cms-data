@@ -225,12 +225,32 @@ availability of the untouched other release.
 When the candidate also includes a new AACT PostgreSQL snapshot, restore and validate it first with
 `pipeline.data_platform stage-aact-database`; never point a rehearsal process at the active `aact`
 database by accident. The temporary API must receive a candidate-only `AACT_DATABASE_URL` and pass
-the same clinical-trials smoke check. A combined cutover must stop the API before renaming the
-PostgreSQL databases, select the DuckDB bundle while the API is stopped, and start the API only after
-both selectors are coherent. If smoke fails, stop the API, restore both the previous PostgreSQL
-database name and previous DuckDB bundle, then start and smoke the rollback. PostgreSQL rename and
-rollback commands remain approval-gated server operations; `stage-aact-database` intentionally has
-no rename or drop capability.
+the same clinical-trials smoke check.
+
+A combined cutover uses an API-stopped coherence boundary because PostgreSQL database rename and a
+filesystem symlink replacement are not one cross-system atomic operation. Before stopping the API,
+record the current `aact` study count, latest update date, exact bytes and SHA-256 of
+`/srv/aact/CURRENT_SNAPSHOT`, and the validated candidate database name. Then:
+
+1. Create `/srv/cms-data-platform/production/aact-transition-pending` as a root-owned `0640` regular
+   file and fsync the production directory. The checked-in systemd unit refuses to start while this
+   sentinel exists.
+2. Stop the API and terminate only its remaining sessions to the current AACT database. Rename the
+   current `aact` database to a unique rollback name; never drop it. Rename the validated versioned
+   candidate database to `aact`.
+3. Write the candidate snapshot date to a new marker file, fsync it, atomically replace
+   `/srv/aact/CURRENT_SNAPSHOT`, and fsync `/srv/aact`. Select the DuckDB release bundle while the API
+   remains stopped.
+4. Recheck both selectors, remove and fsync the AACT transition sentinel, start the API once, and run
+   the complete smoke suite with the exact DuckDB and AACT counts.
+
+If smoke fails, recreate the sentinel before stopping the API, restore the previous DuckDB bundle,
+rename the new `aact` database back to its versioned candidate name, rename the untouched rollback
+database back to `aact`, atomically restore the previous snapshot marker, remove the sentinel, then
+start and smoke the rollback. An interruption leaves the API stopped or startup-blocked; recovery
+must inspect both database names, the marker, the bundle pointer, and the sentinel before taking any
+action. PostgreSQL rename, marker replacement, and rollback commands remain approval-gated server
+operations; `stage-aact-database` intentionally has no rename or drop capability.
 
 ## Interrupted transition recovery
 
