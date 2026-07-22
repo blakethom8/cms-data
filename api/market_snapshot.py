@@ -119,6 +119,19 @@ class SnapshotProvider(BaseModel):
     open_payments_total: Optional[float] = None
 
 
+class OrganizationSearchResult(BaseModel):
+    org_pac_id: str
+    name: Optional[str] = None
+    provider_count: int
+    site_count: int
+    group_size_national: Optional[int] = None
+
+
+class OrganizationSearchResponse(BaseModel):
+    query: str
+    results: list[OrganizationSearchResult]
+
+
 class SnapshotTotals(BaseModel):
     organizations: int
     sites: int
@@ -135,6 +148,9 @@ class MarketSnapshotResponse(BaseModel):
     location_basis: Literal["cms_enrollment"] = "cms_enrollment"
     population_scope: Literal["selected_specialties"] = "selected_specialties"
     metric_scope: Literal["national_npi_totals"] = METRIC_SCOPE
+    # Present when the population was anchored on one CMS enrollment group
+    # (the organization lens) rather than specialty × geography.
+    anchor_org_pac_id: Optional[str] = None
     totals: SnapshotTotals
     organizations: list[SnapshotOrganization]
     independent: Optional[SnapshotIndependent] = None
@@ -165,14 +181,20 @@ def get_market_snapshot_router(get_conn):
         lat: Optional[float] = None,
         lng: Optional[float] = None,
         radius_miles: float = 10.0,
+        org_pac_id: Optional[str] = None,
     ):
+        # Two population anchors: specialty × geography (the territory lens),
+        # or a CMS enrollment group (the organization lens). With an org
+        # anchor, specialties become an optional filter and geography an
+        # optional narrowing — omit both to see everywhere the org operates.
+        anchor_org = (org_pac_id or "").strip() or None
         try:
             requested_specialties = parse_specialties(
-                specialties, specialty, required=True
+                specialties, specialty, required=anchor_org is None
             )
             selected_zips = parse_zip_codes(zips, zip)
             proximity = validate_proximity(lat, lng, radius_miles)
-            if not any((city, state, selected_zips, proximity)):
+            if anchor_org is None and not any((city, state, selected_zips, proximity)):
                 raise ValueError("Choose a city, state, ZIP boundary, or radius origin")
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -220,9 +242,17 @@ def get_market_snapshot_router(get_conn):
                 "and lat between ? and ? and lng between ? and ?"
             )
 
-        where_sql = f"({spec_pred})"
-        if loc_clauses:
-            where_sql += " AND " + " AND ".join(loc_clauses)
+        where_clauses: list[str] = []
+        if patterns:
+            where_clauses.append(f"({spec_pred})")
+        if anchor_org is not None:
+            where_clauses.append("nullif(trim(coalesce(d.org_pac_id, '')), '') = ?")
+        where_clauses.extend(loc_clauses)
+        where_sql = " AND ".join(where_clauses)
+
+        anchor_params: list = [anchor_org] if anchor_org is not None else []
+        if anchor_org is not None:
+            loc_desc.append(f"org {anchor_org}")
 
         matched_cte = f"""
             matched AS (
@@ -245,7 +275,7 @@ def get_market_snapshot_router(get_conn):
                 GROUP BY 1, 2, 3
             )
         """
-        base_params = list(patterns) + loc_params
+        base_params = list(patterns) + anchor_params + loc_params
 
         conn = get_conn()
 
@@ -553,11 +583,91 @@ def get_market_snapshot_router(get_conn):
             requested_specialties=requested_specialties,
             matched_patterns=patterns,
             location=" · ".join(loc_desc) if loc_desc else "",
+            anchor_org_pac_id=anchor_org,
             totals=totals,
             organizations=org_models,
             independent=independent,
             sites=site_models,
             providers=provider_models,
+        )
+
+    @router.get("/organizations", response_model=OrganizationSearchResponse)
+    async def organization_search(
+        q: str,
+        city: Optional[str] = None,
+        state: Optional[str] = None,
+        zip: Optional[str] = None,
+        zips: Optional[str] = None,
+        limit: int = 20,
+    ):
+        """Typeahead over CMS enrollment groups, optionally bounded to a geography."""
+        needle = " ".join(q.split())
+        if len(needle) < 2:
+            raise HTTPException(
+                status_code=422, detail="Type at least two characters to search organizations"
+            )
+        if len(needle) > 80:
+            raise HTTPException(status_code=422, detail="Organization query is too long")
+        if "%" in needle or "_" in needle:
+            raise HTTPException(
+                status_code=422, detail="Organization queries cannot contain wildcards"
+            )
+        try:
+            selected_zips = parse_zip_codes(zips, zip)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        limit = max(1, min(limit, 50))
+
+        clauses = [
+            "nullif(trim(coalesce(d.org_pac_id, '')), '') IS NOT NULL",
+            'd."Facility Name" ILIKE ?',
+        ]
+        params: list = [f"%{needle}%"]
+        if state:
+            clauses.append('upper(trim(d."State")) = ?')
+            params.append(state.upper().strip())
+        if city:
+            clauses.append('upper(trim(d."City/Town")) = ?')
+            params.append(city.upper().strip())
+        if selected_zips:
+            placeholders = ", ".join(["?"] * len(selected_zips))
+            clauses.append(f'left(cast(d."ZIP Code" as varchar), 5) in ({placeholders})')
+            params.extend(selected_zips)
+
+        sql = f"""
+            SELECT nullif(trim(coalesce(d.org_pac_id, '')), '') AS org_pac_id,
+                   min(trim(d."Facility Name")) AS name,
+                   count(DISTINCT cast(d."NPI" AS varchar)) AS provider_count,
+                   count(DISTINCT CASE WHEN nullif(trim(d.adr_ln_1), '') IS NOT NULL
+                       THEN upper(trim(d.adr_ln_1)) || '|' || left(cast(d."ZIP Code" AS varchar), 5)
+                   END) AS site_count,
+                   max(d.num_org_mem) AS group_size_national
+            FROM raw_dac_national d
+            WHERE {' AND '.join(clauses)}
+            GROUP BY 1
+            ORDER BY provider_count DESC, name
+            LIMIT {limit}
+        """
+        try:
+            rows = get_conn().execute(sql, params).fetchall()
+        except Exception as exc:
+            raise HTTPException(
+                status_code=503, detail="CMS warehouse is unavailable"
+            ) from exc
+
+        return OrganizationSearchResponse(
+            query=needle,
+            results=[
+                OrganizationSearchResult(
+                    org_pac_id=row[0],
+                    name=row[1],
+                    provider_count=row[2],
+                    site_count=row[3],
+                    group_size_national=row[4],
+                )
+                for row in rows
+                if row[0]
+            ],
         )
 
     return router

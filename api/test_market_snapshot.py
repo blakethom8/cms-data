@@ -95,6 +95,10 @@ def _database() -> duckdb.DuckDBPyConnection:
         # Non-matching specialty stays out entirely.
         ("5", "EMA", "EAST", "MD", "DERMATOLOGY", "SKIN GROUP", "222", 5,
          "5 PINE LN", "80201", "DENVER", "CO", "3030000005"),
+        # Org 111 also employs a dermatologist — invisible to the cardiology
+        # territory lens, but part of the org-anchored (all-specialty) view.
+        ("6", "FAY", "FIELD", "MD", "DERMATOLOGY", "HEART GROUP", "111", 40,
+         "1 MAIN ST", "80201", "DENVER", "CO", "3030000001"),
     ]
     connection.executemany(
         "insert into raw_dac_national values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -266,6 +270,62 @@ def test_missing_specialty_is_rejected():
         "/practices/market-snapshot", params={"city": "Denver", "state": "CO"}
     )
     assert response.status_code == 422
+
+
+def test_org_anchor_spans_all_specialties_without_geography():
+    client = _client()
+    response = client.get("/practices/market-snapshot", params={"org_pac_id": "111"})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["anchor_org_pac_id"] == "111"
+    assert body["requested_specialties"] == []
+    # All-specialty membership: the two cardiologists, the door-less NPI, and
+    # the dermatologist. The other orgs' clinicians stay out.
+    assert {p["npi"] for p in body["providers"]} == {"1", "2", "4", "6"}
+    assert {site["site_id"] for site in body["sites"]} == {D1, D2}
+    assert body["organizations"][0]["org_pac_id"] == "111"
+    assert body["organizations"][0]["provider_count"] == 4
+    derm = next(p for p in body["providers"] if p["npi"] == "6")
+    assert derm["specialty"] == "DERMATOLOGY"
+
+
+def test_org_anchor_accepts_optional_specialty_and_geography_narrowing():
+    client = _client()
+    with_specialty = client.get(
+        "/practices/market-snapshot",
+        params={"org_pac_id": "111", "specialty": "cardiology"},
+    ).json()
+    assert {p["npi"] for p in with_specialty["providers"]} == {"1", "2", "4"}
+
+    with_geo = client.get(
+        "/practices/market-snapshot",
+        params={"org_pac_id": "111", "zips": "80201"},
+    ).json()
+    assert {site["site_id"] for site in with_geo["sites"]} == {D1}
+    assert {p["npi"] for p in with_geo["providers"]} == {"1", "2", "4", "6"}
+
+
+def test_organization_typeahead_searches_groups():
+    client = _client()
+    response = client.get("/practices/organizations", params={"q": "heart"})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["query"] == "heart"
+    assert len(body["results"]) == 1
+    org = body["results"][0]
+    assert org["org_pac_id"] == "111"
+    assert org["name"] == "HEART GROUP"
+    assert org["provider_count"] == 4
+    assert org["site_count"] == 2
+    assert org["group_size_national"] == 40
+
+    bounded = client.get(
+        "/practices/organizations", params={"q": "group", "zips": "80201"}
+    ).json()
+    assert {row["org_pac_id"] for row in bounded["results"]} == {"111", "222"}
+
+    too_short = client.get("/practices/organizations", params={"q": "h"})
+    assert too_short.status_code == 422
 
 
 def test_wildcard_specialty_is_rejected():
