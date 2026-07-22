@@ -7,6 +7,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from pipeline.transform import (
+    build_practice_locations,
     build_provider_drug_detail,
     build_provider_quality_scores,
     clear_refresh_targets,
@@ -58,7 +59,7 @@ def test_qpp_transform_handles_boolean_inference_and_selects_best_npi_row() -> N
             """
             create table raw_qpp_experience (
                 "provider key" varchar,
-                npi varchar,
+                npi bigint,
                 "practice state or us territory" varchar,
                 "practice size" varchar,
                 "clinician type" varchar,
@@ -111,7 +112,7 @@ def test_drug_transform_aggregates_duplicate_generic_drug_rows() -> None:
         connection.execute(
             """
             create table raw_part_d_by_provider_and_drug (
-                Prscrbr_NPI varchar, Brnd_Name varchar, Gnrc_Name varchar,
+                Prscrbr_NPI bigint, Brnd_Name varchar, Gnrc_Name varchar,
                 Tot_Clms varchar, Tot_30day_Fills varchar, Tot_Day_Suply varchar,
                 Tot_Drug_Cst varchar, Tot_Benes varchar, GE65_Tot_Clms varchar,
                 GE65_Tot_Drug_Cst varchar, GE65_Tot_Benes varchar
@@ -138,3 +139,37 @@ def test_drug_transform_aggregates_duplicate_generic_drug_rows() -> None:
 
     assert count == 1
     assert row == ("Generic X", 5, 6, 31)
+
+
+def test_practice_transform_matches_numeric_raw_npi_to_text_core_npi() -> None:
+    connection = _connection()
+    try:
+        connection.execute(
+            """
+            create table raw_reassignment (
+                "Individual NPI" bigint,
+                "Group PAC ID" varchar,
+                "Group Enrollment ID" varchar,
+                "Group Legal Business Name" varchar,
+                "Group State Code" varchar,
+                "Group Reassignments and Physician Assistants" bigint,
+                "Individual State Code" varchar
+            )
+            """
+        )
+        connection.execute(
+            """
+            insert into raw_reassignment values
+                (1234567890, 'PAC-1', 'ENROLL-1', 'Example Group', 'CA', 8, 'CA')
+            """
+        )
+
+        count = build_practice_locations(connection, 2024)
+        row = connection.execute(
+            "select npi, group_legal_name, group_practice_size from practice_locations"
+        ).fetchone()
+    finally:
+        connection.close()
+
+    assert count == 1
+    assert row == ("1234567890", "Example Group", 8)

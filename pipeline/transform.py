@@ -27,7 +27,7 @@ def build_core_providers(con: duckdb.DuckDBPyConnection, data_year: int):
             pecos_enrollment_id, multiple_npi_flag, data_year
         )
         SELECT
-            p.rndrng_npi,
+            CAST(p.rndrng_npi AS VARCHAR),
             p.rndrng_prvdr_last_org_name,
             p.rndrng_prvdr_first_name,
             p.rndrng_prvdr_mi,
@@ -95,7 +95,7 @@ def build_utilization_metrics(con: duckdb.DuckDBPyConnection, data_year: int):
             cc_stroke_tia_pct
         )
         SELECT
-            p.rndrng_npi,
+            CAST(p.rndrng_npi AS VARCHAR),
             ?,
             -- Part B
             TRY_CAST(p.tot_hcpcs_cds AS INTEGER),
@@ -162,7 +162,7 @@ def build_practice_locations(con: duckdb.DuckDBPyConnection, data_year: int):
             group_state, group_practice_size, state, data_year
         )
         SELECT
-            r."individual npi",
+            CAST(r."individual npi" AS VARCHAR),
             r."group pac id",
             r."group enrollment id",
             r."group legal business name",
@@ -171,7 +171,9 @@ def build_practice_locations(con: duckdb.DuckDBPyConnection, data_year: int):
             r."individual state code",
             ?
         FROM raw_reassignment r
-        WHERE r."individual npi" IN (SELECT npi FROM core_providers)
+        WHERE CAST(r."individual npi" AS VARCHAR) IN (
+            SELECT npi FROM core_providers
+        )
     """, [data_year])
 
     count = con.execute("SELECT COUNT(*) FROM practice_locations WHERE data_year = ?", [data_year]).fetchone()[0]
@@ -216,7 +218,7 @@ def build_hospital_affiliations(con: duckdb.DuckDBPyConnection, data_year: int):
             affiliation_source, confidence_level, group_pac_id, data_year
         )
         SELECT DISTINCT
-            r."individual npi" AS npi,
+            CAST(r."individual npi" AS VARCHAR) AS npi,
             h.npi AS hospital_npi,
             h.ccn AS hospital_ccn,
             h."organization name" AS hospital_name,
@@ -240,7 +242,9 @@ def build_hospital_affiliations(con: duckdb.DuckDBPyConnection, data_year: int):
         INNER JOIN raw_hospital_enrollments h
             ON r."group legal business name" = h."organization name"
             AND r."group state code" = h.state
-        WHERE r."individual npi" IN (SELECT npi FROM core_providers)
+        WHERE CAST(r."individual npi" AS VARCHAR) IN (
+            SELECT npi FROM core_providers
+        )
     """, [data_year])
 
     count = con.execute("SELECT COUNT(*) FROM hospital_affiliations WHERE data_year = ?", [data_year]).fetchone()[0]
@@ -266,7 +270,7 @@ def build_provider_quality_scores(con: duckdb.DuckDBPyConnection, data_year: int
             data_year
         )
         SELECT
-            q.npi,
+            CAST(q.npi AS VARCHAR),
             q."practice state or us territory",
             q."practice size",
             q."clinician type",
@@ -297,10 +301,10 @@ def build_provider_quality_scores(con: duckdb.DuckDBPyConnection, data_year: int
             TRY_CAST(q."cost category weight" AS DECIMAL(5,2)),
             ?
         FROM raw_qpp_experience q
-        WHERE q.npi IN (SELECT npi FROM core_providers)
+        WHERE CAST(q.npi AS VARCHAR) IN (SELECT npi FROM core_providers)
           AND length(trim(CAST(q.npi AS VARCHAR))) = 10
         QUALIFY row_number() OVER (
-            PARTITION BY q.npi
+            PARTITION BY CAST(q.npi AS VARCHAR)
             ORDER BY TRY_CAST(q."final score" AS DECIMAL(7,2)) DESC NULLS LAST,
                      q."provider key" NULLS LAST
         ) = 1
@@ -325,7 +329,7 @@ def build_provider_service_detail(con: duckdb.DuckDBPyConnection, data_year: int
             avg_medicare_standardized, data_year
         )
         SELECT
-            s.rndrng_npi,
+            CAST(s.rndrng_npi AS VARCHAR),
             s.hcpcs_cd,
             s.hcpcs_desc,
             s.hcpcs_drug_ind,
@@ -340,9 +344,9 @@ def build_provider_service_detail(con: duckdb.DuckDBPyConnection, data_year: int
             ?
         FROM raw_physician_by_provider_and_service s
         WHERE s.rndrng_prvdr_ent_cd = 'I'
-          AND s.rndrng_npi IN (SELECT npi FROM core_providers)
+          AND CAST(s.rndrng_npi AS VARCHAR) IN (SELECT npi FROM core_providers)
         QUALIFY row_number() OVER (
-            PARTITION BY s.rndrng_npi, s.hcpcs_cd, s.place_of_srvc
+            PARTITION BY CAST(s.rndrng_npi AS VARCHAR), s.hcpcs_cd, s.place_of_srvc
             ORDER BY TRY_CAST(s.tot_srvcs AS DECIMAL(15,2)) DESC NULLS LAST
         ) = 1
     """, [data_year])
@@ -364,7 +368,7 @@ def build_provider_drug_detail(con: duckdb.DuckDBPyConnection, data_year: int):
             ge65_tot_drug_cost, ge65_tot_benes, data_year
         )
         SELECT
-            d.prscrbr_npi,
+            CAST(d.prscrbr_npi AS VARCHAR),
             min(d.brnd_name),
             trim(d.gnrc_name),
             sum(TRY_CAST(d.tot_clms AS INTEGER)),
@@ -377,9 +381,9 @@ def build_provider_drug_detail(con: duckdb.DuckDBPyConnection, data_year: int):
             sum(TRY_CAST(d.ge65_tot_benes AS INTEGER)),
             ?
         FROM raw_part_d_by_provider_and_drug d
-        WHERE d.prscrbr_npi IN (SELECT npi FROM core_providers)
+        WHERE CAST(d.prscrbr_npi AS VARCHAR) IN (SELECT npi FROM core_providers)
           AND nullif(trim(d.gnrc_name), '') IS NOT NULL
-        GROUP BY d.prscrbr_npi, trim(d.gnrc_name)
+        GROUP BY CAST(d.prscrbr_npi AS VARCHAR), trim(d.gnrc_name)
         """,
         [data_year],
     )
@@ -399,7 +403,7 @@ def build_order_referring_eligibility(con: duckdb.DuckDBPyConnection):
     con.execute("""
         INSERT INTO order_referring_eligibility (npi, last_name, first_name, partb, dme, hha, pmd, hospice)
         SELECT
-            o.npi,
+            CAST(o.npi AS VARCHAR),
             o.last_name,
             o.first_name,
             o.partb,
@@ -408,8 +412,10 @@ def build_order_referring_eligibility(con: duckdb.DuckDBPyConnection):
             o.pmd,
             o.hospice
         FROM raw_order_and_referring o
-        WHERE o.npi IN (SELECT npi FROM core_providers)
-        QUALIFY row_number() OVER (PARTITION BY o.npi ORDER BY o.npi) = 1
+        WHERE CAST(o.npi AS VARCHAR) IN (SELECT npi FROM core_providers)
+        QUALIFY row_number() OVER (
+            PARTITION BY CAST(o.npi AS VARCHAR) ORDER BY o.npi
+        ) = 1
     """)
 
     count = con.execute("SELECT COUNT(*) FROM order_referring_eligibility").fetchone()[0]
