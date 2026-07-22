@@ -1,5 +1,7 @@
 # CMS API systemd release layout
 
+> **Last reviewed: 2026-07-22** · **Status: current production service and monitor layout**
+
 `cms-api.service` reads code, warehouse, and runtime through one atomic `release-current` bundle
 managed by `python -m pipeline.production`. Its root-run startup check rejects a pending transition,
 a mismatched ledger, or changed artifacts before the API process starts. Secrets remain outside Git in

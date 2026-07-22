@@ -1,5 +1,7 @@
 # Comprehensive Provider Data Strategy: Sources, Costs, Legal Terms & LLM Augmentation
 
+> **Archived — reviewed 2026-07-22.** Superseded planning material; use the operating model and source registry for current policy.
+
 **Last Updated:** 2026-02-15  
 **Scope:** Scale from 1.2M Medicare providers → 8M+ US providers with web-crawled enrichment
 

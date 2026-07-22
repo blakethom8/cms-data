@@ -1,5 +1,7 @@
 # Provider Intelligence Data Platform
 
+> **Last reviewed: 2026-07-22** · **Status: current production overview**
+
 > A production-grade public healthcare data foundation that turns fragmented federal datasets into
 > trustworthy provider, practice, market, industry, and research intelligence.
 
@@ -11,7 +13,7 @@ The platform combines 16 registered sources from CMS, NPPES, Open Payments, and 
 ClinicalTrials.gov. Each release is reproducible, checksum-verified, tested against the prior
 warehouse, and promoted as one atomic bundle with a complete rollback release retained.
 
-**Validated candidate snapshot - July 22, 2026**
+**Validated production release snapshot - July 22, 2026**
 
 | Platform signal | Validated scale |
 | --- | ---: |
@@ -25,8 +27,8 @@ warehouse, and promoted as one atomic bundle with a complete rollback release re
 | Inferred hospital affiliations | 139,775 |
 | AACT clinical studies | 594,772 |
 
-These figures describe the latest validated staging candidate. Production changes only after an
-explicit promotion decision and a successful post-restart smoke test.
+These figures describe the active validated release. Every future production change still requires
+an explicit promotion decision and a successful post-restart smoke test.
 
 ## What the platform makes possible
 
@@ -48,20 +50,22 @@ explicit promotion decision and a successful post-restart smoke test.
 ## Curated data marts
 
 The platform preserves publisher-shaped raw tables for auditability and builds opinionated marts for
-product use. NPI remains the shared provider identity key.
+product use. NPI remains the shared provider identity key. The source column identifies each mart's
+primary direct inputs; shared NPPES identity and location enrichment can also support joins across
+multiple marts.
 
-| Data mart | Primary tables | Product-ready questions |
-| --- | --- | --- |
-| Provider identity and directory | `core_providers`, `raw_nppes` | Who is this provider, what is their specialty or taxonomy, and where are they located? |
-| Practices and provider rosters | `practice_locations` | Which clinicians appear in a group, and what is the practice's geographic footprint? |
-| Medicare utilization | `utilization_metrics` | What is the provider's service volume, beneficiary mix, Medicare payment profile, prescribing profile, and DME referral activity? |
-| Services and drugs | `provider_service_detail`, `provider_drug_detail` | Which services and medications characterize the provider's activity? |
-| Hospital network intelligence | `hospital_affiliations`, `raw_hospital_enrollments` | Which hospital relationships can be conservatively inferred, and with what evidence and confidence? |
-| Enrollment and eligibility | `order_referring_eligibility`, PECOS-derived provider fields | Is a provider present in public Medicare enrollment data, and what can they order or refer? |
-| Quality and participation | `provider_quality_scores` | What public QPP participation, practice, and quality measures are available? |
-| Industry and research relationships | `industry_relationships`, `kol_summary`, Open Payments raw tables | Which reported transfers of value, research payments, and ownership records are associated with a provider? |
-| New Provider Radar | `nppes_radar_provider_state`, `nppes_radar_events`, `nppes_radar_releases` | What changed in the provider market, when did it change, and which publisher release proved it? |
-| Clinical research | AACT PostgreSQL `ctgov` schema | Which studies, investigators, sponsors, conditions, interventions, and facilities are represented in ClinicalTrials.gov? |
+| Data mart | Primary source(s) | Primary tables | Product-ready questions |
+| --- | --- | --- | --- |
+| Provider identity and directory | NPPES Monthly V2; NPPES Weekly Incremental V2; Physician & Other Practitioners - by Provider; PECOS Public Provider Enrollment | `core_providers`, `raw_nppes` | Who is this provider, what is their specialty or taxonomy, and where are they located? |
+| Practices and provider rosters | Revalidation Clinic Group Practice Reassignment; NPPES Monthly V2 and Weekly Incremental V2 | `practice_locations` | Which clinicians appear in a group, and what is the practice's geographic footprint? |
+| Medicare utilization | Physician & Other Practitioners - by Provider; Part D - by Provider; DMEPOS - by Referring Provider | `utilization_metrics` | What is the provider's service volume, beneficiary mix, Medicare payment profile, prescribing profile, and DME referral activity? |
+| Services and drugs | Physician & Other Practitioners - by Provider and Service; Part D - by Provider and Drug | `provider_service_detail`, `provider_drug_detail` | Which services and medications characterize the provider's activity? |
+| Hospital network intelligence | Revalidation Clinic Group Practice Reassignment; Hospital Enrollments | `hospital_affiliations`, `raw_hospital_enrollments` | Which hospital relationships can be conservatively inferred, and with what evidence and confidence? |
+| Enrollment and eligibility | PECOS Public Provider Enrollment; Order and Referring | `order_referring_eligibility`, PECOS-derived provider fields | Is a provider present in public Medicare enrollment data, and what can they order or refer? |
+| Quality and participation | Quality Payment Program Experience | `provider_quality_scores` | What public QPP participation, practice, and quality measures are available? |
+| Industry and research relationships | Open Payments General; Open Payments Research; Open Payments Ownership | `industry_relationships`, `kol_summary`, Open Payments raw tables | Which reported transfers of value, research payments, and ownership records are associated with a provider? |
+| New Provider Radar | NPPES Monthly V2; NPPES Weekly Incremental V2 | `nppes_radar_provider_state`, `nppes_radar_events`, `nppes_radar_releases` | What changed in the provider market, when did it change, and which publisher release proved it? |
+| Clinical research | AACT ClinicalTrials.gov snapshot | AACT PostgreSQL `ctgov` schema | Which studies, investigators, sponsors, conditions, interventions, and facilities are represented in ClinicalTrials.gov? |
 
 ## Source portfolio and update cadence
 
@@ -280,13 +284,16 @@ time-bounded so an earlier deployment's result cannot be reused.
 - [Repository README](../README.md)
 - [Styled PDF edition](../output/pdf/cms-data-platform-overview.pdf)
 
-Rebuild the PDF from the repository root with the bundled/documentation Python runtime:
+Rebuild the PDF from the repository root with a Python environment that has `reportlab` installed.
+The Codex Desktop bundled workspace runtime includes it; a standalone local environment can install
+it without changing the API dependency set:
 
 ```bash
-python scripts/build_platform_overview_pdf.py
+uv pip install --python .venv/bin/python reportlab
+.venv/bin/python scripts/build_platform_overview_pdf.py
 ```
 
 ---
 
-*Snapshot metrics and source periods reflect the validated July 22, 2026 candidate. This document is
-an architectural and operating overview, not a representation that a candidate has been promoted.*
+*Snapshot metrics and source periods reflect the active validated July 22, 2026 production release.
+This document is an architectural and operating overview, not a production runbook.*

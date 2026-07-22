@@ -1,5 +1,7 @@
 # Production Cutover Runbook
 
+> **Last reviewed: 2026-07-22** · **Status: current approval-gated production procedure**
+
 ## Scope
 
 This runbook performs one reversible serving cutover. It does not download source data, rebuild a

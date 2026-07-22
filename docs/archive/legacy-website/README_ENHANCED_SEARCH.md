@@ -1,5 +1,7 @@
 # 🎉 CMS Provider Search - Enhanced Prototype Complete!
 
+> **Archived — reviewed 2026-07-22.** Historical dashboard/prototype record; not current operational guidance.
+
 ## What Was Built
 
 A production-ready enhancement to the CMS Provider Intelligence dashboard with **6 major features**:

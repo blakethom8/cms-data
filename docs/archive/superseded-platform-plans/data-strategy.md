@@ -1,5 +1,7 @@
 # Provider Searcher: Data Strategy & Schema Rationale
 
+> **Archived — reviewed 2026-07-22.** Superseded data-model rationale; use `schema/ddl.sql` and the platform overview.
+
 ## What We're Building
 
 Provider Searcher is an analytics platform for medical sales reps and physician liaisons. The core use case: a cardiology device rep covering California needs to answer "Which cardiologists in my territory should I prioritize?" — ranked by volume, prescribing patterns, quality gaps, and practice affiliations.

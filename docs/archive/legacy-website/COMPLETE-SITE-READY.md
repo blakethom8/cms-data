@@ -1,5 +1,7 @@
 # ✅ COMPLETE WEBSITE READY FOR DEPLOYMENT
 
+> **Archived — reviewed 2026-07-22.** Historical static-site deployment record; not current operational guidance.
+
 **Date:** 2026-03-03 15:45 PST  
 **Status:** All pages built, tested locally, ready for production  
 **Total Content:** 110KB+ across 6 complete pages

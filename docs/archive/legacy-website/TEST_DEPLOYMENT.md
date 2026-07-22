@@ -1,5 +1,7 @@
 # CMS Provider Search Enhancement - Deployment Summary
 
+> **Archived — reviewed 2026-07-22.** Historical prototype deployment record; not current operational guidance.
+
 ## ✅ Completed
 
 ### 1. Enhanced Name Parser (api/match.py)

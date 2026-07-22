@@ -1,5 +1,7 @@
 # ✅ CMS Provider Search Enhancement - DEPLOYMENT COMPLETE
 
+> **Archived — reviewed 2026-07-22.** Historical prototype deployment record; not current operational guidance.
+
 ## Summary
 
 All 6 major enhancements have been successfully implemented, deployed, and tested:

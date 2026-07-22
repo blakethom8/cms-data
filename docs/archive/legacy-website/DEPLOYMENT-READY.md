@@ -1,5 +1,7 @@
 # HealthcareDataAI.com - Deployment Ready Status
 
+> **Archived — reviewed 2026-07-22.** Historical static-site planning record; not current operational guidance.
+
 **Date:** 2026-03-03 15:15 PST  
 **Status:** Phase 1 Complete, ready for your review
 

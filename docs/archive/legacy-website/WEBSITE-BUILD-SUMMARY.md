@@ -1,5 +1,7 @@
 # HealthcareDataAI.com Website Build Summary
 
+> **Archived — reviewed 2026-07-22.** Historical static-site build record; not current platform architecture.
+
 **Date:** 2026-03-03  
 **Status:** Initial build complete, ready for review  
 **Builder:** Chief

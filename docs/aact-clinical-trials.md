@@ -1,5 +1,7 @@
 # AACT Clinical-Trials Adapter
 
+> **Last reviewed: 2026-07-22** · **Status: current production adapter guide**
+
 This service exposes the hosted AACT PostgreSQL mirror to Provider Search. It is the request-time
 clinical-trials data plane; Provider Search does not call the public ClinicalTrials.gov search API.
 

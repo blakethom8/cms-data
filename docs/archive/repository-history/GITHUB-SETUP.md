@@ -1,5 +1,7 @@
 # GitHub Setup Instructions for CMS Data Pipeline
 
+> **Archived — reviewed 2026-07-22.** The repository and remote already exist; do not follow these one-time setup steps.
+
 ## Steps to Deploy
 
 1. **Create a new repo on GitHub:**

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the styled Provider Intelligence Data Platform overview PDF."""
+"""Build the styled Provider Intelligence Data Platform overview PDF (reviewed 2026-07-22)."""
 
 from __future__ import annotations
 
@@ -50,51 +50,61 @@ CONTENT_WIDTH = PAGE_WIDTH - LEFT - RIGHT
 MARTS = [
     (
         "Provider identity and directory",
+        "NPPES monthly/weekly; Provider; PECOS",
         "core_providers, raw_nppes",
         "Identity, specialty, taxonomy, public enrollment, and location around NPI.",
     ),
     (
         "Practices and rosters",
+        "Reassignment; NPPES monthly/weekly",
         "practice_locations",
         "Group membership, provider rosters, primary sites, and geographic footprint.",
     ),
     (
         "Medicare utilization",
+        "Physician Provider; Part D Provider; DMEPOS",
         "utilization_metrics",
         "Service volume, payments, beneficiary mix, Part D prescribing, and DME referrals.",
     ),
     (
         "Services and drugs",
+        "Physician Service; Part D Drug",
         "provider_service_detail, provider_drug_detail",
         "Provider-level service mix and medication activity.",
     ),
     (
         "Hospital network intelligence",
+        "Reassignment; Hospital Enrollments",
         "hospital_affiliations, raw_hospital_enrollments",
         "Conservatively inferred relationships with explicit source and confidence.",
     ),
     (
         "Enrollment and eligibility",
+        "PECOS; Order and Referring",
         "order_referring_eligibility, PECOS fields",
         "Public Medicare enrollment presence and order/referring eligibility.",
     ),
     (
         "Quality and participation",
+        "Quality Payment Program Experience",
         "provider_quality_scores",
         "Public QPP participation, practice, and performance measures.",
     ),
     (
         "Industry and research",
+        "Open Payments general, research, ownership",
         "industry_relationships, kol_summary, Open Payments raw",
         "Reported general, research, and ownership relationships.",
     ),
     (
         "New Provider Radar",
+        "NPPES monthly/weekly",
         "nppes_radar_provider_state/events/releases",
         "New providers, moves, taxonomy changes, reactivations, and deactivations.",
     ),
     (
         "Clinical research",
+        "AACT ClinicalTrials.gov snapshot",
         "AACT PostgreSQL ctgov schema",
         "Studies, investigators, sponsors, conditions, interventions, and facilities.",
     ),
@@ -517,7 +527,7 @@ def cover_story(s: dict[str, ParagraphStyle]) -> list[Flowable]:
         metrics,
         Spacer(1, 0.45 * inch),
         p(
-            "Validated candidate snapshot - July 22, 2026. Production changes only after explicit "
+            "Validated production release snapshot - July 22, 2026. Every change requires explicit "
             "approval, bounded smoke validation, and retention of a complete rollback release.",
             s["cover_note"],
         ),
@@ -570,8 +580,8 @@ def build_story(s: dict[str, ParagraphStyle]) -> list[Flowable]:
         ("Inferred hospital affiliations", "139,775"),
         ("AACT clinical studies", "594,772"),
     ]
-    story.append(table(["Validated candidate signal", "Scale"], overview_rows, [4.8 * inch, 1.7 * inch], s, 8.2))
-    story.append(p("Snapshot metrics describe the validated July 22, 2026 staging candidate, not an unapproved production promotion.", s["small"]))
+    story.append(table(["Validated production signal", "Scale"], overview_rows, [4.8 * inch, 1.7 * inch], s, 8.2))
+    story.append(p("Snapshot metrics describe the active validated July 22, 2026 release.", s["small"]))
 
     story.append(PageBreak())
     story += section_title("02", "Curated data marts", s)
@@ -583,7 +593,13 @@ def build_story(s: dict[str, ParagraphStyle]) -> list[Flowable]:
             s["body"],
         )
     )
-    story.append(table(["Data mart", "Primary tables", "Decision surface"], MARTS, [1.62 * inch, 2.05 * inch, 2.83 * inch], s, 6.9))
+    story.append(table(
+        ["Data mart", "Primary sources", "Primary tables", "Decision surface"],
+        MARTS,
+        [1.25 * inch, 1.55 * inch, 1.55 * inch, 2.15 * inch],
+        s,
+        5.9,
+    ))
 
     story.append(PageBreak())
     story += section_title("03", "Source portfolio and cadence", s)
@@ -774,8 +790,7 @@ def build_story(s: dict[str, ParagraphStyle]) -> list[Flowable]:
     story.append(
         p(
             "Architectural and operating overview. Snapshot metrics and source periods reflect the "
-            "validated July 22, 2026 candidate and do not imply that an unapproved candidate has "
-            "already been promoted.",
+            "active validated July 22, 2026 production release. Last reviewed July 22, 2026.",
             s["small"],
         )
     )

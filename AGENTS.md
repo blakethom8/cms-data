@@ -1,5 +1,7 @@
 # Repository Guidelines
 
+> **Last reviewed: 2026-07-22**
+
 ## Project Structure & Module Organization
 
 `pipeline/` owns public-data acquisition and DuckDB transformations. `schema/ddl.sql` defines the

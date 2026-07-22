@@ -1,6 +1,7 @@
 # New Provider Radar
 
-**Status:** backend foundation in progress
+> **Last reviewed: 2026-07-22** · **Status: cms-data backend foundation complete; Provider Search workflow remains pending**
+
 **Owners:** `cms-data` owns public-source ingestion, change detection, provenance, and read-only APIs;
 `provider-search` owns saved-market configuration, user state, notifications, and rep workflows.
 **Initial grain:** Type 1 individual NPI at its primary NPPES practice location.

@@ -1,5 +1,7 @@
 # Provider Data Mining Strategy
 
+> **Archived — reviewed 2026-07-22.** Superseded planning material; it predates the immutable release model.
+
 ## Overview
 
 Building a comprehensive provider intelligence repository by combining CMS Medicare data with external sources. Target: **8M+ NPIs** with enriched profiles for medical sales, pharma, and device targeting.

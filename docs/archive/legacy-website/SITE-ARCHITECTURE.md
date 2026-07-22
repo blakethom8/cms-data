@@ -1,5 +1,7 @@
 # HealthcareDataAI.com Site Architecture
 
+> **Archived — reviewed 2026-07-22.** Historical static-site plan; not current platform architecture.
+
 **Version:** 1.0  
 **Date:** 2026-03-03  
 **Purpose:** Transform single-page dashboard into multi-page portfolio + lead generation platform

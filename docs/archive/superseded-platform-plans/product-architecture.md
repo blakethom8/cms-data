@@ -1,4 +1,6 @@
 # Provider Search Intelligence Platform
+
+> **Archived — reviewed 2026-07-22.** Superseded product architecture proposal; current public-data boundaries live in the operating model.
 ## Product Architecture Document
 
 **Version:** 1.0  

@@ -1,5 +1,7 @@
 # Provider Data Platform Operating Model
 
+> **Last reviewed: 2026-07-22** · **Status: canonical operating policy**
+
 ## Decision
 
 This repository is the canonical public-data plane for Provider Search. It owns source discovery,

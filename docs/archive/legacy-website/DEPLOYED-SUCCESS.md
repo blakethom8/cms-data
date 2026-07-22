@@ -1,5 +1,7 @@
 # 🎉 HEALTHCAREDATAAI.COM - DEPLOYMENT SUCCESSFUL
 
+> **Archived — reviewed 2026-07-22.** Historical static-site deployment record; not current operational guidance.
+
 **Deployed:** 2026-03-03 15:30 PST
 **Status:** ✅ ALL SYSTEMS OPERATIONAL
 **Commit:** ae6b362

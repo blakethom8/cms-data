@@ -1,5 +1,7 @@
 # Provider Intelligence Platform — Technical Implementation Plan
 
+> **Archived — reviewed 2026-07-22.** Superseded multi-agent implementation proposal; not a current pipeline or production runbook.
+
 **Version:** 1.0
 **Date:** February 16, 2026
 **Status:** Implementation Planning

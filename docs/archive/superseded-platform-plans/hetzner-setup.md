@@ -1,5 +1,7 @@
 # Hetzner Server Setup for Provider Data Pipeline
 
+> **Archived — reviewed 2026-07-22.** Superseded provisioning and cron guidance; use the production promotion runbook and systemd guide.
+
 ## Server Specifications
 
 ### Recommended Configuration: **CX52**

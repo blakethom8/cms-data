@@ -1,5 +1,7 @@
 # 🚀 CMS Provider Search - Quick Start
 
+> **Archived — reviewed 2026-07-22.** Historical dashboard/prototype instructions; not current operational guidance.
+
 ## Open Dashboard
 ```bash
 open ~/Repo/cms-data/dashboard/index.html

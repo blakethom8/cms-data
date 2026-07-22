@@ -1,5 +1,7 @@
 # Output Schema Specification
 
+> **Archived — reviewed 2026-07-22.** Superseded schema proposal; `schema/ddl.sql` is the current schema authority.
+
 **Last Updated:** 2026-02-16
 **Purpose:** Define the exact output tables, columns, sources, and relationships for the Provider Intelligence Platform.
 
