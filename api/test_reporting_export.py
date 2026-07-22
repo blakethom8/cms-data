@@ -116,17 +116,18 @@ def _warehouse(path: Path) -> Path:
              'TX', '73301', 'acute_care', 'reassignment', 'medium', 'PAC2', 2024);
 
         CREATE TABLE raw_dac_national (
-            "NPI" VARCHAR, org_pac_id VARCHAR, "Facility Name" VARCHAR,
+            "NPI" VARCHAR, "Ind_PAC_ID" VARCHAR, "Ind_enrl_ID" VARCHAR,
+            org_pac_id VARCHAR, adrs_id VARCHAR, "Facility Name" VARCHAR,
             num_org_mem VARCHAR, pri_spec VARCHAR, adr_ln_1 VARCHAR,
             "City/Town" VARCHAR, "State" VARCHAR, "ZIP Code" VARCHAR,
             extra_source_column VARCHAR
         );
         INSERT INTO raw_dac_national VALUES
-            ('1000000001', 'PAC1', 'Alpha Group', '10', 'Cardiology', '1 Main',
+            ('1000000001', 'IPAC1', 'ENRL1', 'PAC1', 'ADDR1', 'Alpha Group', '10', 'Cardiology', '1 Main',
              'Los Angeles', 'CA', '90001', 'preserved'),
-            ('1000000002', 'PAC2', 'Beta Group', '2', 'Internal Medicine', '2 Main',
+            ('1000000002', 'IPAC2', 'ENRL2', 'PAC2', 'ADDR2', 'Beta Group', '2', 'Internal Medicine', '2 Main',
              'Pasadena', 'ca', '91101', 'preserved'),
-            ('1000000003', 'PAC3', 'Texas Group', '4', 'Cardiology', '3 Main',
+            ('1000000003', 'IPAC3', 'ENRL3', 'PAC3', 'ADDR3', 'Texas Group', '4', 'Cardiology', '3 Main',
              'Austin', 'TX', '73301', 'excluded');
 
         CREATE TABLE raw_nppes (
@@ -198,7 +199,7 @@ def test_profile_exposes_every_source_column(tmp_path: Path) -> None:
     columns = {(row.layer, row.name): row.column_count for row in profile.models}
 
     assert columns[("source_detail", "source_nppes_provider")] == 5
-    assert columns[("source_detail", "source_dac_clinician_location")] == 10
+    assert columns[("source_detail", "source_dac_clinician_location")] == 13
     assert columns[("source_detail", "source_medicare_provider_year")] == 4
 
 
@@ -217,6 +218,10 @@ def test_contract_has_lineage_for_every_curated_field() -> None:
         field.name == "hcpcs_description"
         for model in REPORTING_MODELS
         for field in model.fields
+    )
+    location = next(model for model in REPORTING_MODELS if model.name == "bridge_provider_location")
+    assert {"individual_pac_id", "individual_enrollment_id", "address_id"}.issubset(
+        field.name for field in location.fields
     )
 
 

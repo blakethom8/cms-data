@@ -121,19 +121,23 @@ REPORTING_MODELS: tuple[ReportingModel, ...] = (
     ),
     ReportingModel(
         name="bridge_provider_location",
-        grain="one provider NPI by DAC-reported practice address and organization",
+        grain="one provider enrollment by DAC address identifier and organization",
         scope_rule='raw_dac_national."State" = \'CA\'',
         source_tables=("raw_dac_national",),
         key_columns=("location_key",),
         from_sql='FROM raw_dac_national d WHERE UPPER(d."State") = \'CA\'',
         notes=(
-            "DAC practice-location bridge. A provider can have several rows; do not "
-            "physically join this table to provider-level measures before aggregation."
+            "DAC practice-location bridge. Enrollment and publisher address identifiers "
+            "distinguish otherwise identical address rows. A provider can have several rows; "
+            "do not physically join this table to provider-level measures before aggregation."
         ),
         fields=(
-            _field("location_key", "MD5(CONCAT_WS('|', CAST(d.\"NPI\" AS VARCHAR), COALESCE(CAST(d.org_pac_id AS VARCHAR), ''), UPPER(COALESCE(d.adr_ln_1, '')), LEFT(CAST(d.\"ZIP Code\" AS VARCHAR), 5)))", "cms_dac_national_legacy", "raw_dac_national", "NPI + org_pac_id + adr_ln_1 + ZIP Code", "Stable hash of the reported location grain", derived=True),
+            _field("location_key", "MD5(CONCAT_WS('|', CAST(d.\"NPI\" AS VARCHAR), COALESCE(CAST(d.\"Ind_PAC_ID\" AS VARCHAR), ''), COALESCE(CAST(d.\"Ind_enrl_ID\" AS VARCHAR), ''), COALESCE(CAST(d.org_pac_id AS VARCHAR), ''), COALESCE(CAST(d.adrs_id AS VARCHAR), '')))", "cms_dac_national_legacy", "raw_dac_national", "NPI + Ind_PAC_ID + Ind_enrl_ID + org_pac_id + adrs_id", "Stable hash of the source enrollment-location grain", derived=True),
             _field("npi", 'CAST(d."NPI" AS VARCHAR)', "cms_dac_national_legacy", "raw_dac_national", "NPI"),
+            _field("individual_pac_id", 'CAST(d."Ind_PAC_ID" AS VARCHAR)', "cms_dac_national_legacy", "raw_dac_national", "Ind_PAC_ID"),
+            _field("individual_enrollment_id", 'CAST(d."Ind_enrl_ID" AS VARCHAR)', "cms_dac_national_legacy", "raw_dac_national", "Ind_enrl_ID"),
             _field("organization_pac_id", "CAST(d.org_pac_id AS VARCHAR)", "cms_dac_national_legacy", "raw_dac_national", "org_pac_id"),
+            _field("address_id", "CAST(d.adrs_id AS VARCHAR)", "cms_dac_national_legacy", "raw_dac_national", "adrs_id"),
             _field("facility_name", 'd."Facility Name"', "cms_dac_national_legacy", "raw_dac_national", "Facility Name"),
             _field("organization_member_count", "TRY_CAST(d.num_org_mem AS BIGINT)", "cms_dac_national_legacy", "raw_dac_national", "num_org_mem", "Safe integer cast", derived=True),
             _field("primary_specialty", "d.pri_spec", "cms_dac_national_legacy", "raw_dac_national", "pri_spec"),

@@ -659,6 +659,7 @@ def _write_json_atomic(path: Path, value: dict) -> None:
             handle.flush()
             os.fsync(handle.fileno())
         os.chmod(temporary, 0o640)
+        _inherit_control_group(temporary, path.parent)
         os.replace(temporary, path)
         _fsync_directory(path.parent)
     finally:

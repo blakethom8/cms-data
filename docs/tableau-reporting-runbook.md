@@ -27,7 +27,7 @@ The `reporting` schema contains certified analytical models:
 | View | Declared grain |
 | --- | --- |
 | `dim_provider` | one current individual provider NPI |
-| `bridge_provider_location` | one provider NPI by DAC-reported practice address and organization |
+| `bridge_provider_location` | one provider enrollment by DAC address identifier and organization |
 | `fact_provider_metrics_year` | one provider NPI by Medicare metric year |
 | `fact_provider_quality_year` | one provider NPI by available QPP data year |
 | `bridge_provider_hospital` | one provider NPI by inferred hospital NPI and data year |
