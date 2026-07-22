@@ -1,0 +1,11 @@
+[Unit]
+Description=Check for the approved Tableau reporting release daily
+
+[Timer]
+OnCalendar=*-*-* 08:00:00
+Persistent=true
+RandomizedDelaySec=15m
+Unit=cms-tableau-reporting.service
+
+[Install]
+WantedBy=timers.target

@@ -32,6 +32,14 @@ uv pip install --python .venv/bin/python -r api/requirements-dev.txt
 cd api && ../.venv/bin/python -m pytest -q
 ```
 
+## Internal Data Command Center
+
+The internal Data Command Center lives in [`dashboard/command-center/`](dashboard/command-center/).
+It combines the curated data catalog, columns and samples, source-to-mart lineage, contract evidence,
+and manifest run history without adding pipeline writes to the serving API. Its operating model and
+future approval-gated refresh boundary are documented in
+[`docs/data-command-center.md`](docs/data-command-center.md).
+
 Run the FastAPI service locally against an explicitly selected local DuckDB file only:
 
 ```bash

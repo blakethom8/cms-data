@@ -1,0 +1,17 @@
+services:
+  cms-tableau-postgres:
+    image: postgres:17
+    container_name: cms-tableau-postgres
+    restart: unless-stopped
+    env_file:
+      - /etc/cms-data/tableau-postgres.env
+    ports:
+      - "127.0.0.1:5434:5432"
+    volumes:
+      - /srv/cms-data-platform/reporting/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    shm_size: 1gb
