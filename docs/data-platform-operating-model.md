@@ -64,6 +64,35 @@ was reached. Every source must pass these common gates before it can enter a pro
    evidence; a verified predecessor remains available; selection changes only `release-current`;
    and the bounded smoke/automatic rollback path is ready.
 
+### Candidate scope policy
+
+Every promotion produces a complete, immutable DuckDB candidate, but a complete candidate does
+**not** imply that every source or mart must be rebuilt. Before acquisition is promoted, the operator
+must classify its dependency scope and record the affected source runs, warehouse tables, validation
+checks, and comparison allowlist in the release evidence.
+
+| Candidate scope | Use when | Candidate work | Full rebuild required? |
+| --- | --- | --- | --- |
+| Targeted additive | A new raw source table or mart is added and its upstream dependencies already exist at a compatible period | Copy the verified baseline; add the declared raw tables; rebuild only declared downstream tables and reporting models | No |
+| Source-family refresh | A publisher refresh changes one source family and its direct dependents | Copy the verified baseline; replace that family's raw tables; rebuild its dependency closure | No, unless the change crosses source-family boundaries |
+| Full reconciliation | A new platform baseline, shared identity model, runtime/schema migration, or deliberate cross-family audit is required | Rebuild the complete declared platform bundle and all derived marts | Yes |
+
+Targeted and source-family candidates still use the same immutable-copy, checksum, comparison,
+promotion, rollback, and post-restart smoke process. They never mutate the selected DuckDB in place.
+Their comparison must prove that every table outside the declared impact set is unchanged.
+
+The first PPEF promotion is a **targeted additive** candidate. Its inputs are the active
+same-period PECOS enrollment table plus the acquired PPEF reassignment and practice-location files.
+Its allowed changes are the two PPEF raw tables, the two curated PPEF bridges, and their declared
+reporting/export surfaces. It must enforce same-period alignment, declared raw grains, zero orphan
+enrollment keys, curated bridge key uniqueness, row-count evidence, and the usual API/reporting
+contracts. It does not require a Medicare, NPPES, Open Payments, or AACT rebuild.
+
+The current CLI does not yet expose a PPEF-scoped builder. Until that builder and its focused tests
+exist, operators must not use `build-platform-release` as a substitute merely to add PPEF. That
+command is a full-reconciliation path and can exhaust the serving host without adding safety for an
+otherwise additive change.
+
 Source-specific gates add to, and never replace, those common gates:
 
 | Source family | Required source-specific gate before candidate build |
@@ -184,10 +213,12 @@ warehouse unchanged. `--dry-run` performs discovery and path planning without cr
 root. Fixture metadata is deliberately accepted only with `--dry-run`, so fixture-derived publisher
 versions cannot be acquired as promotion candidates.
 
-`build-platform-release --environment staging` requires exactly the ten CMS, two NPPES, and three
-Open Payments runs. It copies a checksum-verified baseline to a new candidate, strictly replaces raw
-tables, rebuilds derived data, applies monthly NPPES before the weekly overlay, rebuilds Radar and
-Open Payments summaries, and records exact counts for every table required by production smoke.
+`build-platform-release --environment staging` is the full-reconciliation command. It requires
+exactly the twelve CMS, two NPPES, and three Open Payments runs. It copies a checksum-verified
+baseline to a new candidate, strictly replaces raw tables, rebuilds derived data, applies monthly
+NPPES before the weekly overlay, rebuilds Radar and Open Payments summaries, and records exact counts
+for every table required by production smoke. It is not the default path for an additive or
+source-family-scoped release.
 `prepare-aact-release --environment staging` revalidates the AACT archive and seals its PostgreSQL
 custom dump and data dictionary as a separate immutable restore artifact. Neither operation opens or
 overwrites the selected production DuckDB.

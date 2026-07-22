@@ -12,7 +12,7 @@ complete analytical releases, and serves stable read-only API contracts to downs
 The platform registers 18 sources from CMS, NPPES, Open Payments, and AACT / ClinicalTrials.gov.
 The active production release contains the previously validated 16-source bundle; the two PPEF
 relationship subfiles are registered for staged acquisition and are not production data until a
-complete candidate passes comparison and promotion. Each release is reproducible,
+targeted additive candidate passes comparison and promotion. Each release is reproducible,
 checksum-verified, tested against the prior warehouse, and promoted as one atomic bundle with a
 complete rollback release retained.
 

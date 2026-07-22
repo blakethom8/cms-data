@@ -273,25 +273,46 @@ hand and never copy a database over an existing artifact.
 After the initial cutover, every refresh uses the same release mechanism; there is no in-place
 "update production" path:
 
-1. Run publisher discovery. Proceed only for an explicit newer version and only after the
+1. Classify the candidate before building it: targeted additive, source-family refresh, or full
+   reconciliation. Record the triggering source runs, exact dependency closure, expected changed
+   tables, comparison allowlist, validation gates, and resource budget. Do not select a full rebuild
+   merely because it is the only available command.
+2. Run publisher discovery. Proceed only for an explicit newer version and only after the
    source-specific gate in the operating model passes.
-2. Acquire into a new immutable staging run, record the complete source manifest, and build a new
-   DuckDB candidate from a checksum-verified production baseline copy.
-3. Run source validation, complete-warehouse comparison, API contract tests, and the full temporary
+3. Acquire into a new immutable staging run, record the complete source manifest, and build a new
+   DuckDB candidate from a checksum-verified production baseline copy. A targeted or source-family
+   candidate loads and rebuilds only its declared dependency closure; a full reconciliation rebuilds
+   the complete bundle.
+4. Run source validation, complete-warehouse comparison, API contract tests, and the full temporary
    loopback smoke suite. Do not reuse evidence from another deployment.
-4. Create separate immutable production code, runtime, and warehouse artifacts. Prepare a new
+5. Create separate immutable production code, runtime, and warehouse artifacts. Prepare a new
    deployment bundle while the live bundle remains selected.
-5. Reconcile the candidate's source manifests to the contents of that exact warehouse. Write the
+6. Reconcile the candidate's source manifests to the contents of that exact warehouse. Write the
    resulting document as `root:dataops` mode `0440`, in a `root:dataops` mode `0750` directory, at
    `production/evidence/<candidate-deployment-id>/source-manifests.json`. Validate it with fixture
    status and, when publisher metadata is reachable, live status. Missing provenance stays unknown.
-6. Reconfirm the selected release, hashes, journal, transition sentinel, rollback artifact, and disk
+7. Reconfirm the selected release, hashes, journal, transition sentinel, rollback artifact, and disk
    headroom immediately before cutover.
-7. Run `pipeline.production_cutover` once. It atomically selects the complete candidate bundle,
+8. Run `pipeline.production_cutover` once. It atomically selects the complete candidate bundle,
    restarts, creates fresh smoke evidence, and verifies. Any required failure selects, restarts, and
    smoke-tests the complete predecessor.
-8. Retain the selected release and at least two prior validated releases. Prune only an explicitly
+9. Retain the selected release and at least two prior validated releases. Prune only an explicitly
    identified superseded artifact after its hashes and rollback retention requirements are reviewed.
+
+### Scoped-build resource guardrail
+
+Build work must not starve the serving API or administrative access. Before a candidate starts,
+reserve enough RAM, CPU, and disk for the selected API bundle, its predecessor, the candidate copy,
+and any reporting export. Configure DuckDB's thread and memory limits plus a candidate-only spill
+directory, or move the build to an isolated worker, when the host cannot preserve that reserve.
+
+If a candidate causes sustained API, SSH, or reverse-proxy degradation, stop only the identified
+candidate process, leave `release-current` untouched, and inspect the partial candidate before
+retrying. Do not kill the API or overwrite a release to recover capacity. The interrupted candidate
+remains unpromoted and must be rebuilt from the verified baseline after the resource plan is fixed.
+
+For PPEF specifically, the next attempt must use the documented targeted-additive scope; the current
+full-platform command is not an acceptable operational substitute.
 
 The daily `cms-data-status.timer` is advisory discovery monitoring. A stale result opens an operator
 workflow; it does not authorize acquisition, candidate construction, restart, or promotion. Inspect
