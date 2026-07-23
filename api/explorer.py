@@ -44,6 +44,18 @@ CATALOG: list[dict] = [
         "join_keys": ["NPI"],
     },
     {
+        "key": "pecos_enrollment",
+        "table": "raw_pecos_enrollment",
+        "title": "PECOS Public Provider Enrollment",
+        "domain": "identity",
+        "grain": "one Medicare enrollment record",
+        "description": "CMS's quarterly public enrollment snapshot for Medicare "
+                       "fee-for-service providers and organizations. Use the enrollment "
+                       "ID to connect enrollment records; an enrollment is not evidence "
+                       "of employment, a billing reassignment, or a primary practice site.",
+        "join_keys": ["NPI", "ENRLMT_ID"],
+    },
+    {
         "key": "physician_by_provider",
         "table": "raw_physician_by_provider",
         "title": "Medicare Utilization (per provider)",
@@ -168,6 +180,12 @@ SAMPLES: dict[str, str] = {
                practice_state state
         from raw_nppes
         where practice_city ilike ? and practice_state = ?""",
+    "pecos_enrollment": """
+        select "NPI" npi, "ENRLMT_ID" enrollment_id,
+               coalesce(nullif("ORG_NAME", ''), concat_ws(' ', "FIRST_NAME", "MDL_NAME", "LAST_NAME")) provider_name,
+               "PROVIDER_TYPE_DESC" provider_type, "STATE_CD" state
+        from raw_pecos_enrollment
+        where "STATE_CD" = ?""",
     "physician_by_provider": """
         select "Rndrng_NPI" npi, "Rndrng_Prvdr_Last_Org_Name" last_name,
                "Rndrng_Prvdr_Type" specialty, "Tot_Benes" beneficiaries,
@@ -245,7 +263,7 @@ SAMPLES: dict[str, str] = {
 }
 
 # Reassignment has no city column — it binds (state, state) instead.
-STATE_ONLY_SAMPLES = {"reassignment"}
+STATE_ONLY_SAMPLES = {"pecos_enrollment", "reassignment"}
 
 
 # Provider-first source comparison. These are intentionally static, reviewed SQL
