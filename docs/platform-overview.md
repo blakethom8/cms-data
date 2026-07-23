@@ -9,19 +9,19 @@ The Provider Intelligence Data Platform is the canonical public-data plane for P
 discovers and validates primary publisher releases, preserves immutable source provenance, builds
 complete analytical releases, and serves stable read-only API contracts to downstream products.
 
-The platform registers 18 sources from CMS, NPPES, Open Payments, and AACT / ClinicalTrials.gov.
-The active production release contains the previously validated 16-source bundle; the two PPEF
-relationship subfiles are registered for staged acquisition and are not production data until a
-targeted additive candidate passes comparison and promotion. Each release is reproducible,
+The platform registers and actively validates 18 sources from CMS, NPPES, Open Payments, and AACT /
+ClinicalTrials.gov. The Q1 2026 PPEF reassignment and practice-location subfiles are installed with
+the same-period PECOS enrollment snapshot. Their targeted additive release passed source-period,
+grain, relationship, comparison, and production smoke gates. Each release is reproducible,
 checksum-verified, tested against the prior warehouse, and promoted as one atomic bundle with a
 complete rollback release retained.
 
-**Validated production release snapshot - July 22, 2026**
+**Validated production release snapshot - July 23, 2026 UTC**
 
 | Platform signal | Validated scale |
 | --- | ---: |
 | Registered publisher sources | 18 |
-| Sources in active validated production bundle | 16 |
+| Sources in active validated production bundle | 18 |
 | Public publishers and official indexes | 4 |
 | Core provider records | 7,373,208 |
 | Practice locations | 2,341,984 |
@@ -29,6 +29,8 @@ complete rollback release retained.
 | Provider-drug records | 22,444,680 |
 | Open Payments general-payment records | 16,131,856 |
 | Inferred hospital affiliations | 139,775 |
+| PECOS provider-to-receiving-enrollment relationships | 3,857,023 |
+| PECOS enrollment practice locations | 1,080,813 |
 | AACT clinical studies | 594,772 |
 
 These figures describe the active validated release. Every future production change still requires
@@ -65,7 +67,7 @@ multiple marts.
 | Medicare utilization | Physician & Other Practitioners - by Provider; Part D - by Provider; DMEPOS - by Referring Provider | `utilization_metrics` | What is the provider's service volume, beneficiary mix, Medicare payment profile, prescribing profile, and DME referral activity? |
 | Services and drugs | Physician & Other Practitioners - by Provider and Service; Part D - by Provider and Drug | `provider_service_detail`, `provider_drug_detail` | Which services and medications characterize the provider's activity? |
 | Hospital network intelligence | Revalidation Clinic Group Practice Reassignment; Hospital Enrollments | `hospital_affiliations`, `raw_hospital_enrollments` | Which hospital relationships can be conservatively inferred, and with what evidence and confidence? |
-| Enrollment, billing reassignment, and eligibility | PECOS Public Provider Enrollment and its Reassignment and Practice Location subfiles; Order and Referring | `raw_pecos_enrollment`, `raw_pecos_reassignment`, `raw_pecos_practice_location`, `order_referring_eligibility` | Is a provider enrolled, which entities receive reassigned Medicare benefits, where are those enrollment entities located, and what can the provider order or refer? |
+| Enrollment, billing reassignment, and eligibility | PECOS Public Provider Enrollment and its Reassignment and Practice Location subfiles; Order and Referring | `raw_pecos_enrollment`, `raw_pecos_reassignment`, `raw_pecos_practice_location`, `pecos_provider_organizations`, `pecos_enrollment_practice_locations`, `order_referring_eligibility` | Is a provider enrolled, which entities receive reassigned Medicare benefits, where are those enrollment entities located, and what can the provider order or refer? |
 | Quality and participation | Quality Payment Program Experience | `provider_quality_scores` | What public QPP participation, practice, and quality measures are available? |
 | Industry and research relationships | Open Payments General; Open Payments Research; Open Payments Ownership | `industry_relationships`, `kol_summary`, Open Payments raw tables | Which reported transfers of value, research payments, and ownership records are associated with a provider? |
 | New Provider Radar | NPPES Monthly V2; NPPES Weekly Incremental V2 | `nppes_radar_provider_state`, `nppes_radar_events`, `nppes_radar_releases` | What changed in the provider market, when did it change, and which publisher release proved it? |
@@ -85,8 +87,8 @@ official publisher metadata exposes a different, parseable release and every val
 | DMEPOS - by Referring Provider | Annual | Check daily; promote new release within 48 hours | Calendar-year DME referral utilization | 2023 |
 | Quality Payment Program Experience | Annual | Check daily; promote new release within 48 hours | QPP performance year | 2024 |
 | PECOS Public Provider Enrollment | Quarterly | Check weekly; promote within 72 hours | Quarter-end enrollment snapshot | Q1 2026 |
-| PECOS Reassignment subfile | Quarterly | Check weekly; promote only with a same-period PPEF enrollment bundle | Enrollment ID reassigning benefits × enrollment ID receiving benefits | Not yet promoted |
-| PECOS Practice Location subfile | Quarterly | Check weekly; promote only with a same-period PPEF enrollment bundle | Enrollment ID × city × state × ZIP | Not yet promoted |
+| PECOS Reassignment subfile | Quarterly | Check weekly; promote only with a same-period PPEF enrollment bundle | Enrollment ID reassigning benefits × enrollment ID receiving benefits | Q1 2026 |
+| PECOS Practice Location subfile | Quarterly | Check weekly; promote only with a same-period PPEF enrollment bundle | Enrollment ID × city × state × ZIP | Q1 2026 |
 | Order and Referring | About twice weekly | Check daily; promote changed version within 48 hours | Publisher eligibility interval | Jul 12-18, 2026 |
 | Hospital Enrollments | Monthly | Check daily; promote changed version within 48 hours | Month-end hospital enrollment snapshot | May 2026 |
 | Revalidation Clinic Group Practice Reassignment | Monthly | Check daily; promote changed version within 48 hours | Month-end reassignment snapshot | Jul 2026 |
