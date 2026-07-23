@@ -56,8 +56,7 @@ def _client() -> TestClient:
             receiving_enrollment_id VARCHAR,
             receiving_organization_name VARCHAR
         );
-        CREATE TABLE pecos_provider_practice_locations (
-            npi VARCHAR,
+        CREATE TABLE pecos_enrollment_practice_locations (
             receiving_enrollment_id VARCHAR,
             receiving_organization_name VARCHAR,
             city VARCHAR,
@@ -91,8 +90,8 @@ def _client() -> TestClient:
         "VALUES ('1710390513', 'IND-1', 'ORG-ENROLL-1', 'CEDARS GROUP')"
     )
     connection.execute(
-        "INSERT INTO pecos_provider_practice_locations "
-        "VALUES ('1710390513', 'ORG-ENROLL-1', 'CEDARS GROUP', 'LOS ANGELES', 'CA', '90048')"
+        "INSERT INTO pecos_enrollment_practice_locations "
+        "VALUES ('ORG-ENROLL-1', 'CEDARS GROUP', 'LOS ANGELES', 'CA', '90048')"
     )
     connection.execute("INSERT INTO raw_physician_by_provider VALUES ('1710390513', 125000.0)")
     connection.execute(

@@ -76,7 +76,7 @@ PPEF_CHANGED_TABLES = frozenset(
         "raw_pecos_reassignment",
         "raw_pecos_practice_location",
         "pecos_provider_organizations",
-        "pecos_provider_practice_locations",
+        "pecos_enrollment_practice_locations",
     }
 )
 FULL_PLATFORM_SMOKE_TABLES = (
@@ -99,7 +99,7 @@ FULL_PLATFORM_SMOKE_TABLES = (
     "raw_pecos_reassignment",
     "raw_pecos_practice_location",
     "pecos_provider_organizations",
-    "pecos_provider_practice_locations",
+    "pecos_enrollment_practice_locations",
     "raw_order_and_referring",
     "raw_hospital_enrollments",
     "raw_reassignment",
@@ -137,7 +137,7 @@ FULL_CMS_CHANGED_TABLES = frozenset(
         "raw_pecos_reassignment",
         "raw_pecos_practice_location",
         "pecos_provider_organizations",
-        "pecos_provider_practice_locations",
+        "pecos_enrollment_practice_locations",
         "raw_order_and_referring",
         "raw_hospital_enrollments",
         "raw_reassignment",
@@ -1181,12 +1181,17 @@ def _validate_ppef_relationships(
             """
         ).fetchone()[0]
     )
+    curated_location_row_delta = int(
+        table_counts["pecos_enrollment_practice_locations"]
+        - table_counts["raw_pecos_practice_location"]
+    )
     failing_checks = {
         "duplicate_reassignment_pairs": duplicate_reassignment_pairs,
         "duplicate_practice_location_grains": duplicate_practice_locations,
         "orphan_reassigning_enrollments": orphan_reassigning_enrollments,
         "orphan_receiving_enrollments": orphan_receiving_enrollments,
         "orphan_location_enrollments": orphan_location_enrollments,
+        "curated_location_row_delta": curated_location_row_delta,
     }
     failures = [name for name, count in failing_checks.items() if count != 0]
     if failures:
@@ -1196,7 +1201,7 @@ def _validate_ppef_relationships(
         )
 
     organization_rows = int(table_counts["pecos_provider_organizations"])
-    location_rows = int(table_counts["pecos_provider_practice_locations"])
+    location_rows = int(table_counts["pecos_enrollment_practice_locations"])
     organization_named_rows = int(
         connection.execute(
             """
@@ -1208,7 +1213,7 @@ def _validate_ppef_relationships(
     ca_location_rows = int(
         connection.execute(
             """
-            SELECT count(*) FROM pecos_provider_practice_locations
+            SELECT count(*) FROM pecos_enrollment_practice_locations
             WHERE state = 'CA'
             """
         ).fetchone()[0]
@@ -1312,7 +1317,7 @@ def _load_full_cms_content(
         "utilization_metrics",
         "practice_locations",
         "pecos_provider_organizations",
-        "pecos_provider_practice_locations",
+        "pecos_enrollment_practice_locations",
         "provider_quality_scores",
         "provider_service_detail",
         "provider_drug_detail",

@@ -180,24 +180,23 @@ def _warehouse(path: Path) -> Path:
             ('rel3', '1000000003', 'E3', 'O3', '2000000003', 'Texas Group',
              'organization', '12-00', 'Group Practice', 'TX', '2026-01-01/2026-03-31', 'r1', 'e1');
 
-        CREATE TABLE pecos_provider_practice_locations (
-            location_key VARCHAR, npi VARCHAR, provider_enrollment_id VARCHAR,
-            receiving_enrollment_id VARCHAR, receiving_npi VARCHAR,
+        CREATE TABLE pecos_enrollment_practice_locations (
+            location_key VARCHAR, receiving_enrollment_id VARCHAR, receiving_npi VARCHAR,
             receiving_organization_name VARCHAR, receiving_entity_kind VARCHAR,
             city VARCHAR, state VARCHAR, zip_code VARCHAR, zip5 VARCHAR,
-            source_data_period VARCHAR, relationship_source_run_id VARCHAR,
-            location_source_run_id VARCHAR, enrollment_source_run_id VARCHAR
+            source_data_period VARCHAR, location_source_run_id VARCHAR,
+            enrollment_source_run_id VARCHAR
         );
-        INSERT INTO pecos_provider_practice_locations VALUES
-            ('loc1', '1000000001', 'E1', 'O1', '2000000001', 'Alpha Group',
+        INSERT INTO pecos_enrollment_practice_locations VALUES
+            ('loc1', 'O1', '2000000001', 'Alpha Group',
              'organization', 'Los Angeles', 'CA', '900010001', '90001',
-             '2026-01-01/2026-03-31', 'r1', 'l1', 'e1'),
-            ('loc2', '1000000002', 'E2', 'O2', '2000000002', 'Beta Group',
+             '2026-01-01/2026-03-31', 'l1', 'e1'),
+            ('loc2', 'O2', '2000000002', 'Beta Group',
              'organization', 'Pasadena', 'CA', '911010001', '91101',
-             '2026-01-01/2026-03-31', 'r1', 'l1', 'e1'),
-            ('loc3', '1000000003', 'E3', 'O3', '2000000003', 'Texas Group',
+             '2026-01-01/2026-03-31', 'l1', 'e1'),
+            ('loc3', 'O3', '2000000003', 'Texas Group',
              'organization', 'Austin', 'TX', '733010001', '73301',
-             '2026-01-01/2026-03-31', 'r1', 'l1', 'e1');
+             '2026-01-01/2026-03-31', 'l1', 'e1');
 
         CREATE TABLE nppes_radar_provider_state (
             npi VARCHAR, first_name VARCHAR, last_name VARCHAR, credentials VARCHAR,
@@ -436,7 +435,7 @@ def test_profile_preserves_grain_and_source_detail(tmp_path: Path) -> None:
     assert counts[("reporting", "bridge_provider_hospital")] == 1
     assert counts[("reporting", "bridge_provider_practice")] == 2
     assert counts[("reporting", "bridge_provider_pecos_organization")] == 2
-    assert counts[("reporting", "bridge_provider_pecos_location")] == 2
+    assert counts[("reporting", "bridge_pecos_enrollment_location")] == 2
     assert counts[("reporting", "bridge_provider_taxonomy")] == 3
     assert counts[("reporting", "fact_provider_drug_year")] == 2
     assert counts[("reporting", "dim_provider_order_referring")] == 2

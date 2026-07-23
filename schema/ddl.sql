@@ -94,10 +94,8 @@ CREATE INDEX IF NOT EXISTS idx_pecos_provider_org_npi
 CREATE INDEX IF NOT EXISTS idx_pecos_provider_org_receiving
     ON pecos_provider_organizations(receiving_enrollment_id);
 
-CREATE TABLE IF NOT EXISTS pecos_provider_practice_locations (
+CREATE TABLE IF NOT EXISTS pecos_enrollment_practice_locations (
     location_key                 VARCHAR       PRIMARY KEY,
-    npi                          VARCHAR(10)   NOT NULL,
-    provider_enrollment_id       VARCHAR(20)   NOT NULL,
     receiving_enrollment_id      VARCHAR(20)   NOT NULL,
     receiving_npi                VARCHAR(10),
     receiving_organization_name  VARCHAR(255),
@@ -107,17 +105,14 @@ CREATE TABLE IF NOT EXISTS pecos_provider_practice_locations (
     zip_code                     VARCHAR(20),
     zip5                         VARCHAR(5),
     source_data_period           VARCHAR       NOT NULL,
-    relationship_source_run_id   VARCHAR       NOT NULL,
     location_source_run_id       VARCHAR       NOT NULL,
     enrollment_source_run_id     VARCHAR       NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_pecos_provider_location_npi
-    ON pecos_provider_practice_locations(npi);
-CREATE INDEX IF NOT EXISTS idx_pecos_provider_location_receiving
-    ON pecos_provider_practice_locations(receiving_enrollment_id);
-CREATE INDEX IF NOT EXISTS idx_pecos_provider_location_state
-    ON pecos_provider_practice_locations(state);
+CREATE INDEX IF NOT EXISTS idx_pecos_enrollment_location_receiving
+    ON pecos_enrollment_practice_locations(receiving_enrollment_id);
+CREATE INDEX IF NOT EXISTS idx_pecos_enrollment_location_state
+    ON pecos_enrollment_practice_locations(state);
 
 
 ------------------------------------------------------------

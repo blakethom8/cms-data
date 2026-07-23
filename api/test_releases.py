@@ -69,7 +69,7 @@ def _ppef_validation_connection() -> duckdb.DuckDBPyConnection:
         "(receiving_organization_name VARCHAR)"
     )
     connection.execute(
-        "CREATE TABLE pecos_provider_practice_locations (state VARCHAR)"
+        "CREATE TABLE pecos_enrollment_practice_locations (state VARCHAR)"
     )
     connection.execute(
         "INSERT INTO raw_pecos_enrollment VALUES ('provider'), ('receiver')"
@@ -85,7 +85,7 @@ def _ppef_validation_connection() -> duckdb.DuckDBPyConnection:
         "INSERT INTO pecos_provider_organizations VALUES ('Example Medical Group')"
     )
     connection.execute(
-        "INSERT INTO pecos_provider_practice_locations VALUES ('CA')"
+        "INSERT INTO pecos_enrollment_practice_locations VALUES ('CA')"
     )
     return connection
 
@@ -99,7 +99,7 @@ def test_validate_ppef_relationships_accepts_declared_grain_and_enrollment_keys(
                 "raw_pecos_reassignment": 1,
                 "raw_pecos_practice_location": 1,
                 "pecos_provider_organizations": 1,
-                "pecos_provider_practice_locations": 1,
+                "pecos_enrollment_practice_locations": 1,
             },
         )
     finally:
@@ -125,7 +125,7 @@ def test_validate_ppef_relationships_rejects_orphan_enrollment_keys():
                     "raw_pecos_reassignment": 2,
                     "raw_pecos_practice_location": 1,
                     "pecos_provider_organizations": 1,
-                    "pecos_provider_practice_locations": 1,
+                    "pecos_enrollment_practice_locations": 1,
                 },
             )
     finally:
@@ -464,7 +464,7 @@ def test_targeted_ppef_release_changes_only_relationship_tables(tmp_path: Path) 
     ]["source_data_period"] == PPEF_PERIOD
     assert result.release.table_counts == {
         "pecos_provider_organizations": 1,
-        "pecos_provider_practice_locations": 1,
+        "pecos_enrollment_practice_locations": 1,
         "raw_pecos_practice_location": 1,
         "raw_pecos_reassignment": 1,
     }

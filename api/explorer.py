@@ -351,14 +351,24 @@ PROVIDER_EVIDENCE_SOURCES: tuple[dict, ...] = (
     },
     {
         "key": "curated_pecos_location_bridge",
-        "table": "pecos_provider_practice_locations",
+        "table": "pecos_enrollment_practice_locations",
         "title": "Curated PECOS receiving-location bridge",
         "grain": "one provider-to-receiving-enrollment relationship × receiving location",
         "relationship": "provider NPI to practice locations published for the receiving enrollment",
         "proves": "How the datamart joins PPEF benefit reassignment to the receiving enrollment's locations.",
         "does_not_prove": "The clinician's primary location or the site where a specific service was rendered.",
-        "sql": "SELECT * FROM pecos_provider_practice_locations WHERE CAST(npi AS VARCHAR) = ?",
-        "required_tables": ("pecos_provider_practice_locations",),
+        "sql": """
+            SELECT r.npi, l.receiving_enrollment_id,
+                   l.receiving_organization_name, l.city, l.state, l.zip_code
+            FROM pecos_provider_organizations r
+            JOIN pecos_enrollment_practice_locations l
+              ON l.receiving_enrollment_id = r.receiving_enrollment_id
+            WHERE CAST(r.npi AS VARCHAR) = ?
+        """,
+        "required_tables": (
+            "pecos_provider_organizations",
+            "pecos_enrollment_practice_locations",
+        ),
         "layer": "curated",
         "evidence_kind": "derived",
     },

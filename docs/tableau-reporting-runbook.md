@@ -33,7 +33,7 @@ The `reporting` schema contains certified analytical models:
 | `bridge_provider_hospital` | one provider NPI by inferred hospital NPI and data year |
 | `bridge_provider_practice` | one provider NPI by group practice relationship and warehouse year |
 | `bridge_provider_pecos_organization` | one provider enrollment by receiving PECOS enrollment |
-| `bridge_provider_pecos_location` | one provider-to-receiving-enrollment relationship by receiving enrollment location |
+| `bridge_pecos_enrollment_location` | one receiving enrollment by published practice location; relate to `bridge_provider_pecos_organization` on `receiving_enrollment_id` |
 | `bridge_provider_taxonomy` | one provider NPI by distinct NPPES taxonomy code |
 | `fact_provider_drug_year` | one provider NPI by generic drug and Part D data year |
 | `dim_provider_order_referring` | one current provider NPI eligibility record |

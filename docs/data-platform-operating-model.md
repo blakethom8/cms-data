@@ -83,7 +83,8 @@ Their comparison must prove that every table outside the declared impact set is 
 
 The first PPEF promotion is a **targeted additive** candidate. Its inputs are the active
 same-period PECOS enrollment table plus the acquired PPEF reassignment and practice-location files.
-Its allowed changes are the two PPEF raw tables, the two curated PPEF bridges, and their declared
+Its allowed changes are the two PPEF raw tables, the provider-organization bridge, the normalized
+enrollment-location bridge, and their declared
 reporting/export surfaces. It must enforce same-period alignment, declared raw grains, zero orphan
 enrollment keys, curated bridge key uniqueness, row-count evidence, and the usual API/reporting
 contracts. It does not require a Medicare, NPPES, Open Payments, or AACT rebuild.
@@ -94,6 +95,12 @@ and a candidate-only spill directory. It verifies that both inputs match the ins
 enrollment period, rebuilds only the four PPEF-owned tables, and records complete-warehouse count
 evidence for comparison. Do not use `build-platform-release` as a substitute merely to add PPEF;
 that command is reserved for full reconciliation.
+
+Do not materialize provider × receiving-enrollment location fanout in DuckDB. The national source
+would expand roughly 3.9 million reassignment rows and 1.1 million enrollment-location rows into
+about 180 million provider-location combinations. Keep provider-to-enrollment and
+enrollment-to-location as separate normalized bridges; Tableau and provider-specific evidence views
+relate them on `receiving_enrollment_id` only when that combined grain is actually requested.
 
 Source-specific gates add to, and never replace, those common gates:
 

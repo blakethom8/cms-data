@@ -190,6 +190,8 @@ def test_pecos_relationship_transform_preserves_assignment_and_location_grains()
             INSERT INTO raw_pecos_enrollment VALUES
                 ('1234567890', 'I20031103000001', NULL, '14-00', 'Physician',
                  'CA', 'enrollment-run', '2026-01-01/2026-03-31'),
+                ('1234567891', 'I20031103000002', NULL, '14-00', 'Physician',
+                 'CA', 'enrollment-run', '2026-01-01/2026-03-31'),
                 ('1098765432', 'O20031216000213', 'Example Group', '12-00',
                  'Group Practice', 'CA', 'enrollment-run', '2026-01-01/2026-03-31');
 
@@ -199,6 +201,8 @@ def test_pecos_relationship_transform_preserves_assignment_and_location_grains()
             );
             INSERT INTO raw_pecos_reassignment VALUES
                 ('I20031103000001', 'O20031216000213', 'relationship-run',
+                 '2026-01-01/2026-03-31'),
+                ('I20031103000002', 'O20031216000213', 'relationship-run',
                  '2026-01-01/2026-03-31');
 
             CREATE TABLE raw_pecos_practice_location (
@@ -208,6 +212,8 @@ def test_pecos_relationship_transform_preserves_assignment_and_location_grains()
             );
             INSERT INTO raw_pecos_practice_location VALUES
                 ('O20031216000213', 'LOS ANGELES', 'CA', '900480001',
+                 'location-run', '2026-01-01/2026-03-31'),
+                ('O20031216000213', 'PASADENA', 'CA', '911010001',
                  'location-run', '2026-01-01/2026-03-31');
             """
         )
@@ -218,20 +224,22 @@ def test_pecos_relationship_transform_preserves_assignment_and_location_grains()
             SELECT npi, provider_enrollment_id, receiving_enrollment_id,
                    receiving_organization_name, receiving_entity_kind
             FROM pecos_provider_organizations
+            ORDER BY npi
             """
         ).fetchone()
         location = connection.execute(
             """
-            SELECT npi, receiving_enrollment_id, city, state, zip_code, zip5
-            FROM pecos_provider_practice_locations
+            SELECT receiving_enrollment_id, city, state, zip_code, zip5
+            FROM pecos_enrollment_practice_locations
+            ORDER BY city
             """
         ).fetchone()
     finally:
         connection.close()
 
     assert counts == {
-        "pecos_provider_organizations": 1,
-        "pecos_provider_practice_locations": 1,
+        "pecos_provider_organizations": 2,
+        "pecos_enrollment_practice_locations": 2,
     }
     assert organization == (
         "1234567890",
@@ -241,7 +249,6 @@ def test_pecos_relationship_transform_preserves_assignment_and_location_grains()
         "organization",
     )
     assert location == (
-        "1234567890",
         "O20031216000213",
         "LOS ANGELES",
         "CA",

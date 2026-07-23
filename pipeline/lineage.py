@@ -64,11 +64,11 @@ TRANSFORMS: tuple[TransformSpec, ...] = (
         "Builds a provider-to-receiving-organization bridge from PECOS enrollment and reassignment records.",
     ),
     TransformSpec(
-        "build_pecos_provider_practice_locations",
-        "Build provider-location bridge",
-        ("pecos_provider_organizations", "raw_pecos_practice_location"),
-        ("pecos_provider_practice_locations",),
-        "Connects receiving enrollments to their PECOS practice locations.",
+        "build_pecos_enrollment_practice_locations",
+        "Build enrollment-location bridge",
+        ("raw_pecos_enrollment", "raw_pecos_practice_location"),
+        ("pecos_enrollment_practice_locations",),
+        "Resolves each receiving enrollment to its PECOS practice locations without provider fanout.",
     ),
     TransformSpec(
         "build_hospital_affiliations",
@@ -134,7 +134,7 @@ TRANSFORMS: tuple[TransformSpec, ...] = (
 
 
 BRIDGE_TABLES = frozenset(
-    {"pecos_provider_organizations", "pecos_provider_practice_locations"}
+    {"pecos_provider_organizations", "pecos_enrollment_practice_locations"}
 )
 SUMMARY_TABLES = frozenset({"kol_summary", "nppes_radar_events", "nppes_radar_releases"})
 

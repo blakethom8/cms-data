@@ -356,33 +356,31 @@ REPORTING_MODELS: tuple[ReportingModel, ...] = (
         ),
     ),
     ReportingModel(
-        name="bridge_provider_pecos_location",
-        grain="one provider benefit reassignment by receiving-enrollment practice location",
-        scope_rule="provider NPI belongs to core_providers.state = 'CA'",
-        source_tables=("pecos_provider_practice_locations", "core_providers"),
+        name="bridge_pecos_enrollment_location",
+        grain="one receiving enrollment by published practice location",
+        scope_rule="pecos_enrollment_practice_locations.state = 'CA'",
+        source_tables=("pecos_enrollment_practice_locations",),
         key_columns=("location_key",),
         from_sql=(
-            "FROM pecos_provider_practice_locations p "
-            "JOIN core_providers cp ON cp.npi = p.npi "
-            "WHERE UPPER(cp.state) = 'CA'"
+            "FROM pecos_enrollment_practice_locations p "
+            "WHERE UPPER(p.state) = 'CA'"
         ),
         notes=(
-            "Locations belong to the receiving PECOS enrollment. They are not claim-level "
-            "service sites and no location is labeled primary by this source."
+            "Relate this model to bridge_provider_pecos_organization on "
+            "receiving_enrollment_id. Locations belong to the receiving PECOS enrollment; "
+            "they are not claim-level sites and no location is labeled primary."
         ),
         fields=(
-            _field("location_key", "p.location_key", "cms_pecos_practice_location", "pecos_provider_practice_locations", "location_key", "Stable hash of relationship and location fields", derived=True),
-            _field("npi", "p.npi", "cms_pecos_public_provider_enrollment", "pecos_provider_practice_locations", "npi"),
-            _field("provider_enrollment_id", "p.provider_enrollment_id", "cms_pecos_reassignment", "pecos_provider_practice_locations", "provider_enrollment_id"),
-            _field("receiving_enrollment_id", "p.receiving_enrollment_id", "cms_pecos_reassignment", "pecos_provider_practice_locations", "receiving_enrollment_id"),
-            _field("receiving_npi", "p.receiving_npi", "cms_pecos_public_provider_enrollment", "pecos_provider_practice_locations", "receiving_npi"),
-            _field("receiving_organization_name", "p.receiving_organization_name", "cms_pecos_public_provider_enrollment", "pecos_provider_practice_locations", "receiving_organization_name"),
-            _field("receiving_entity_kind", "p.receiving_entity_kind", "cms_pecos_public_provider_enrollment", "pecos_provider_practice_locations", "receiving_entity_kind", "Derived from organization-name presence", derived=True),
-            _field("city", "p.city", "cms_pecos_practice_location", "pecos_provider_practice_locations", "city"),
-            _field("state", "p.state", "cms_pecos_practice_location", "pecos_provider_practice_locations", "state"),
-            _field("zip_code", "p.zip_code", "cms_pecos_practice_location", "pecos_provider_practice_locations", "zip_code"),
-            _field("zip5", "p.zip5", "cms_pecos_practice_location", "pecos_provider_practice_locations", "zip5", "Five-digit ZIP projection", derived=True),
-            _field("source_data_period", "p.source_data_period", "cms_pecos_reassignment", "pecos_provider_practice_locations", "source_data_period"),
+            _field("location_key", "p.location_key", "cms_pecos_practice_location", "pecos_enrollment_practice_locations", "location_key", "Stable hash of enrollment and location fields", derived=True),
+            _field("receiving_enrollment_id", "p.receiving_enrollment_id", "cms_pecos_practice_location", "pecos_enrollment_practice_locations", "receiving_enrollment_id"),
+            _field("receiving_npi", "p.receiving_npi", "cms_pecos_public_provider_enrollment", "pecos_enrollment_practice_locations", "receiving_npi"),
+            _field("receiving_organization_name", "p.receiving_organization_name", "cms_pecos_public_provider_enrollment", "pecos_enrollment_practice_locations", "receiving_organization_name"),
+            _field("receiving_entity_kind", "p.receiving_entity_kind", "cms_pecos_public_provider_enrollment", "pecos_enrollment_practice_locations", "receiving_entity_kind", "Derived from organization-name presence", derived=True),
+            _field("city", "p.city", "cms_pecos_practice_location", "pecos_enrollment_practice_locations", "city"),
+            _field("state", "p.state", "cms_pecos_practice_location", "pecos_enrollment_practice_locations", "state"),
+            _field("zip_code", "p.zip_code", "cms_pecos_practice_location", "pecos_enrollment_practice_locations", "zip_code"),
+            _field("zip5", "p.zip5", "cms_pecos_practice_location", "pecos_enrollment_practice_locations", "zip5", "Five-digit ZIP projection", derived=True),
+            _field("source_data_period", "p.source_data_period", "cms_pecos_practice_location", "pecos_enrollment_practice_locations", "source_data_period"),
         ),
     ),
     ReportingModel(
