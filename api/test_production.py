@@ -97,6 +97,7 @@ def _write_release(
     comparison_state: str = "passed",
     pipeline_commit: str = COMMIT,
     comparison_schema_version: int = 2,
+    comparison_policy: str = "full_platform_v1",
 ) -> None:
     release_dir = paths["data"] / "releases" / RELEASE_ID
     staging_database = _write_immutable(
@@ -122,11 +123,31 @@ def _write_release(
         "failed_requirements": [],
         "unexpected_differences": [],
         "evidence_mismatches": [],
-        "comparison_policy": "full_platform_v1",
+        "comparison_policy": comparison_policy,
         "candidate": {"sha256": CANDIDATE_SHA},
     }
     (release_dir / "release.json").write_text(json.dumps(release))
     (release_dir / "comparison.json").write_text(json.dumps(comparison))
+
+
+def test_prepare_accepts_targeted_ppef_comparison_policy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths, _ = _bootstrap_verified(tmp_path, monkeypatch)
+    _write_release(paths, comparison_policy="ppef_additive_v1")
+
+    deployment = production.prepare_release(
+        paths["production"],
+        paths["artifacts"],
+        paths["data"],
+        paths["candidate_code"],
+        paths["candidate_runtime"],
+        paths["candidate_db"],
+        RELEASE_ID,
+    )
+
+    assert deployment.warehouse_release_id == RELEASE_ID
+    assert deployment.state == production.DeploymentState.PREPARED
 
 
 def _write_evidence(
