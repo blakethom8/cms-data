@@ -707,10 +707,29 @@ def _validate_build(
     )
     if outside_location:
         raise ReportingError("Provider location bridge contains records outside California")
-    checks["scope"] = {"dim_provider": "passed", "bridge_provider_location": "passed"}
+    enrollment_location_table = sql.Identifier(
+        build_schema, "bridge_pecos_enrollment_location"
+    )
+    outside_enrollment_location = _scalar(
+        connection,
+        sql.SQL("SELECT COUNT(*) FROM {} WHERE state <> 'CA' OR state IS NULL").format(
+            enrollment_location_table
+        ),
+    )
+    if outside_enrollment_location:
+        raise ReportingError(
+            "PECOS enrollment location bridge contains records outside California"
+        )
+    checks["scope"] = {
+        "dim_provider": "passed",
+        "bridge_provider_location": "passed",
+        "bridge_pecos_enrollment_location": "passed",
+    }
 
     for model in REPORTING_MODELS:
-        if model.name == "dim_provider":
+        if model.name == "dim_provider" or not any(
+            field.name == "npi" for field in model.fields
+        ):
             continue
         table = sql.Identifier(build_schema, model.name)
         orphan_count = _scalar(
