@@ -6,53 +6,56 @@
   <meta name="color-scheme" content="light">
   <meta name="theme-color" content="#101b25">
   <title>CMS Data Command Center</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=20260723-lineage-upstream-schema">
 </head>
 <body>
   <a class="skip-link" href="#workspace">Skip to workspace</a>
 
   <div class="app-shell">
-    <aside class="rail" aria-label="Primary navigation">
+    <aside class="rail" id="primary-navigation" aria-label="Primary navigation">
       <div class="brand">
         <div class="brand-mark" aria-hidden="true">
           <span></span><span></span><span></span>
         </div>
-        <div>
+        <div class="brand-copy">
           <strong>CMS DATA</strong>
           <small>COMMAND CENTER</small>
         </div>
+        <button class="rail-toggle" id="rail-toggle" type="button" aria-controls="primary-navigation" aria-expanded="true" aria-label="Collapse navigation rail" title="Collapse navigation rail">
+          <span aria-hidden="true">‹</span>
+        </button>
       </div>
 
       <nav class="rail-nav">
         <a href="#overview" data-route="overview" aria-current="page">
           <span class="nav-icon" aria-hidden="true">01</span>
-          <span>Overview</span>
+          <span class="rail-label">Overview</span>
         </a>
         <a href="#provider-evidence" data-route="provider-evidence">
           <span class="nav-icon" aria-hidden="true">02</span>
-          <span>Provider Evidence</span>
+          <span class="rail-label">Provider Evidence</span>
         </a>
         <a href="#catalog" data-route="catalog">
           <span class="nav-icon" aria-hidden="true">03</span>
-          <span>Data Catalog</span>
+          <span class="rail-label">Data Catalog</span>
         </a>
         <a href="#lineage" data-route="lineage">
           <span class="nav-icon" aria-hidden="true">04</span>
-          <span>Lineage</span>
+          <span class="rail-label">Lineage</span>
         </a>
         <a href="#contracts" data-route="contracts">
           <span class="nav-icon" aria-hidden="true">05</span>
-          <span>Contracts</span>
+          <span class="rail-label">Contracts</span>
         </a>
         <a href="#operations" data-route="operations">
           <span class="nav-icon" aria-hidden="true">06</span>
-          <span>Operations</span>
+          <span class="rail-label">Operations</span>
         </a>
       </nav>
 
       <div class="rail-foot">
         <span class="read-only-seal" aria-hidden="true">R/O</span>
-        <div>
+        <div class="rail-foot-copy">
           <strong>Read-only surface</strong>
           <small>Operator actions require a separate approved service.</small>
         </div>
@@ -177,57 +180,31 @@
         <section class="view" id="view-provider-evidence" data-view="provider-evidence" aria-labelledby="provider-evidence-title" hidden>
           <div class="page-heading evidence-page-heading">
             <div>
-              <span class="eyebrow">Record-level reconciliation</span>
-              <h1 id="provider-evidence-title">Follow one provider through every source.</h1>
+              <span class="eyebrow">Record-level evidence review</span>
+              <h1 id="provider-evidence-title">Open one provider’s source dossier.</h1>
             </div>
-            <p>Billing reassignment, registered location, practice site, facility affiliation, and employment are different claims. This workspace keeps those distinctions visible.</p>
+            <p>Search a California clinician, then inspect source-native records without joining them into a combined fact.</p>
           </div>
 
-          <div class="provider-selector" id="provider-selector" aria-label="Focus provider">
-            <button class="provider-card selected" type="button" data-provider-npi="1710390513" aria-pressed="true">
-              <span class="provider-card-index">01</span><strong>Lauren DeStefano</strong><small>Surgical Oncology</small><code>1710390513</code>
-            </button>
-            <button class="provider-card" type="button" data-provider-npi="1962509216" aria-pressed="false">
-              <span class="provider-card-index">02</span><strong>Robert Vescio</strong><small>Hematology / Oncology</small><code>1962509216</code>
-            </button>
-            <button class="provider-card" type="button" data-provider-npi="1740218155" aria-pressed="false">
-              <span class="provider-card-index">03</span><strong>Joshua “Josh” Scott</strong><small>Pediatric Medicine</small><code>1740218155</code>
-            </button>
-            <button class="provider-card" type="button" data-provider-npi="1659383891" aria-pressed="false">
-              <span class="provider-card-index">04</span><strong>Jonathan Weiner</strong><small>Internal Medicine</small><code>1659383891</code>
-            </button>
-          </div>
+          <section class="provider-evidence-workbench" aria-label="Provider evidence workbench">
+            <form class="provider-search-form" id="provider-search-form" role="search">
+              <label class="provider-search-label" for="provider-evidence-search">Find a provider</label>
+              <div class="provider-search-row">
+                <input id="provider-evidence-search" type="search" autocomplete="off" placeholder="Name or exact 10-digit NPI" aria-describedby="provider-search-help">
+                <button type="submit">Search</button>
+              </div>
+              <p id="provider-search-help">California scope · use the full NPI for an exact match.</p>
+              <div id="provider-search-results" class="provider-search-results" aria-live="polite"></div>
+            </form>
 
-          <section class="relationship-vocabulary" aria-labelledby="relationship-vocabulary-title">
-            <h2 id="relationship-vocabulary-title" class="sr-only">Relationship vocabulary</h2>
-            <article><span>01</span><strong>Registry location</strong><p>The practice address registered to an NPI.</p></article>
-            <article><span>02</span><strong>Practice organization</strong><p>A clinician, enrollment, organization, and address published together.</p></article>
-            <article><span>03</span><strong>Benefit reassignment</strong><p>A Medicare enrollment receiving a clinician’s reassigned benefits.</p></article>
-            <article><span>04</span><strong>Facility affiliation</strong><p>A clinician associated with a CMS-certified facility.</p></article>
-          </section>
-
-          <section class="evidence-light-table" aria-labelledby="evidence-matrix-title">
-            <div class="section-heading compact evidence-section-heading">
-              <div><span class="eyebrow">Source-by-provider light table</span><h2 id="evidence-matrix-title">Relationship evidence matrix</h2></div>
-              <div class="matrix-key" aria-label="Matrix key"><span><i class="status-dot current"></i>Records</span><span><i class="status-dot unavailable"></i>No record</span><span><i class="status-dot warning"></i>Awaiting ingestion</span></div>
-            </div>
-            <div class="evidence-matrix-frame" id="evidence-matrix" aria-live="polite" aria-busy="true">
-              <div class="evidence-loading"><span class="loading-rule"></span><strong>Reading source-native records…</strong><p>Comparing the four providers without physically joining source rows.</p></div>
+            <div id="provider-evidence-content" class="provider-evidence-content" aria-live="polite">
+              <div class="provider-evidence-empty">
+                <span class="empty-glyph" aria-hidden="true">⌕</span>
+                <h2>Start with a provider.</h2>
+                <p>Search by clinician name or NPI to open their publisher-source evidence dossier.</p>
+              </div>
             </div>
           </section>
-
-          <section class="record-inspector" id="record-inspector" aria-live="polite" aria-labelledby="record-inspector-title">
-            <div class="record-inspector-empty">
-              <span class="empty-glyph" aria-hidden="true">⌗</span>
-              <h2 id="record-inspector-title">Select an evidence cell</h2>
-              <p>Choose a provider and source intersection to inspect every physical field returned by the live warehouse.</p>
-            </div>
-          </section>
-
-          <aside class="evidence-caveat">
-            <strong>Source rows stay separate.</strong>
-            <p>This page does not physically join these files. Joining several many-to-many relationships would multiply records and make source assertions look more certain than they are.</p>
-          </aside>
         </section>
 
         <section class="view" id="view-catalog" data-view="catalog" aria-labelledby="catalog-title" hidden>
@@ -403,6 +380,6 @@
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-  <script src="app.js" defer></script>
+  <script src="app.js?v=20260723-lineage-upstream-schema" defer></script>
 </body>
 </html>

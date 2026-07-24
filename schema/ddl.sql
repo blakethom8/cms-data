@@ -209,6 +209,37 @@ CREATE INDEX IF NOT EXISTS idx_hospital_aff_state ON hospital_affiliations(hospi
 
 
 ------------------------------------------------------------
+-- Table 5b: provider_hospital_evidence
+-- Source-preserving provider-to-hospital evidence.  A row is one
+-- provider/hospital relationship supported by one declared method.
+------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS provider_hospital_evidence (
+    evidence_key              VARCHAR(64) PRIMARY KEY,
+    npi                       VARCHAR(10)  NOT NULL REFERENCES core_providers(npi),
+    hospital_npi              VARCHAR(10)  NOT NULL,
+    hospital_ccn              VARCHAR(10),
+    hospital_name             VARCHAR(255),
+    hospital_city             VARCHAR(100),
+    hospital_state            VARCHAR(2),
+    hospital_zip              VARCHAR(10),
+    evidence_method           VARCHAR(80)  NOT NULL,
+    confidence_level          VARCHAR(10)  NOT NULL,
+    group_pac_id              VARCHAR(20),
+    organization_pac_id       VARCHAR(20),
+    dac_address_id            VARCHAR,
+    provider_enrollment_id    VARCHAR(20),
+    receiving_enrollment_id   VARCHAR(20),
+    source_data_period        VARCHAR,
+    data_year                 INTEGER      NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_provider_hospital_evidence_npi
+    ON provider_hospital_evidence(npi);
+CREATE INDEX IF NOT EXISTS idx_provider_hospital_evidence_hospital
+    ON provider_hospital_evidence(hospital_npi);
+
+
+------------------------------------------------------------
 -- Staged raw source: CMS Hospital Enrollments
 -- One row per publisher record with immutable run provenance.
 ------------------------------------------------------------

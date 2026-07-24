@@ -201,6 +201,31 @@ def _search_registry(conn, parts: list[str], city: Optional[str], state: Optiona
     return rows
 
 
+def _search_npi(conn, npi: str, state: Optional[str]) -> list[dict]:
+    """Resolve an exact NPI without treating it as a provider-name token."""
+    state_predicate = ' AND "State" = ?' if state else ""
+    rows = _rows(conn, f"""
+        select CAST("NPI" as varchar) npi,
+               any_value("Provider First Name") || ' ' || any_value("Provider Last Name") as "name",
+               trim(coalesce(any_value({CRED}), '')) credentials,
+               any_value(pri_spec) specialty, any_value("City/Town") city,
+               any_value("State") state, any_value("Facility Name") group_name,
+               'medicare' source
+        from raw_dac_national
+        where CAST("NPI" as varchar) = ? {state_predicate}
+        group by "NPI"
+    """, [npi, state.upper()] if state else [npi])
+    if rows:
+        return rows
+    state_predicate = " AND practice_state = ?" if state else ""
+    return _rows(conn, f"""
+        select CAST(npi as varchar) npi, coalesce(first_name || ' ', '') || last_name as "name",
+               credentials, null specialty, practice_city city, practice_state state,
+               null group_name, 'registry' source
+        from raw_nppes where CAST(npi as varchar) = ? {state_predicate}
+    """, [npi, state.upper()] if state else [npi])
+
+
 def get_profiles_router(get_conn):
     @router.get("/exemplars")
     async def exemplars():
@@ -224,9 +249,13 @@ def get_profiles_router(get_conn):
         if not parts:
             return []
         conn = get_conn()
-        rows = _search_dac(conn, parts, city, state, limit)
-        if not rows:
-            rows = _search_registry(conn, parts, city, state, limit)
+        exact_npi = q.strip()
+        if re.fullmatch(r"\d{10}", exact_npi):
+            rows = _search_npi(conn, exact_npi, state)
+        else:
+            rows = _search_dac(conn, parts, city, state, limit)
+            if not rows:
+                rows = _search_registry(conn, parts, city, state, limit)
         return [SearchHit(**{**r, "credentials": (r.get("credentials") or "").strip() or None})
                 for r in rows]
 

@@ -78,6 +78,19 @@ TRANSFORMS: tuple[TransformSpec, ...] = (
         "Matches group reassignment records to hospital enrollment records.",
     ),
     TransformSpec(
+        "build_provider_hospital_evidence",
+        "Build provider-hospital evidence",
+        (
+            "hospital_affiliations",
+            "pecos_provider_organizations",
+            "raw_hospital_enrollments",
+            "raw_dac_national",
+            "core_providers",
+        ),
+        ("provider_hospital_evidence",),
+        "Preserves PECOS, reassignment, and DAC name/address evidence as separate provider-to-hospital records.",
+    ),
+    TransformSpec(
         "build_provider_quality_scores",
         "Build quality scores",
         ("raw_qpp_experience", "core_providers"),

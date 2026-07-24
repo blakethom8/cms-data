@@ -397,6 +397,306 @@ def build_hospital_affiliations(con: duckdb.DuckDBPyConnection, data_year: int):
     return count
 
 
+def _table_has_columns(
+    con: duckdb.DuckDBPyConnection, table: str, columns: set[str]
+) -> bool:
+    """Return whether a legacy/optional table exposes the required columns."""
+    try:
+        available = {
+            str(row[1]).casefold()
+            for row in con.execute(f"PRAGMA table_info('{table}')").fetchall()
+        }
+    except duckdb.CatalogException:
+        return False
+    return all(column.casefold() in available for column in columns)
+
+
+def _ensure_provider_hospital_evidence_table(con: duckdb.DuckDBPyConnection) -> None:
+    """Create the additive evidence layer for warehouses predating this model."""
+    con.execute(
+        """
+        CREATE TABLE IF NOT EXISTS provider_hospital_evidence (
+            evidence_key VARCHAR(64) PRIMARY KEY,
+            npi VARCHAR(10) NOT NULL REFERENCES core_providers(npi),
+            hospital_npi VARCHAR(10) NOT NULL,
+            hospital_ccn VARCHAR(10),
+            hospital_name VARCHAR(255),
+            hospital_city VARCHAR(100),
+            hospital_state VARCHAR(2),
+            hospital_zip VARCHAR(10),
+            evidence_method VARCHAR(80) NOT NULL,
+            confidence_level VARCHAR(10) NOT NULL,
+            group_pac_id VARCHAR(20),
+            organization_pac_id VARCHAR(20),
+            dac_address_id VARCHAR,
+            provider_enrollment_id VARCHAR(20),
+            receiving_enrollment_id VARCHAR(20),
+            source_data_period VARCHAR,
+            data_year INTEGER NOT NULL
+        )
+        """
+    )
+    con.execute(
+        "CREATE INDEX IF NOT EXISTS idx_provider_hospital_evidence_npi "
+        "ON provider_hospital_evidence(npi)"
+    )
+    con.execute(
+        "CREATE INDEX IF NOT EXISTS idx_provider_hospital_evidence_hospital "
+        "ON provider_hospital_evidence(hospital_npi)"
+    )
+
+
+def build_provider_hospital_evidence(
+    con: duckdb.DuckDBPyConnection, data_year: int
+) -> int:
+    """Build source-preserving provider-to-hospital relationship evidence.
+
+    This deliberately retains direct PECOS receiving-organization matches,
+    existing reassignment-based inference, and optional DAC name/address campus
+    evidence as separate rows.  No method asserts employment, exclusivity, or a
+    primary hospital.
+    """
+    logger.info("Building provider_hospital_evidence (data_year=%d)", data_year)
+    _ensure_provider_hospital_evidence_table(con)
+    con.execute("DELETE FROM provider_hospital_evidence")
+
+    con.execute(
+        """
+        CREATE OR REPLACE TEMP TABLE provider_hospital_evidence_hospitals AS
+        SELECT * EXCLUDE (preferred)
+        FROM (
+            SELECT h.*,
+                row_number() OVER (
+                    PARTITION BY h.npi
+                    ORDER BY
+                        CASE WHEN nullif(trim(h.ccn), '') IS NOT NULL THEN 0 ELSE 1 END,
+                        h.ccn NULLS LAST,
+                        h.enrollment_id NULLS LAST,
+                        h.address_line_1 NULLS LAST
+                ) AS preferred
+            FROM raw_hospital_enrollments h
+        )
+        WHERE preferred = 1
+        """
+    )
+
+    counts: dict[str, int] = {}
+    if _table_has_columns(
+        con,
+        "pecos_provider_organizations",
+        {
+            "npi",
+            "provider_enrollment_id",
+            "receiving_enrollment_id",
+            "receiving_npi",
+            "source_data_period",
+        },
+    ):
+        con.execute(
+            """
+            INSERT INTO provider_hospital_evidence
+            SELECT DISTINCT
+                md5(concat_ws('|', 'pecos_receiving_npi_match', p.npi,
+                    p.provider_enrollment_id, p.receiving_enrollment_id, h.npi,
+                    p.source_data_period)),
+                p.npi,
+                h.npi,
+                nullif(trim(h.ccn), ''),
+                nullif(trim(h.organization_name), ''),
+                nullif(trim(h.city), ''),
+                upper(nullif(trim(h.state), '')),
+                nullif(trim(h.zip_code), ''),
+                'pecos_receiving_npi_match',
+                'high',
+                NULL,
+                NULL,
+                NULL,
+                p.provider_enrollment_id,
+                p.receiving_enrollment_id,
+                p.source_data_period,
+                ?
+            FROM pecos_provider_organizations p
+            INNER JOIN provider_hospital_evidence_hospitals h
+                ON CAST(p.receiving_npi AS VARCHAR) = CAST(h.npi AS VARCHAR)
+            INNER JOIN core_providers c ON c.npi = p.npi
+            WHERE nullif(trim(CAST(p.receiving_npi AS VARCHAR)), '') IS NOT NULL
+            """,
+            [data_year],
+        )
+        counts["pecos_receiving_npi_match"] = int(
+            con.execute(
+                """
+                SELECT count(*) FROM provider_hospital_evidence
+                WHERE evidence_method = 'pecos_receiving_npi_match'
+                """
+            ).fetchone()[0]
+        )
+
+    con.execute(
+        """
+        INSERT INTO provider_hospital_evidence
+        SELECT DISTINCT
+            md5(concat_ws('|', a.affiliation_source, a.npi, a.hospital_npi,
+                coalesce(a.group_pac_id, ''), CAST(a.data_year AS VARCHAR))),
+            a.npi,
+            a.hospital_npi,
+            a.hospital_ccn,
+            a.hospital_name,
+            a.hospital_city,
+            a.hospital_state,
+            a.hospital_zip,
+            a.affiliation_source,
+            a.confidence_level,
+            a.group_pac_id,
+            NULL,
+            NULL,
+            NULL,
+            NULL,
+            CAST(a.data_year AS VARCHAR),
+            a.data_year
+        FROM hospital_affiliations a
+        INNER JOIN core_providers c ON c.npi = a.npi
+        """
+    )
+    counts["reassignment"] = int(
+        con.execute(
+            """
+            SELECT count(*) FROM provider_hospital_evidence
+            WHERE evidence_method IN (
+                'cms_reassignment_legal_name_state',
+                'cms_reassignment_dba_name_state'
+            )
+            """
+        ).fetchone()[0]
+    )
+
+    dac_columns = {
+        "NPI",
+        "org_pac_id",
+        "Facility Name",
+        "adrs_id",
+        "adr_ln_1",
+        "City/Town",
+        "State",
+        "ZIP Code",
+    }
+    if _table_has_columns(con, "raw_dac_national", dac_columns):
+        con.execute(
+            """
+            CREATE OR REPLACE TEMP TABLE provider_hospital_evidence_dac_keys AS
+            WITH names AS (
+                SELECT
+                    h.npi AS hospital_npi,
+                    h.ccn AS hospital_ccn,
+                    h.organization_name AS hospital_name,
+                    h.city AS hospital_city,
+                    h.state AS hospital_state,
+                    h.zip_code AS hospital_zip,
+                    regexp_replace(upper(trim(h.organization_name)), '[^A-Z0-9]', '', 'g')
+                        AS match_name,
+                    regexp_replace(upper(trim(h.address_line_1)), '[^A-Z0-9]', '', 'g')
+                        AS match_address,
+                    upper(trim(h.city)) AS match_city,
+                    upper(trim(h.state)) AS match_state,
+                    left(trim(h.zip_code), 5) AS match_zip5,
+                    1 AS match_priority
+                FROM provider_hospital_evidence_hospitals h
+                WHERE nullif(trim(h.organization_name), '') IS NOT NULL
+
+                UNION ALL
+
+                SELECT
+                    h.npi, h.ccn, h.organization_name, h.city, h.state, h.zip_code,
+                    regexp_replace(upper(trim(h.doing_business_as_name)), '[^A-Z0-9]', '', 'g'),
+                    regexp_replace(upper(trim(h.address_line_1)), '[^A-Z0-9]', '', 'g'),
+                    upper(trim(h.city)), upper(trim(h.state)), left(trim(h.zip_code), 5),
+                    2
+                FROM provider_hospital_evidence_hospitals h
+                WHERE nullif(trim(h.doing_business_as_name), '') IS NOT NULL
+            ),
+            candidate_counts AS (
+                SELECT match_name, match_address, match_city, match_state, match_zip5,
+                       count(DISTINCT hospital_npi) AS hospital_count
+                FROM names
+                WHERE match_name <> '' AND match_address <> '' AND match_state <> ''
+                GROUP BY 1, 2, 3, 4, 5
+            ),
+            ranked AS (
+                SELECT n.*, c.hospital_count,
+                       row_number() OVER (
+                           PARTITION BY n.match_name, n.match_address, n.match_city,
+                               n.match_state, n.match_zip5
+                           ORDER BY n.match_priority, n.hospital_npi
+                       ) AS preferred
+                FROM names n
+                INNER JOIN candidate_counts c
+                    USING (match_name, match_address, match_city, match_state, match_zip5)
+            )
+            SELECT * EXCLUDE (preferred)
+            FROM ranked
+            WHERE hospital_count = 1 AND preferred = 1
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO provider_hospital_evidence
+            SELECT DISTINCT
+                md5(concat_ws('|',
+                    CASE k.match_priority
+                        WHEN 1 THEN 'dac_hospital_organization_name_address'
+                        ELSE 'dac_hospital_dba_name_address'
+                    END,
+                    CAST(d."NPI" AS VARCHAR), d.org_pac_id, d.adrs_id, k.hospital_npi)),
+                CAST(d."NPI" AS VARCHAR),
+                k.hospital_npi,
+                nullif(trim(k.hospital_ccn), ''),
+                nullif(trim(k.hospital_name), ''),
+                nullif(trim(k.hospital_city), ''),
+                upper(nullif(trim(k.hospital_state), '')),
+                nullif(trim(k.hospital_zip), ''),
+                CASE k.match_priority
+                    WHEN 1 THEN 'dac_hospital_organization_name_address'
+                    ELSE 'dac_hospital_dba_name_address'
+                END,
+                'medium',
+                NULL,
+                nullif(trim(CAST(d.org_pac_id AS VARCHAR)), ''),
+                nullif(trim(CAST(d.adrs_id AS VARCHAR)), ''),
+                NULL,
+                NULL,
+                NULL,
+                ?
+            FROM raw_dac_national d
+            INNER JOIN core_providers c ON c.npi = CAST(d."NPI" AS VARCHAR)
+            INNER JOIN provider_hospital_evidence_dac_keys k
+                ON regexp_replace(upper(trim(d."Facility Name")), '[^A-Z0-9]', '', 'g')
+                    = k.match_name
+               AND regexp_replace(upper(trim(d.adr_ln_1)), '[^A-Z0-9]', '', 'g')
+                    = k.match_address
+               AND upper(trim(d."City/Town")) = k.match_city
+               AND upper(trim(d."State")) = k.match_state
+               AND left(trim(CAST(d."ZIP Code" AS VARCHAR)), 5) = k.match_zip5
+            WHERE nullif(trim(CAST(d.org_pac_id AS VARCHAR)), '') IS NOT NULL
+              AND nullif(trim(d."Facility Name"), '') IS NOT NULL
+            """,
+            [data_year],
+        )
+        counts["dac_name_address"] = int(
+            con.execute(
+                """
+                SELECT count(*) FROM provider_hospital_evidence
+                WHERE evidence_method LIKE 'dac_hospital_%_address'
+                """
+            ).fetchone()[0]
+        )
+
+    count = int(
+        con.execute("SELECT count(*) FROM provider_hospital_evidence").fetchone()[0]
+    )
+    logger.info("provider_hospital_evidence: %d rows loaded (%s)", count, counts)
+    return count
+
+
 def build_provider_quality_scores(con: duckdb.DuckDBPyConnection, data_year: int):
     """Populate provider_quality_scores from QPP experience data."""
     logger.info("Building provider_quality_scores (data_year=%d)", data_year)
@@ -592,6 +892,9 @@ def transform_all(
         results["hospital_affiliations"] = build_hospital_affiliations(
             con, practice_year or data_year
         )
+        results["provider_hospital_evidence"] = build_provider_hospital_evidence(
+            con, practice_year or data_year
+        )
     results["provider_quality_scores"] = build_provider_quality_scores(
         con, quality_year or data_year
     )
@@ -620,6 +923,7 @@ def clear_refresh_targets(
     dependent tables, commit, and delete ``core_providers`` separately.
     """
     for table in (
+        "provider_hospital_evidence",
         "hospital_affiliations",
         "practice_locations",
         "utilization_metrics",

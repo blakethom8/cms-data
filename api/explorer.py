@@ -402,6 +402,101 @@ PROVIDER_EVIDENCE_SOURCES: tuple[dict, ...] = (
         "required_tables": ("raw_physician_by_provider",),
     },
     {
+        "key": "part_d_provider_year",
+        "table": "raw_part_d_by_provider",
+        "title": "Part D prescribing by provider",
+        "grain": "one prescriber × source year",
+        "relationship": "provider-level Part D prescribing totals",
+        "proves": "CMS published annual Part D prescribing totals for this NPI.",
+        "does_not_prove": "Which organization received payment or a specific prescription relationship.",
+        "sql": 'SELECT * FROM raw_part_d_by_provider WHERE CAST("Prscrbr_NPI" AS VARCHAR) = ?',
+        "required_tables": ("raw_part_d_by_provider",),
+    },
+    {
+        "key": "part_d_provider_drug",
+        "table": "raw_part_d_by_provider_and_drug",
+        "title": "Part D prescribing by drug",
+        "grain": "one prescriber × drug × source year",
+        "relationship": "provider-level published Part D prescribing detail",
+        "proves": "CMS published this NPI's drug-level prescribing record.",
+        "does_not_prove": "A diagnosis, individual patient treatment, or product preference outside the published period.",
+        "sql": 'SELECT * FROM raw_part_d_by_provider_and_drug WHERE CAST("Prscrbr_NPI" AS VARCHAR) = ?',
+        "required_tables": ("raw_part_d_by_provider_and_drug",),
+    },
+    {
+        "key": "open_payments_general",
+        "table": "raw_open_payments_general",
+        "title": "Open Payments — general",
+        "grain": "one reported payment or transfer of value",
+        "relationship": "manufacturer or GPO payment reported for a covered recipient",
+        "proves": "A published Open Payments general-payment record names this NPI.",
+        "does_not_prove": "Clinical influence, prescribing causation, or an undisclosed payment.",
+        "sql": 'SELECT * FROM raw_open_payments_general WHERE CAST("Covered_Recipient_NPI" AS VARCHAR) = ?',
+        "required_tables": ("raw_open_payments_general",),
+    },
+    {
+        "key": "open_payments_research",
+        "table": "raw_open_payments_research",
+        "title": "Open Payments — research",
+        "grain": "one reported research payment or study record",
+        "relationship": "covered recipient or listed principal investigator on a research payment",
+        "proves": "A published Open Payments research record names this NPI in one of its reviewed NPI fields.",
+        "does_not_prove": "The provider's study role beyond the published fields or a clinical-trial conclusion.",
+        "sql": '''SELECT * FROM raw_open_payments_research
+                  WHERE CAST("Covered_Recipient_NPI" AS VARCHAR) = ?
+                     OR CAST("Principal_Investigator_1_NPI" AS VARCHAR) = ?
+                     OR CAST("Principal_Investigator_2_NPI" AS VARCHAR) = ?
+                     OR CAST("Principal_Investigator_3_NPI" AS VARCHAR) = ?
+                     OR CAST("Principal_Investigator_4_NPI" AS VARCHAR) = ?
+                     OR CAST("Principal_Investigator_5_NPI" AS VARCHAR) = ?''',
+        "required_tables": ("raw_open_payments_research",),
+        "npi_repetitions": 6,
+    },
+    {
+        "key": "open_payments_ownership",
+        "table": "raw_open_payments_ownership",
+        "title": "Open Payments — ownership",
+        "grain": "one reported physician ownership or investment interest",
+        "relationship": "physician ownership or investment interest reported to Open Payments",
+        "proves": "A published Open Payments ownership record names this NPI.",
+        "does_not_prove": "A current investment position or influence beyond the reported period.",
+        "sql": 'SELECT * FROM raw_open_payments_ownership WHERE CAST("Physician_NPI" AS VARCHAR) = ?',
+        "required_tables": ("raw_open_payments_ownership",),
+    },
+    {
+        "key": "mips_performance",
+        "table": "raw_mips_performance",
+        "title": "MIPS performance",
+        "grain": "one eligible clinician × program year",
+        "relationship": "published quality-payment-program performance record",
+        "proves": "CMS published a MIPS performance record for this NPI and program year.",
+        "does_not_prove": "Care quality outside the measures or an organization affiliation.",
+        "sql": 'SELECT * FROM raw_mips_performance WHERE CAST("NPI" AS VARCHAR) = ?',
+        "required_tables": ("raw_mips_performance",),
+    },
+    {
+        "key": "dme_referring",
+        "table": "raw_dme_by_referring_provider",
+        "title": "DME by referring provider",
+        "grain": "one referring provider × source year",
+        "relationship": "provider-level durable-medical-equipment referral activity",
+        "proves": "CMS published DME referral activity under this NPI.",
+        "does_not_prove": "A specific patient referral or the provider's complete DME activity.",
+        "sql": 'SELECT * FROM raw_dme_by_referring_provider WHERE CAST("Rfrg_NPI" AS VARCHAR) = ?',
+        "required_tables": ("raw_dme_by_referring_provider",),
+    },
+    {
+        "key": "order_referring",
+        "table": "raw_order_and_referring",
+        "title": "Order and referring eligibility",
+        "grain": "one ordering/referring provider record",
+        "relationship": "provider eligibility recorded in the CMS ordering and referring file",
+        "proves": "CMS published an ordering/referring eligibility record for this NPI.",
+        "does_not_prove": "That a specific order, referral, or service occurred.",
+        "sql": 'SELECT * FROM raw_order_and_referring WHERE CAST("NPI" AS VARCHAR) = ?',
+        "required_tables": ("raw_order_and_referring",),
+    },
+    {
         "key": "facility_affiliation",
         "table": "raw_dac_facility_affiliations",
         "title": "CMS facility affiliations",
@@ -759,7 +854,12 @@ def get_explorer_router(get_conn):
             if not missing_tables:
                 try:
                     for npi in requested_npis:
-                        provider_rows[npi] = _run_json_safe(conn, source["sql"], [npi], limit)
+                        provider_rows[npi] = _run_json_safe(
+                            conn,
+                            source["sql"],
+                            [npi] * int(source.get("npi_repetitions", 1)),
+                            limit,
+                        )
                 except Exception as error:
                     availability = "query_error"
                     provider_rows = {}

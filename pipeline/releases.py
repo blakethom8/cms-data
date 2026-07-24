@@ -85,6 +85,7 @@ FULL_PLATFORM_SMOKE_TABLES = (
     "utilization_metrics",
     "industry_relationships",
     "hospital_affiliations",
+    "provider_hospital_evidence",
     "provider_service_detail",
     "provider_drug_detail",
     "provider_quality_scores",
@@ -114,7 +115,11 @@ FULL_PLATFORM_SMOKE_TABLES = (
 )
 AFFILIATION_MATCH_POLICY = "normalized_name_and_state_unique_hospital_npi_v1"
 AFFILIATION_CHANGED_TABLES = frozenset(
-    {"raw_hospital_enrollments", "hospital_affiliations"}
+    {
+        "raw_hospital_enrollments",
+        "hospital_affiliations",
+        "provider_hospital_evidence",
+    }
 )
 FULL_CMS_CHANGED_TABLES = frozenset(
     {
@@ -123,6 +128,7 @@ FULL_CMS_CHANGED_TABLES = frozenset(
         "utilization_metrics",
         "industry_relationships",
         "hospital_affiliations",
+        "provider_hospital_evidence",
         "provider_service_detail",
         "provider_drug_detail",
         "provider_quality_scores",
@@ -845,6 +851,9 @@ def _validate_candidate(
     affiliation_rows = connection.execute(
         "SELECT count(*) FROM hospital_affiliations"
     ).fetchone()[0]
+    evidence_rows = connection.execute(
+        "SELECT count(*) FROM provider_hospital_evidence"
+    ).fetchone()[0]
     affiliated_providers = connection.execute(
         "SELECT count(DISTINCT npi) FROM hospital_affiliations"
     ).fetchone()[0]
@@ -874,6 +883,22 @@ def _validate_candidate(
         SELECT count(*)
         FROM hospital_affiliations a
         LEFT JOIN raw_hospital_enrollments h ON h.npi = a.hospital_npi
+        WHERE h.npi IS NULL
+        """
+    ).fetchone()[0]
+    evidence_missing_providers = connection.execute(
+        """
+        SELECT count(*)
+        FROM provider_hospital_evidence e
+        LEFT JOIN core_providers p ON p.npi = e.npi
+        WHERE p.npi IS NULL
+        """
+    ).fetchone()[0]
+    evidence_missing_hospitals = connection.execute(
+        """
+        SELECT count(*)
+        FROM provider_hospital_evidence e
+        LEFT JOIN raw_hospital_enrollments h ON h.npi = e.hospital_npi
         WHERE h.npi IS NULL
         """
     ).fetchone()[0]
@@ -935,6 +960,8 @@ def _validate_candidate(
         raise ReleaseError("Candidate warehouse has no distinct hospital NPIs")
     if affiliation_rows <= 0:
         raise ReleaseError("Candidate warehouse has no validated hospital affiliations")
+    if evidence_rows <= 0:
+        raise ReleaseError("Candidate warehouse has no provider hospital evidence")
     if duplicate_affiliations:
         raise ReleaseError(
             f"Candidate warehouse contains {duplicate_affiliations} duplicate affiliations"
@@ -947,6 +974,11 @@ def _validate_candidate(
         raise ReleaseError(
             f"Candidate warehouse contains {missing_hospitals} affiliations without hospitals"
         )
+    if evidence_missing_providers or evidence_missing_hospitals:
+        raise ReleaseError(
+            "Candidate warehouse contains provider hospital evidence without a "
+            "provider or hospital"
+        )
     if invalid_affiliation_values:
         raise ReleaseError(
             "Candidate warehouse contains "
@@ -957,6 +989,7 @@ def _validate_candidate(
         "raw_hospital_enrollments": int(source_rows),
         "distinct_hospital_npis": int(distinct_hospital_npis),
         "hospital_affiliations": int(affiliation_rows),
+        "provider_hospital_evidence": int(evidence_rows),
         "affiliated_providers": int(affiliated_providers),
         "affiliated_hospitals": int(affiliated_hospitals),
         "database_tables": int(table_count),
@@ -971,6 +1004,8 @@ def _validate_candidate(
             "duplicate_provider_hospital_pairs": int(duplicate_affiliations),
             "missing_core_providers": int(missing_providers),
             "missing_raw_hospitals": int(missing_hospitals),
+            "evidence_missing_core_providers": int(evidence_missing_providers),
+            "evidence_missing_raw_hospitals": int(evidence_missing_hospitals),
             "invalid_affiliation_values": int(invalid_affiliation_values),
         },
         "representative_affiliations": [
@@ -1044,6 +1079,14 @@ def build_warehouse_release(
                 transform_counts = _rebuild_hospital_affiliations(
                     connection,
                     data_year=_hospital_data_year(manifest.source_data_period),
+                )
+                from .transform import build_provider_hospital_evidence
+
+                transform_counts["provider_hospital_evidence"] = (
+                    build_provider_hospital_evidence(
+                        connection,
+                        _hospital_data_year(manifest.source_data_period),
+                    )
                 )
                 table_counts, validation_details = _validate_candidate(
                     connection, inserted, transform_counts
@@ -1241,7 +1284,11 @@ def _load_full_cms_content(
     by_source_id: dict[str, RunManifest],
 ) -> tuple[dict[str, int], dict[str, object]]:
     from .candidate_sources import load_cms_raw_tables
-    from .transform import clear_refresh_targets, transform_all
+    from .transform import (
+        build_provider_hospital_evidence,
+        clear_refresh_targets,
+        transform_all,
+    )
 
     ppef_source_ids = (
         "cms_pecos_public_provider_enrollment",
@@ -1302,6 +1349,10 @@ def _load_full_cms_content(
             connection,
             data_year=_period_year(hospital_manifest),
         )
+        provider_hospital_evidence_count = build_provider_hospital_evidence(
+            connection,
+            _period_year(hospital_manifest),
+        )
         connection.execute("COMMIT")
     except Exception:
         connection.execute("ROLLBACK")
@@ -1311,6 +1362,7 @@ def _load_full_cms_content(
         "raw_hospital_enrollments": hospital_rows,
         **transform_counts,
         "hospital_affiliations": affiliation_counts["hospital_affiliations"],
+        "provider_hospital_evidence": provider_hospital_evidence_count,
     }
     required_nonempty = (
         "core_providers",
@@ -1323,6 +1375,7 @@ def _load_full_cms_content(
         "provider_drug_detail",
         "order_referring_eligibility",
         "hospital_affiliations",
+        "provider_hospital_evidence",
     )
     empty = [name for name in required_nonempty if table_counts.get(name, 0) <= 0]
     if empty:

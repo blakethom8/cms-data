@@ -62,6 +62,16 @@ class CommandCenterHandler(SimpleHTTPRequestHandler):
     api_base_url: str
     api_key: str
 
+    def end_headers(self) -> None:
+        """Keep local dashboard assets fresh while preserving proxied API headers."""
+        if not (self.path == "/api" or self.path.startswith("/api/")):
+            self.send_header(
+                "Cache-Control", "no-store, no-cache, max-age=0, must-revalidate"
+            )
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Expires", "0")
+        super().end_headers()
+
     def do_GET(self) -> None:  # noqa: N802 - stdlib handler contract
         if self.path == "/api" or self.path.startswith("/api/"):
             self._proxy_read_request(include_body=True)
@@ -165,9 +175,9 @@ class CommandCenterHandler(SimpleHTTPRequestHandler):
                 if not missing_tables:
                     union_parts = []
                     for npi in requested_npis:
-                        source_sql = source["sql"].strip().rstrip(";").replace(
-                            "?", self._sql_literal(npi), 1
-                        )
+                        source_sql = source["sql"].strip().rstrip(";")
+                        for _ in range(int(source.get("npi_repetitions", 1))):
+                            source_sql = source_sql.replace("?", self._sql_literal(npi), 1)
                         timestamp_columns = timezone_columns.get(source["table"], [])
                         if timestamp_columns:
                             replacements = ", ".join(

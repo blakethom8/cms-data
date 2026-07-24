@@ -2,12 +2,13 @@
   "use strict";
 
   const API = "/api";
-
-  const evidenceProviders = [
-    { npi: "1710390513", name: "Lauren DeStefano", specialty: "Surgical Oncology" },
-    { npi: "1962509216", name: "Robert Vescio", specialty: "Hematology / Oncology" },
-    { npi: "1740218155", name: "Joshua “Josh” Scott", specialty: "Pediatric Medicine" },
-    { npi: "1659383891", name: "Jonathan Weiner", specialty: "Internal Medicine" }
+  const RAIL_PREFERENCE_KEY = "cms-command-center-rail-collapsed";
+  const lineageLayers = [
+    { id: "source", heading: "Publisher source", kinds: ["source"] },
+    { id: "raw", heading: "Raw landing", kinds: ["raw"] },
+    { id: "transform", heading: "Transformation", kinds: ["transform"] },
+    { id: "bridge", heading: "Bridge / core", kinds: ["bridge"] },
+    { id: "curated", heading: "Curated output", kinds: ["mart", "summary"] }
   ];
 
   const previewCatalog = [
@@ -41,6 +42,12 @@
     lineage: null,
     lineageFilter: "all",
     selectedLineageNode: null,
+    lineageSchema: {
+      cache: new Map(),
+      errors: new Map(),
+      activeTab: "details",
+      loadingTable: null
+    },
     overview: null,
     offlinePreview: false,
     selectedDataset: null,
@@ -51,12 +58,18 @@
     sampleInspector: null,
     reopenSampleInspector: false,
     providerEvidence: {
-      result: null,
       data: null,
-      focusedNpi: evidenceProviders[0].npi,
+      provider: null,
+      loadedNpi: null,
+      loading: false,
+      error: null,
+      searchResults: [],
+      searching: false,
+      searchError: null,
       selectedSourceKey: null,
       selectedRow: 0
-    }
+    },
+    railCollapsed: false
   };
 
   const $ = (selector, root = document) => root.querySelector(selector);
@@ -154,8 +167,7 @@
       overview: getJson("/operations/overview"),
       sources: getJson("/operations/sources"),
       runs: getJson("/operations/runs?limit=50"),
-      lineage: getJson("/operations/lineage"),
-      providerEvidence: getJson(`/explorer/provider-evidence?npis=${evidenceProviders.map(provider => provider.npi).join(",")}&limit=10`)
+      lineage: getJson("/operations/lineage")
     };
 
     const entries = Object.entries(requests);
@@ -163,12 +175,6 @@
 
     results.forEach((result, index) => {
       const name = entries[index][0];
-      if (name === "providerEvidence") {
-        state.providerEvidence.result = result.status === "fulfilled"
-          ? { ok: true, data: result.value }
-          : { ok: false, error: result.reason };
-        return;
-      }
       const target = ["health", "tables", "catalog"].includes(name) ? state.core : state.operations;
       target[name] = result.status === "fulfilled" ? { ok: true, data: result.value } : { ok: false, error: result.reason };
     });
@@ -627,40 +633,8 @@
     return "attention";
   }
 
-  function lineageNodeStage(kind) {
-    if (kind === "source") return 0;
-    if (kind === "raw") return 1;
-    if (kind === "transform") return 2;
-    return 3;
-  }
-
-  function lineageDepths(nodes, edges) {
-    const depths = new Map(nodes.map(node => [node.id, lineageNodeStage(node.kind)]));
-    for (let pass = 0; pass < nodes.length; pass += 1) {
-      let changed = false;
-      edges.forEach(edge => {
-        const sourceDepth = depths.get(edge.source);
-        const targetDepth = depths.get(edge.target);
-        if (sourceDepth === undefined || targetDepth === undefined) return;
-        const nextDepth = Math.max(targetDepth, sourceDepth + 1);
-        if (nextDepth !== targetDepth) {
-          depths.set(edge.target, nextDepth);
-          changed = true;
-        }
-      });
-      if (!changed) break;
-    }
-    return depths;
-  }
-
-  function lineageStageHeading(stageNodes) {
-    const kinds = new Set(stageNodes.map(node => node.kind));
-    if (kinds.size === 1 && kinds.has("source")) return "Publisher source";
-    if (kinds.size === 1 && kinds.has("raw")) return "Raw landing";
-    if (kinds.size === 1 && kinds.has("transform")) return "Transformation";
-    if (kinds.size === 1 && kinds.has("bridge")) return "Bridge / core model";
-    if ([...kinds].every(kind => ["mart", "summary"].includes(kind))) return "Curated model";
-    return "Downstream model";
+  function lineageLayerForNode(node) {
+    return lineageLayers.find(layer => layer.kinds.includes(node?.kind))?.id || "curated";
   }
 
   function lineageKindLabel(kind) {
@@ -747,29 +721,32 @@
     const visibleNodes = nodes.filter(node => visibleIds.has(node.id));
     const visibleEdges = edges.filter(edge => visibleIds.has(edge.source) && visibleIds.has(edge.target));
     const relatedIds = lineageRelatedNodeIds(state.selectedLineageNode, visibleEdges);
-    const depths = lineageDepths(visibleNodes, visibleEdges);
-    const stageCount = Math.max(1, ...visibleNodes.map(node => depths.get(node.id) || 0)) + 1;
-    const stages = Array.from({ length: stageCount }, (_, stage) => visibleNodes.filter(node => depths.get(node.id) === stage).sort((a, b) => String(a.label).localeCompare(String(b.label))));
-    const stageRows = Math.max(1, ...stages.map(stage => stage.length));
+    const stages = lineageLayers
+      .map(layer => ({ ...layer, nodes: visibleNodes.filter(node => lineageLayerForNode(node) === layer.id).sort((a, b) => String(a.label).localeCompare(String(b.label))) }))
+      .filter(layer => layer.nodes.length);
+    const stageCount = stages.length;
+    const stageRows = Math.max(1, ...stages.map(stage => stage.nodes.length));
     const graphHeight = Math.max(560, 98 + stageRows * 98);
-    const stageWidth = 174;
-    const graphWidth = Math.max(880, stageCount * stageWidth + 24);
+    const stageWidth = 176;
+    // Keep the graph compact around its five meaningful layers. The surrounding
+    // layout gives the reclaimed desktop width to the Inspector, not an empty lane.
+    const graphWidth = Math.max(880, stageCount * stageWidth);
     const positions = new Map();
-    stages.forEach((stageNodes, stage) => stageNodes.forEach((node, index) => positions.set(node.id, { x: 18 + stage * stageWidth, y: 72 + index * 98 })));
-    const stageNames = stages.map(lineageStageHeading);
+    stages.forEach((stage, index) => stage.nodes.forEach((node, row) => positions.set(node.id, { x: 14 + index * stageWidth, y: 72 + row * 98 })));
 
     const connectorMarkup = visibleEdges.map(edge => {
       const from = positions.get(edge.source);
       const to = positions.get(edge.target);
       if (!from || !to) return "";
+      const isIntraLayer = lineageLayerForNode(nodes.find(node => node.id === edge.source)) === lineageLayerForNode(nodes.find(node => node.id === edge.target));
       const startX = from.x + 160;
       const startY = from.y + 34;
-      const endX = to.x;
+      const endX = isIntraLayer ? to.x + 160 : to.x;
       const endY = to.y + 34;
-      const curve = Math.max(28, (endX - startX) * .42);
+      const curve = isIntraLayer ? 52 : Math.max(28, (endX - startX) * .42);
       const evidence = String(edge.evidence_status || "declared").toLowerCase().includes("observed") ? "observed" : "declared";
       const related = !state.selectedLineageNode || (relatedIds.has(edge.source) && relatedIds.has(edge.target));
-      return `<path class="lineage-edge ${evidence}${related ? " is-related" : " is-dimmed"}" d="M ${startX} ${startY} C ${startX + curve} ${startY}, ${endX - curve} ${endY}, ${endX} ${endY}" data-edge-id="${escapeHtml(edge.id || "")}" />`;
+      return `<path class="lineage-edge ${evidence}${isIntraLayer ? " intra-layer" : ""}${related ? " is-related" : " is-dimmed"}" d="M ${startX} ${startY} C ${startX + curve} ${startY}, ${endX + (isIntraLayer ? curve : -curve)} ${endY}, ${endX} ${endY}" data-edge-id="${escapeHtml(edge.id || "")}" />`;
     }).join("");
 
     const nodeMarkup = visibleNodes.map(node => {
@@ -791,7 +768,7 @@
 
     container.style.minWidth = `${graphWidth}px`;
     container.style.height = `${graphHeight}px`;
-    container.innerHTML = `<div class="lineage-stage-headings" style="grid-template-columns:repeat(${stageCount}, ${stageWidth}px);width:${graphWidth}px" aria-hidden="true">${stageNames.map(name => `<span>${name}</span>`).join("")}</div><svg class="lineage-connectors" viewBox="0 0 ${graphWidth} ${graphHeight}" width="${graphWidth}" height="${graphHeight}" aria-hidden="true"><defs><marker id="lineage-arrowhead" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 8 4 L 0 8 z" /></marker></defs>${connectorMarkup}</svg>${nodeMarkup}`;
+    container.innerHTML = `<div class="lineage-stage-headings" style="grid-template-columns:repeat(${stageCount}, ${stageWidth}px);width:${graphWidth}px" aria-hidden="true">${stages.map(stage => `<span>${escapeHtml(stage.heading)} <b>${stage.nodes.length}</b></span>`).join("")}</div><svg class="lineage-connectors" viewBox="0 0 ${graphWidth} ${graphHeight}" width="${graphWidth}" height="${graphHeight}" aria-hidden="true"><defs><marker id="lineage-arrowhead" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 8 4 L 0 8 z" /></marker></defs>${connectorMarkup}</svg>${nodeMarkup}`;
     renderLineageInspector(nodes, edges);
   }
 
@@ -813,10 +790,140 @@
     return facts.filter(([, value]) => value !== null && value !== undefined && value !== "");
   }
 
+  function lineageSchemaTarget(node, nodes, edges) {
+    if (!node) return null;
+    const ownTable = typeof node.table === "string" && node.table.trim() ? node.table : null;
+    if (["mart", "summary", "raw"].includes(node.kind)) {
+      return ownTable ? {
+        table: ownTable,
+        observed: node?.observed?.table_present === true,
+        heading: "Live schema",
+        evidence: "Active-warehouse evidence",
+        unavailable: node.kind === "raw"
+          ? "This raw landing is declared in lineage but is not observed in the active warehouse."
+          : "This curated output is declared in lineage but is not observed in the active warehouse."
+      } : null;
+    }
+    if (node.kind !== "source") return null;
+
+    const byId = new Map(nodes.map(item => [item.id, item]));
+    const rawTargets = [...new Map(edges
+      .filter(edge => edge.source === node.id && edge.kind === "lands_in")
+      .map(edge => byId.get(edge.target))
+      .filter(target => target?.kind === "raw" && typeof target.table === "string" && target.table.trim())
+      .map(target => [target.id, target])).values()];
+    const observedTargets = rawTargets.filter(target => target?.observed?.table_present === true);
+    if (observedTargets.length === 1) {
+      return {
+        table: observedTargets[0].table,
+        observed: true,
+        heading: "Loaded landing schema",
+        evidence: "Columns currently captured in the active warehouse; not a claim about unpublished or un-ingested publisher artifact fields.",
+        sourceLanding: true
+      };
+    }
+    return {
+      table: null,
+      observed: false,
+      heading: "Loaded landing schema",
+      sourceLanding: true,
+      unavailable: rawTargets.length === 1
+        ? `The declared landing table ${rawTargets[0].table} is not observed in the active warehouse.`
+        : rawTargets.length > 1
+          ? "This source has multiple declared raw landings, so the Command Center will not guess which schema to show."
+          : "This source has no direct declared raw landing table, so there is no loaded schema to inspect."
+    };
+  }
+
+  function lineageSchemaIsObserved(target) {
+    return target?.observed === true;
+  }
+
+  function lineageNullableLabel(value) {
+    if (value === true || String(value).toLowerCase() === "yes") return "YES";
+    if (value === false || String(value).toLowerCase() === "no") return "NO";
+    return value === null || value === undefined || value === "" ? "NOT REPORTED" : String(value).toUpperCase();
+  }
+
+  function lineageInspectorId(node, panel) {
+    return `lineage-${panel}-${String(node.id || "node").replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+  }
+
+  function lineageSchemaUnavailableNote(target) {
+    if (!target) return "";
+    return `<section class="lineage-schema-unavailable" aria-label="Schema availability">
+      <span>${escapeHtml(target.heading || "Warehouse inventory")}</span><strong>Schema unavailable</strong><p>${escapeHtml(target.unavailable || "The table is declared in lineage but not observed in the active warehouse.")}</p>
+    </section>`;
+  }
+
+  function lineageSchemaPanel(node, target) {
+    const table = target?.table;
+    const panelId = lineageInspectorId(node, "columns-panel");
+    if (!table || !lineageSchemaIsObserved(target)) return "";
+    const loading = state.lineageSchema.loadingTable === table;
+    const schema = state.lineageSchema.cache.get(table);
+    const error = state.lineageSchema.errors.get(table);
+    const heading = `<div class="lineage-schema-heading"><div><span>${escapeHtml(target.heading)}</span><h3>${escapeHtml(table)}</h3></div><span class="lineage-schema-count">${schema ? `${schema.columns.length} ${schema.columns.length === 1 ? "column" : "columns"}` : "active warehouse"}</span></div>`;
+    if (loading) {
+      return `<section class="lineage-tab-panel lineage-columns-panel" id="${panelId}" role="tabpanel" aria-labelledby="${lineageInspectorId(node, "columns-tab")}" aria-live="polite" aria-busy="true">${heading}<p class="lineage-schema-evidence">Requesting read-only physical-column evidence from the active warehouse.</p><div class="lineage-schema-state"><strong>Loading columns…</strong><span>No inferred metadata is shown while the request is in progress.</span></div></section>`;
+    }
+    if (error) {
+      return `<section class="lineage-tab-panel lineage-columns-panel" id="${panelId}" role="tabpanel" aria-labelledby="${lineageInspectorId(node, "columns-tab")}" aria-live="polite">${heading}<p class="lineage-schema-evidence">The active warehouse did not return physical-column evidence for this table.</p><div class="lineage-schema-state unavailable"><strong>Columns could not be loaded.</strong><span>Select Columns again to retry. Node details and declared dependencies remain available.</span></div></section>`;
+    }
+    if (!schema) {
+      return `<section class="lineage-tab-panel lineage-columns-panel" id="${panelId}" role="tabpanel" aria-labelledby="${lineageInspectorId(node, "columns-tab")}" aria-live="polite">${heading}<p class="lineage-schema-evidence">Ready to read the active warehouse’s physical fields.</p><div class="lineage-schema-state"><strong>Schema not loaded yet.</strong><span>Select the Columns tab to request read-only evidence.</span></div></section>`;
+    }
+    const columns = schema.columns;
+    const rows = columns.length
+      ? columns.map(column => `<tr><th scope="row"><code>${escapeHtml(column.name || "Unnamed field")}</code></th><td><code>${escapeHtml(column.type || "Not reported")}</code></td><td>${escapeHtml(lineageNullableLabel(column.nullable))}</td></tr>`).join("")
+      : '<tr><td colspan="3" class="lineage-schema-empty">The active warehouse returned no physical columns for this table.</td></tr>';
+    return `<section class="lineage-tab-panel lineage-columns-panel" id="${panelId}" role="tabpanel" aria-labelledby="${lineageInspectorId(node, "columns-tab")}">${heading}<p class="lineage-schema-evidence">${escapeHtml(target.evidence || "Active-warehouse evidence")} · cached for this page session.</p><div class="lineage-schema-frame" tabindex="0" aria-label="Live schema for ${escapeHtml(table)}. Scroll to review all columns."><table><thead><tr><th scope="col">Field</th><th scope="col">Type</th><th scope="col">Nullable</th></tr></thead><tbody>${rows}</tbody></table></div></section>`;
+  }
+
+  async function selectLineageInspectorTab(nodeId, tab) {
+    const { nodes, edges } = lineageTopology();
+    const node = nodes.find(item => item.id === nodeId);
+    const target = lineageSchemaTarget(node, nodes, edges);
+    const table = target?.table;
+    if (!node || state.selectedLineageNode !== nodeId) return;
+    if (tab !== "columns") {
+      state.lineageSchema.activeTab = "details";
+      renderLineage();
+      return;
+    }
+    if (!table || !lineageSchemaIsObserved(target)) return;
+    state.lineageSchema.activeTab = "columns";
+    if (state.lineageSchema.cache.has(table)) {
+      renderLineage();
+      return;
+    }
+
+    state.lineageSchema.errors.delete(table);
+    state.lineageSchema.loadingTable = table;
+    renderLineage();
+    try {
+      const payload = await getJson(`/tables/${encodeURIComponent(table)}/schema`);
+      if (!Array.isArray(payload?.columns)) throw new Error("Schema response did not include columns");
+      state.lineageSchema.cache.set(table, {
+        columns: payload.columns.map(column => ({
+          name: column?.name,
+          type: column?.type,
+          nullable: column?.nullable
+        }))
+      });
+    } catch (error) {
+      state.lineageSchema.errors.set(table, error);
+    } finally {
+      if (state.lineageSchema.loadingTable === table) state.lineageSchema.loadingTable = null;
+      renderLineage();
+    }
+  }
+
   function renderLineageInspector(nodes, edges) {
     const inspector = $("#lineage-inspector");
     const node = nodes.find(item => item.id === state.selectedLineageNode);
     if (!node) {
+      inspector.classList.remove("schema-active");
       inspector.innerHTML = `<span class="eyebrow">Graph inspector</span><h2>No node selected</h2><p>Select a source, landing, transform, bridge, or curated model to trace every connected upstream and downstream path.</p><div class="lineage-inspector-note"><strong>Evidence-aware</strong><span>Declared edges are implementation intent. Observed edges have active-warehouse support.</span></div>`;
       return;
     }
@@ -824,13 +931,30 @@
     const upstream = edges.filter(edge => edge.target === node.id).map(edge => ({ edge, node: byId.get(edge.source) })).filter(item => item.node);
     const downstream = edges.filter(edge => edge.source === node.id).map(edge => ({ edge, node: byId.get(edge.target) })).filter(item => item.node);
     const dependencyList = (items, direction) => items.length ? `<ul class="lineage-dependency-list">${items.map(({ edge, node: dependency }) => `<li><button type="button" data-lineage-node="${escapeHtml(dependency.id)}"><strong>${escapeHtml(dependency.label || dependency.id)}</strong><small>${escapeHtml(direction)} · ${escapeHtml(edge.label || edge.kind || "dependency")} · ${escapeHtml(String(edge.evidence_status || "declared"))}</small></button></li>`).join("")}</ul>` : '<p class="lineage-no-dependencies">None declared.</p>';
-    inspector.innerHTML = `<span class="eyebrow">Selected ${escapeHtml(lineageKindLabel(node.kind))}</span><h2>${escapeHtml(node.label || node.id)}</h2><div class="lineage-inspector-status"><span class="lineage-kind-badge">${escapeHtml(lineageKindLabel(node.kind))}</span><span class="status-chip ${lineageNodeEvidence(node) === "observed" ? "current" : lineageNodeEvidence(node) === "attention" ? "warning" : ""}">${escapeHtml(lineageStatusLabel(lineageNodeEvidence(node)))}</span></div><dl class="inspector-facts">${lineageDetails(node).map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}</dl><section class="lineage-dependencies"><h3>Direct inputs</h3>${dependencyList(upstream, "reads from")}</section><section class="lineage-dependencies"><h3>Direct outputs</h3>${dependencyList(downstream, "feeds")}</section>`;
+    const schemaTarget = lineageSchemaTarget(node, nodes, edges);
+    const table = schemaTarget?.table;
+    const hasObservedSchema = Boolean(table && lineageSchemaIsObserved(schemaTarget));
+    const activeTab = hasObservedSchema && state.lineageSchema.activeTab === "columns" ? "columns" : "details";
+    const schema = hasObservedSchema ? state.lineageSchema.cache.get(table) : null;
+    const loading = hasObservedSchema && state.lineageSchema.loadingTable === table;
+    const columnsLabel = schema ? `Columns (${schema.columns.length})` : loading ? "Columns · loading" : "Columns";
+    const detailsId = lineageInspectorId(node, "details-panel");
+    const columnsId = lineageInspectorId(node, "columns-panel");
+    const tabs = hasObservedSchema ? `<div class="lineage-inspector-tabs" role="tablist" aria-label="Inspector views"><button type="button" id="${lineageInspectorId(node, "details-tab")}" role="tab" aria-selected="${activeTab === "details"}" aria-controls="${detailsId}" tabindex="${activeTab === "details" ? "0" : "-1"}" data-lineage-tab="details" data-lineage-tab-node="${escapeHtml(node.id)}">Details</button><button type="button" id="${lineageInspectorId(node, "columns-tab")}" role="tab" aria-selected="${activeTab === "columns"}" aria-controls="${columnsId}" tabindex="${activeTab === "columns" ? "0" : "-1"}" data-lineage-tab="columns" data-lineage-tab-node="${escapeHtml(node.id)}">${escapeHtml(columnsLabel)}</button></div>` : "";
+    const detailsPanelAttributes = hasObservedSchema
+      ? ` id="${detailsId}" role="tabpanel" aria-labelledby="${lineageInspectorId(node, "details-tab")}"${activeTab === "columns" ? " hidden" : ""}`
+      : "";
+    const details = `<section class="lineage-tab-panel lineage-details-panel"${detailsPanelAttributes}><dl class="inspector-facts">${lineageDetails(node).map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}</dl><section class="lineage-dependencies"><h3>Direct inputs</h3>${dependencyList(upstream, "reads from")}</section><section class="lineage-dependencies"><h3>Direct outputs</h3>${dependencyList(downstream, "feeds")}</section>${schemaTarget && !hasObservedSchema ? lineageSchemaUnavailableNote(schemaTarget) : ""}</section>`;
+    const columns = hasObservedSchema && activeTab === "columns" ? lineageSchemaPanel(node, schemaTarget) : "";
+    inspector.classList.toggle("schema-active", activeTab === "columns");
+    inspector.innerHTML = `<header class="lineage-inspector-header"><span class="eyebrow">Selected ${escapeHtml(lineageKindLabel(node.kind))}</span><h2>${escapeHtml(node.label || node.id)}</h2><div class="lineage-inspector-status"><span class="lineage-kind-badge">${escapeHtml(lineageKindLabel(node.kind))}</span><span class="status-chip ${lineageNodeEvidence(node) === "observed" ? "current" : lineageNodeEvidence(node) === "attention" ? "warning" : ""}">${escapeHtml(lineageStatusLabel(lineageNodeEvidence(node)))}</span></div></header>${tabs}${details}${columns}`;
   }
 
   function inspectLineage(nodeId) {
     const { nodes } = lineageTopology();
     if (!nodes.some(node => node.id === nodeId)) return;
     state.selectedLineageNode = state.selectedLineageNode === nodeId ? null : nodeId;
+    state.lineageSchema.activeTab = "details";
     renderLineage();
   }
 
@@ -921,7 +1045,7 @@
     return evidenceProviders.find(provider => provider.npi === npi) || { npi, name: `NPI ${npi}`, specialty: "Specialty not listed" };
   }
 
-  function providerTable(source, npi) {
+  function providerTable(source, npi = state.providerEvidence.provider?.npi) {
     const table = source?.providers?.[npi];
     return {
       columns: Array.isArray(table?.columns) ? table.columns : [],
@@ -974,7 +1098,7 @@
   function evidenceAvailability(source) {
     if (source.availability === "available") return { status: "current", label: "Source loaded" };
     if (source.availability === "query_error") return { status: "failed", label: "Query error" };
-    return { status: "warning", label: "Awaiting ingestion" };
+    return { status: "warning", label: "Unavailable" };
   }
 
   function renderProviderEvidence() {
@@ -1088,6 +1212,155 @@
     requestAnimationFrame(() => $("#record-inspector")?.scrollIntoView({ behavior: "smooth", block: "start" }));
   }
 
+  // The evidence workspace is provider-first. The earlier matrix renderer is
+  // retained above only for history; these declarations are the active UI.
+  function renderProviderEvidence() {
+    const content = $("#provider-evidence-content");
+    if (!content) return;
+    const evidence = state.providerEvidence;
+    if (!evidence.provider) {
+      content.innerHTML = `<div class="provider-evidence-empty"><span class="empty-glyph" aria-hidden="true">⌕</span><h2>Start with a provider.</h2><p>Search by clinician name or NPI to open their publisher-source evidence dossier.</p></div>`;
+      return;
+    }
+    if (evidence.loading) {
+      content.innerHTML = `<div class="provider-evidence-loading"><span class="loading-rule"></span><strong>Opening source dossier…</strong><p>Retrieving bounded publisher rows separately for NPI <code>${escapeHtml(evidence.provider.npi)}</code>.</p></div>`;
+      return;
+    }
+    if (evidence.error) {
+      content.innerHTML = `<div class="provider-evidence-error"><span class="evidence-offline-code">EVIDENCE UNAVAILABLE</span><strong>Source records could not be retrieved.</strong><p>${escapeHtml(evidence.error)}</p><button type="button" data-provider-retry>Try again</button></div>`;
+      return;
+    }
+    const sources = Array.isArray(evidence.data?.sources) ? evidence.data.sources : [];
+    if (!sources.length) {
+      content.innerHTML = '<div class="provider-evidence-error"><strong>No source registry was returned.</strong><p>The evidence service is connected, but no reviewed sources are currently available.</p></div>';
+      return;
+    }
+    hydrateProviderIdentityFromEvidence(sources);
+    const publisherSources = sources.filter(source => (source.layer || "raw") === "raw");
+    const derivedSources = sources.filter(source => (source.layer || "raw") !== "raw");
+    if (!publisherSources.length) {
+      content.innerHTML = '<div class="provider-evidence-error"><strong>No publisher-source registry was returned.</strong><p>The evidence service is connected, but no reviewed raw sources are currently available.</p></div>';
+      return;
+    }
+    if (!publisherSources.some(source => source.key === evidence.selectedSourceKey)) {
+      evidence.selectedSourceKey = (publisherSources.find(source => providerTable(source).rows.length) || publisherSources[0]).key;
+    }
+    const provider = evidence.provider;
+    const activeSource = publisherSources.find(source => source.key === evidence.selectedSourceKey) || publisherSources[0];
+    const activeTable = providerTable(activeSource);
+    content.innerHTML = `<section class="provider-identity" aria-label="Selected provider"><div><span class="eyebrow">Selected provider</span><h2>${escapeHtml(provider.name || `NPI ${provider.npi}`)}</h2><p><code>${escapeHtml(provider.npi)}</code>${provider.credentials ? ` · ${escapeHtml(provider.credentials)}` : ""}${provider.specialty ? ` · ${escapeHtml(provider.specialty)}` : ""}</p></div><button type="button" class="change-provider" data-provider-change>Change provider</button></section>
+      <section class="evidence-shelf" aria-labelledby="evidence-shelf-title"><div class="evidence-shelf-heading"><div><span class="eyebrow">Evidence shelf</span><h2 id="evidence-shelf-title">Publisher-source records <b>${publisherSources.length} sources</b></h2></div><p>Each tab is a separate raw publisher-source result for this NPI.</p></div><div class="evidence-tabs-frame"><button type="button" class="evidence-tab-scroll back" data-evidence-tab-scroll="back" aria-label="Show earlier evidence sources">←</button><div class="evidence-tabs" id="evidence-tabs" role="tablist" aria-label="Publisher evidence sources">${publisherSources.map(source => { const table = providerTable(source); const availability = evidenceAvailability(source); const selected = source.key === activeSource.key; const count = source.availability === "available" ? table.rows.length : availability.label; return `<button type="button" role="tab" aria-selected="${selected}" class="evidence-source-tab ${selected ? "selected" : ""}" data-evidence-source-tab="${escapeHtml(source.key)}"><span>${escapeHtml(source.title)}</span><b class="status-${availability.status}">${escapeHtml(String(count))}</b></button>`; }).join("")}</div><button type="button" class="evidence-tab-scroll forward" data-evidence-tab-scroll="forward" aria-label="Show later evidence sources">→</button></div>${renderEvidenceInspector(activeSource, provider, activeTable)}</section>
+      ${derivedSources.length ? `<aside class="derived-relationships"><strong>Derived relationships · not publisher-source evidence</strong><p>${derivedSources.map(source => `<code>${escapeHtml(source.title)}</code>`).join(" · ")}</p><small>These warehouse bridges and inferences are intentionally kept outside the raw evidence shelf.</small></aside>` : ""}
+      <aside class="evidence-caveat"><strong>Source rows stay separate.</strong><p>Records are never joined together in this workspace. A zero count means no matching source row was returned; an unavailable tab means the source cannot be retrieved in this warehouse.</p></aside>`;
+    requestAnimationFrame(() => $(".evidence-source-tab.selected")?.scrollIntoView({ behavior: "auto", block: "nearest", inline: "center" }));
+  }
+
+  function hydrateProviderIdentityFromEvidence(sources) {
+    const provider = state.providerEvidence.provider;
+    if (!provider || (provider.name && !/^NPI\s+\d{10}$/.test(provider.name))) return;
+    const source = sources.find(item => item.key === "dac_national" && providerTable(item).rows.length)
+      || sources.find(item => item.key === "nppes" && providerTable(item).rows.length);
+    if (!source) return;
+    const table = providerTable(source);
+    const row = table.rows[0];
+    const value = (...patterns) => {
+      const index = table.columns.findIndex(column => patterns.some(pattern => pattern.test(String(column))));
+      return index >= 0 ? row[index] : null;
+    };
+    const firstName = value(/^first_name$/i, /provider first name/i);
+    const lastName = value(/^last_name$/i, /provider last name/i);
+    const fullName = [firstName, lastName].filter(Boolean).join(" ");
+    if (!fullName) return;
+    state.providerEvidence.provider = {
+      ...provider,
+      name: fullName,
+      credentials: provider.credentials || value(/credential/i, /^cred/i),
+      // Taxonomy codes remain visible in NPPES raw evidence, but are not a
+      // human-readable specialty in the dossier header.
+      specialty: provider.specialty || value(/pri_spec/i, /specialty/i)
+    };
+  }
+
+  function renderEvidenceInspector(source, provider, table) {
+    const availability = evidenceAvailability(source);
+    const rowIndex = Math.min(state.providerEvidence.selectedRow, Math.max(table.rows.length - 1, 0));
+    state.providerEvidence.selectedRow = rowIndex;
+    const row = table.rows[rowIndex] || [];
+    const missing = Array.isArray(source.missing_tables) ? source.missing_tables : [];
+    const body = source.availability !== "available"
+      ? `<div class="inspector-unavailable"><span class="status-chip ${availability.status}"><i class="status-dot ${availability.status}"></i>${escapeHtml(availability.label)}</span><strong>These records are not currently available.</strong><p>${missing.length ? `Required source table: ${missing.map(item => `<code>${escapeHtml(item)}</code>`).join(" · ")}` : "The live source query did not complete."}</p></div>`
+      : !table.rows.length ? '<div class="inspector-unavailable empty"><span class="status-chip unavailable"><i class="status-dot unavailable"></i>0 records</span><strong>No record for this provider in this source.</strong><p>An empty result is evidence too; it is not replaced with a row from another file.</p></div>'
+      : `<div class="raw-record-workbench">${table.rows.length > 1 ? `<div class="record-tabs" role="tablist" aria-label="Raw records">${table.rows.map((_, index) => `<button type="button" role="tab" aria-selected="${index === rowIndex}" class="${index === rowIndex ? "selected" : ""}" data-evidence-row="${index}"><span>${String(index + 1).padStart(2, "0")}</span>Record ${index + 1}</button>`).join("")}</div>` : '<div class="single-record-label">RAW RECORD 01</div>'}<div class="raw-field-frame" tabindex="0" aria-label="Source-native field and value table"><span class="raw-scroll-cue" aria-hidden="true">← scroll fields →</span><table class="raw-field-table"><thead><tr><th scope="col">Physical field</th><th scope="col">Source value</th></tr></thead><tbody>${table.columns.map((column, index) => `<tr><th scope="row"><code>${escapeHtml(column)}</code></th><td>${formatCell(row[index])}</td></tr>`).join("")}</tbody></table></div></div>`;
+    return `<section class="record-inspector" aria-live="polite" aria-labelledby="record-inspector-title"><div class="inspector-heading"><div><span class="eyebrow">Selected source record</span><h2 id="record-inspector-title">${escapeHtml(source.title)}</h2><p><code>${escapeHtml(provider.npi)}</code> · <code>${escapeHtml(source.table)}</code></p></div><span class="inspector-row-count">${source.availability === "available" ? `${table.rows.length} ${table.rows.length === 1 ? "ROW" : "ROWS"} RETURNED` : availability.label.toUpperCase()}</span></div><div class="claim-ledger"><article class="claim-proves"><span>What this proves</span><p>${escapeHtml(source.proves)}</p></article><article class="claim-limits"><span>What this does not prove</span><p>${escapeHtml(source.does_not_prove)}</p></article><article class="claim-grain"><span>Source relationship</span><p>${escapeHtml(source.relationship)}</p></article></div>${body}</section>`;
+  }
+
+  function renderProviderSearchResults() {
+    const results = $("#provider-search-results");
+    if (!results) return;
+    const evidence = state.providerEvidence;
+    if (evidence.searching) { results.innerHTML = '<p class="search-status">Searching California provider records…</p>'; return; }
+    if (evidence.searchError) { results.innerHTML = `<p class="search-status error">${escapeHtml(evidence.searchError)}</p>`; return; }
+    if (!evidence.searchResults.length) { results.innerHTML = ""; return; }
+    results.innerHTML = `<p class="search-status">${evidence.searchResults.length} matching provider${evidence.searchResults.length === 1 ? "" : "s"}</p><ul>${evidence.searchResults.map(provider => `<li><button type="button" data-provider-select="${escapeHtml(provider.npi)}"><strong>${escapeHtml(provider.name)}</strong><span><code>${escapeHtml(provider.npi)}</code>${provider.credentials ? ` · ${escapeHtml(provider.credentials)}` : ""}${provider.specialty ? ` · ${escapeHtml(provider.specialty)}` : ""}</span><small>${escapeHtml([provider.city, provider.state, provider.group_name].filter(Boolean).join(" · ") || "Location not published")}</small></button></li>`).join("")}</ul>`;
+  }
+
+  async function searchProviders(query) {
+    const evidence = state.providerEvidence;
+    evidence.searching = true; evidence.searchError = null; evidence.searchResults = [];
+    renderProviderSearchResults();
+    try {
+      evidence.searchResults = await getJson(`/profiles/search?q=${encodeURIComponent(query)}&state=CA&limit=12`);
+      if (!evidence.searchResults.length) evidence.searchError = "No California provider matched that name or NPI.";
+    } catch (_) { evidence.searchError = "Provider search is currently unavailable. Check the API connection and try again."; }
+    finally { evidence.searching = false; renderProviderSearchResults(); }
+  }
+
+  async function selectProvider(provider, { updateUrl = true } = {}) {
+    const evidence = state.providerEvidence;
+    evidence.provider = provider; evidence.loadedNpi = null; evidence.data = null; evidence.error = null; evidence.selectedSourceKey = null; evidence.selectedRow = 0; evidence.loading = true;
+    renderProviderEvidence();
+    if (updateUrl && location.hash !== `#provider-evidence/${provider.npi}`) location.hash = `provider-evidence/${provider.npi}`;
+    try { evidence.data = await getJson(`/explorer/provider-evidence?npis=${encodeURIComponent(provider.npi)}&limit=25`); evidence.loadedNpi = provider.npi; }
+    catch (_) { evidence.error = "The evidence endpoint did not return a usable response."; }
+    finally { evidence.loading = false; renderProviderEvidence(); }
+  }
+
+  async function loadProviderFromRoute(npi) {
+    if (!/^\d{10}$/.test(npi) || state.providerEvidence.loadedNpi === npi || state.providerEvidence.loading) return;
+    if (state.providerEvidence.provider?.npi === npi) { selectProvider(state.providerEvidence.provider, { updateUrl: false }); return; }
+    try { const matches = await getJson(`/profiles/search?q=${encodeURIComponent(npi)}&state=CA&limit=1`); selectProvider(matches.find(match => match.npi === npi) || { npi, name: `NPI ${npi}` }, { updateUrl: false }); }
+    catch (_) { state.providerEvidence.provider = { npi, name: `NPI ${npi}` }; state.providerEvidence.error = "Provider identity could not be resolved. Try a new search."; renderProviderEvidence(); }
+  }
+
+  function readRailPreference() {
+    try {
+      return window.localStorage.getItem(RAIL_PREFERENCE_KEY) === "true";
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function applyRailPreference() {
+    const isDesktop = window.matchMedia("(min-width: 901px)").matches;
+    const collapsed = isDesktop && state.railCollapsed;
+    $(".app-shell").classList.toggle("rail-collapsed", collapsed);
+    const toggle = $("#rail-toggle");
+    toggle.setAttribute("aria-expanded", String(!collapsed));
+    toggle.setAttribute("aria-label", collapsed ? "Expand navigation rail" : "Collapse navigation rail");
+    toggle.setAttribute("title", collapsed ? "Expand navigation rail" : "Collapse navigation rail");
+  }
+
+  function toggleRail() {
+    if (!window.matchMedia("(min-width: 901px)").matches) return;
+    state.railCollapsed = !state.railCollapsed;
+    try {
+      window.localStorage.setItem(RAIL_PREFERENCE_KEY, String(state.railCollapsed));
+    } catch (_) {
+      // The control remains useful when browser storage is unavailable.
+    }
+    applyRailPreference();
+  }
+
   function routeFromHash() {
     closeSampleInspector({ restoreFocus: false });
     state.reopenSampleInspector = false;
@@ -1101,6 +1374,7 @@
     });
     $$(".rail-nav a").forEach(link => link.setAttribute("aria-current", link.dataset.route === validRoute ? "page" : "false"));
     if (validRoute === "catalog" && detail) selectDataset(detail, false);
+    if (validRoute === "provider-evidence" && detail) loadProviderFromRoute(detail);
     $("#mobile-menu").setAttribute("aria-expanded", "false");
     $(".rail").classList.remove("open");
     document.title = `${validRoute[0].toUpperCase()}${validRoute.slice(1)} · CMS Data Command Center`;
@@ -1108,11 +1382,24 @@
   }
 
   function bindEvents() {
+    state.railCollapsed = readRailPreference();
+    applyRailPreference();
     window.addEventListener("hashchange", routeFromHash);
+    window.addEventListener("resize", applyRailPreference);
     $("#catalog-search").addEventListener("input", filterCatalog);
     $("#catalog-domain").addEventListener("change", filterCatalog);
     $("#contract-search").addEventListener("input", filterContracts);
     $("#contract-status").addEventListener("change", filterContracts);
+    $("#provider-search-form").addEventListener("submit", event => {
+      event.preventDefault();
+      const query = $("#provider-evidence-search").value.trim();
+      if (!query) {
+        state.providerEvidence.searchError = "Enter a provider name or 10-digit NPI.";
+        renderProviderSearchResults();
+        return;
+      }
+      searchProviders(query);
+    });
 
     document.addEventListener("click", event => {
       const datasetButton = event.target.closest(".dataset-button[data-dataset-key]");
@@ -1143,6 +1430,8 @@
       }
       const lineageButton = event.target.closest("[data-lineage-node]");
       if (lineageButton) inspectLineage(lineageButton.dataset.lineageNode);
+      const lineageTab = event.target.closest("[data-lineage-tab][data-lineage-tab-node]");
+      if (lineageTab) selectLineageInspectorTab(lineageTab.dataset.lineageTabNode, lineageTab.dataset.lineageTab);
       const providerButton = event.target.closest("[data-provider-npi]");
       if (providerButton) {
         state.providerEvidence.focusedNpi = providerButton.dataset.providerNpi;
@@ -1154,7 +1443,29 @@
       const evidenceRow = event.target.closest("[data-evidence-row]");
       if (evidenceRow) {
         state.providerEvidence.selectedRow = Number(evidenceRow.dataset.evidenceRow);
-        renderEvidenceInspector();
+        renderProviderEvidence();
+      }
+      const providerSelect = event.target.closest("[data-provider-select]");
+      if (providerSelect) {
+        const provider = state.providerEvidence.searchResults.find(item => item.npi === providerSelect.dataset.providerSelect);
+        if (provider) selectProvider(provider);
+      }
+      const evidenceTab = event.target.closest("[data-evidence-source-tab]");
+      if (evidenceTab) {
+        state.providerEvidence.selectedSourceKey = evidenceTab.dataset.evidenceSourceTab;
+        state.providerEvidence.selectedRow = 0;
+        renderProviderEvidence();
+      }
+      const evidenceTabScroll = event.target.closest("[data-evidence-tab-scroll]");
+      if (evidenceTabScroll) {
+        const tabs = $("#evidence-tabs");
+        tabs?.scrollBy({ left: evidenceTabScroll.dataset.evidenceTabScroll === "forward" ? 280 : -280, behavior: "smooth" });
+      }
+      if (event.target.closest("[data-provider-change]")) {
+        $("#provider-evidence-search")?.focus();
+      }
+      if (event.target.closest("[data-provider-retry]") && state.providerEvidence.provider) {
+        selectProvider(state.providerEvidence.provider, { updateUrl: false });
       }
     });
 
@@ -1187,6 +1498,7 @@
       rail.classList.toggle("open", open);
       $("#mobile-menu").setAttribute("aria-expanded", String(open));
     });
+    $("#rail-toggle").addEventListener("click", toggleRail);
   }
 
   bindEvents();

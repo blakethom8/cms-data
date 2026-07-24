@@ -115,6 +115,23 @@ def _warehouse(path: Path) -> Path:
             ('1000000003', '2000000002', 'CCN2', 'Texas Hospital', 'Austin',
              'TX', '73301', 'acute_care', 'reassignment', 'medium', 'PAC2', 2024);
 
+        CREATE TABLE provider_hospital_evidence (
+            evidence_key VARCHAR, npi VARCHAR, hospital_npi VARCHAR,
+            hospital_ccn VARCHAR, hospital_name VARCHAR, hospital_city VARCHAR,
+            hospital_state VARCHAR, hospital_zip VARCHAR, evidence_method VARCHAR,
+            confidence_level VARCHAR, group_pac_id VARCHAR,
+            organization_pac_id VARCHAR, dac_address_id VARCHAR,
+            provider_enrollment_id VARCHAR, receiving_enrollment_id VARCHAR,
+            source_data_period VARCHAR, data_year INTEGER
+        );
+        INSERT INTO provider_hospital_evidence VALUES
+            ('evidence-1', '1000000001', '2000000001', 'CCN1', 'Alpha Hospital',
+             'Los Angeles', 'CA', '90001', 'pecos_receiving_npi_match', 'high',
+             NULL, NULL, NULL, 'P1', 'R1', '2024-Q4', 2024),
+            ('evidence-2', '1000000003', '2000000002', 'CCN2', 'Texas Hospital',
+             'Austin', 'TX', '73301', 'cms_reassignment_legal_name_state', 'medium',
+             'PAC2', NULL, NULL, NULL, NULL, '2024', 2024);
+
         CREATE TABLE raw_dac_national (
             "NPI" VARCHAR, "Ind_PAC_ID" VARCHAR, "Ind_enrl_ID" VARCHAR,
             org_pac_id VARCHAR, adrs_id VARCHAR, "Facility Name" VARCHAR,
@@ -433,6 +450,7 @@ def test_profile_preserves_grain_and_source_detail(tmp_path: Path) -> None:
     assert counts[("reporting", "fact_provider_metrics_year")] == 2
     assert counts[("reporting", "fact_provider_quality_year")] == 1
     assert counts[("reporting", "bridge_provider_hospital")] == 1
+    assert counts[("reporting", "bridge_provider_hospital_evidence")] == 1
     assert counts[("reporting", "bridge_provider_practice")] == 2
     assert counts[("reporting", "bridge_provider_pecos_organization")] == 2
     assert counts[("reporting", "bridge_pecos_enrollment_location")] == 2

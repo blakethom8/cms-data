@@ -527,8 +527,9 @@ def test_build_release_copies_baseline_loads_source_and_records_provenance(
     assert result.release.table_counts["raw_hospital_enrollments"] == 1
     assert result.release.table_counts["core_providers"] == 1
     assert result.release.table_counts["hospital_affiliations"] == 1
+    assert result.release.table_counts["provider_hospital_evidence"] == 1
     assert result.release.table_counts["ambiguous_hospital_name_state_keys"] == 0
-    assert result.release.table_counts["database_tables"] == 5
+    assert result.release.table_counts["database_tables"] == 6
     assert (
         result.release.validation_details["affiliation_match_policy"]
         == "normalized_name_and_state_unique_hospital_npi_v1"

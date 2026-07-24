@@ -158,6 +158,17 @@ def test_provider_evidence_reports_optional_tables_as_unavailable() -> None:
     assert ppef["availability"] == "unavailable"
     assert ppef["missing_tables"] == ["raw_pecos_reassignment", "raw_pecos_enrollment"]
     assert ppef["providers"] == {}
+    source_keys = {source["key"] for source in payload["sources"]}
+    assert {
+        "part_d_provider_year",
+        "part_d_provider_drug",
+        "open_payments_general",
+        "open_payments_research",
+        "open_payments_ownership",
+        "mips_performance",
+        "dme_referring",
+        "order_referring",
+    } <= source_keys
 
 
 def test_provider_evidence_validates_npis_and_limits() -> None:
@@ -166,3 +177,21 @@ def test_provider_evidence_validates_npis_and_limits() -> None:
     assert client.get("/explorer/provider-evidence?npis=not-an-npi").status_code == 422
     assert client.get("/explorer/provider-evidence?npis=1710390513&limit=26").status_code == 422
     assert client.get("/explorer/provider-evidence?npis=").status_code == 422
+
+
+def test_provider_evidence_exposes_reviewed_npi_addressable_raw_sources() -> None:
+    connection = duckdb.connect(":memory:")
+    connection.execute('CREATE TABLE raw_part_d_by_provider ("Prscrbr_NPI" VARCHAR, claims INTEGER)')
+    connection.execute('CREATE TABLE raw_dme_by_referring_provider ("Rfrg_NPI" VARCHAR, suppliers INTEGER)')
+    connection.execute('CREATE TABLE raw_order_and_referring ("NPI" VARCHAR, last_name VARCHAR)')
+    connection.execute("INSERT INTO raw_part_d_by_provider VALUES ('1710390513', 42)")
+    connection.execute("INSERT INTO raw_dme_by_referring_provider VALUES ('1710390513', 3)")
+    connection.execute("INSERT INTO raw_order_and_referring VALUES ('1710390513', 'DESTEFANO')")
+    app = FastAPI()
+    app.include_router(get_explorer_router(lambda: connection))
+
+    payload = TestClient(app).get("/explorer/provider-evidence?npis=1710390513").json()
+
+    assert _source(payload, "part_d_provider_year")["providers"]["1710390513"]["rows"] == [["1710390513", 42]]
+    assert _source(payload, "dme_referring")["providers"]["1710390513"]["rows"] == [["1710390513", 3]]
+    assert _source(payload, "order_referring")["providers"]["1710390513"]["rows"] == [["1710390513", "DESTEFANO"]]

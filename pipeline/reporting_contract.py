@@ -298,6 +298,54 @@ REPORTING_MODELS: tuple[ReportingModel, ...] = (
         ),
     ),
     ReportingModel(
+        name="bridge_provider_hospital_evidence",
+        grain="one provider NPI by hospital NPI and source-preserving evidence record",
+        scope_rule="provider NPI belongs to core_providers.state = 'CA'",
+        source_tables=("provider_hospital_evidence", "core_providers"),
+        key_columns=("evidence_key",),
+        from_sql=(
+            "FROM provider_hospital_evidence e "
+            "JOIN core_providers cp ON cp.npi = e.npi "
+            "WHERE UPPER(cp.state) = 'CA'"
+        ),
+        notes=(
+            "Provider-hospital evidence layer. PECOS receiving-NPI matches, "
+            "reassignment name/state matches, and DAC name/address matches remain "
+            "separate rows. No record proves employment, exclusivity, or a primary "
+            "hospital."
+        ),
+        fields=tuple(
+            _field(
+                column,
+                f"e.{column}",
+                "provider_hospital_evidence",
+                "provider_hospital_evidence",
+                column,
+                "Source-preserving provider-hospital evidence build",
+                derived=True,
+            )
+            for column in (
+                "evidence_key",
+                "npi",
+                "hospital_npi",
+                "hospital_ccn",
+                "hospital_name",
+                "hospital_city",
+                "hospital_state",
+                "hospital_zip",
+                "evidence_method",
+                "confidence_level",
+                "group_pac_id",
+                "organization_pac_id",
+                "dac_address_id",
+                "provider_enrollment_id",
+                "receiving_enrollment_id",
+                "source_data_period",
+                "data_year",
+            )
+        ),
+    ),
+    ReportingModel(
         name="bridge_provider_practice",
         grain="one provider NPI by group practice relationship and warehouse year",
         scope_rule="provider NPI belongs to core_providers.state = 'CA'",

@@ -31,6 +31,7 @@ The `reporting` schema contains certified analytical models:
 | `fact_provider_metrics_year` | one provider NPI by Medicare metric year |
 | `fact_provider_quality_year` | one provider NPI by available QPP data year |
 | `bridge_provider_hospital` | one provider NPI by inferred hospital NPI and data year |
+| `bridge_provider_hospital_evidence` | one provider NPI by hospital NPI and source-preserving evidence record |
 | `bridge_provider_practice` | one provider NPI by group practice relationship and warehouse year |
 | `bridge_provider_pecos_organization` | one provider enrollment by receiving PECOS enrollment |
 | `bridge_pecos_enrollment_location` | one receiving enrollment by published practice location; relate to `bridge_provider_pecos_organization` on `receiving_enrollment_id` |
@@ -64,6 +65,11 @@ enrollment receiving reassigned Medicare benefits, then receiving enrollment to 
 practice locations. They are useful organization and location evidence, but neither bridge asserts
 employment, exclusivity, a primary billing organization, a clinician's primary site, or a claim
 service location. Tableau users can inspect the matching raw PPEF rows beside the curated bridges.
+
+`bridge_provider_hospital_evidence` keeps direct PECOS receiving-organization NPI matches,
+reassignment name/state matches, and conservative DAC name-plus-address matches as separate rows.
+Its evidence method and confidence must remain visible; no row establishes employment, exclusivity,
+or a primary hospital.
 
 The `control` schema exposes the active release, model catalog, declared grain, source period
 semantics, and column-level lineage. Every curated column identifies its source table/column,
