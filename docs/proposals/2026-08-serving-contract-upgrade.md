@@ -205,9 +205,44 @@ S1 → S2 is the natural order (S2 needs release identity). S3 and S4 are indepe
 
 ## 8. Open questions for the owner
 
-1. Retention: what is N for "retain the last N releases off-box"? (Pick and write it down.)
+Findings recorded 2026-08-03 after S1/S2 implementation; items still needing an owner decision
+are marked **OWNER**.
+
+1. Retention: what is N for "retain the last N releases off-box"?
+   *Finding:* the operating model already sets an on-box floor — lifecycle step 8 retains "the
+   active and at least two previous validated releases", and verified baselines live under
+   `backups/<backup-id>/`. **OWNER:** pick the off-box N (suggest N = 3 to match the on-box
+   floor) and write it into the operating model with S4.
 2. Key distribution: where do the scoped key values live on the consumer side, and who rotates
    them on what cadence?
-3. Should `/release` be reachable by an *unscoped* monitoring check (no key) for uptime probes,
-   or stay key-gated? (Default here: key-gated.)
+   *Finding:* on the serving side the natural home already exists — the systemd unit loads
+   secrets only from stable protected environment files (`/etc/cms-data/cms-api.env`), so the
+   scoped-key mapping belongs there. The consumer side is invisible from this repository.
+   **OWNER:** decide consumer-side storage and rotation cadence before S3 starts.
+3. Should `/release` be reachable by an *unscoped* monitoring check (no key)?
+   *Finding:* `/health` is already unauthenticated (and runs a DuckDB count), so an uptime
+   probe needs no new surface; `/release` was implemented key-gated per the default here.
+   **OWNER:** confirm key-gated stands.
 4. When every consumer has scoped keys, who retires the shared key, and when?
+   **OWNER:** unchanged; this is the explicit last step of §2.3 and is not an implementer call.
+
+New questions raised by implementation:
+
+5. **OWNER / one-time box check:** is `production/deployments.json` (mode `0640`, control
+   group) group-readable by the `dataops` service user on the real box? The bundle-derived
+   `release_id` needs only symlink traversal (which the service already has — it opens the
+   warehouse through the same links), but `promoted_at`, checksums, and
+   `warehouse_release_id` come from the ledger. If it is not readable, either loosen the group
+   policy deliberately or have the deploy step stamp a `CMS_RELEASE_METADATA_PATH` JSON file;
+   the endpoint already degrades to partial metadata rather than failing.
+6. Conditional requests are honored on **GET only** (standard `If-None-Match` semantics);
+   `POST /query` and any future POST data routes carry no validators. **OWNER/provider-search:**
+   confirm all cache-worthy data calls are GETs, or say which POST responses need validators
+   before the consumer cache is built.
+7. Development serving (`ps-dev` tunnel): if the dev box serves a bare DuckDB path rather than
+   a production bundle, `GET /release` returns `503` there by design. **OWNER:** either accept
+   that in dev or stamp `CMS_RELEASE_METADATA_PATH` in the dev deploy.
+8. `representation_version` bump discipline: the constant lives in `api/release_info.py` with
+   the bump rule documented, but nothing mechanical enforces it. **OWNER:** decide whether a
+   review-checklist note is enough or whether a contract test should pin the expected response
+   shapes per version.
