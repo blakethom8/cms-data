@@ -53,18 +53,20 @@ import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from auth import make_key_validator
+from auth import API_KEY_HEADER, configured_consumer_names, make_key_resolver
 
-api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+SCOPED_API_KEYS = os.getenv("CMS_API_KEYS", "")
 
-# The one key-validity predicate. Every enforcement point (route dependency
-# and cache middleware) must go through this; scoped keys (S3) replace only
-# the validator construction in auth.py.
-is_valid_api_key = make_key_validator(API_KEY)
+api_key_header = APIKeyHeader(name=API_KEY_HEADER, auto_error=False)
+
+# The one key resolver. Every enforcement point (route dependency, cache
+# middleware, access log) goes through this, so a scoped key cannot be honored
+# in one place and rejected in another.
+resolve_api_key_name = make_key_resolver(API_KEY, SCOPED_API_KEYS)
 
 
 async def check_api_key(key: Optional[str] = Security(api_key_header)):
-    if not is_valid_api_key(key):
+    if resolve_api_key_name(key) is None:
         raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
 
@@ -114,7 +116,17 @@ app.include_router(get_release_router(release_resolver), dependencies=_secured)
 app.add_middleware(
     ReleaseCacheMiddleware,
     resolve_metadata=release_resolver,
-    is_authorized=lambda request: is_valid_api_key(request.headers.get("X-API-Key")),
+    is_authorized=lambda request: resolve_api_key_name(request.headers.get(API_KEY_HEADER))
+    is not None,
+)
+
+# Added after ReleaseCacheMiddleware, so it wraps it: conditional requests that
+# short-circuit to 304 still get their correlation ID echoed and logged.
+from request_context import RequestContextMiddleware
+app.add_middleware(
+    RequestContextMiddleware,
+    resolve_key_name=resolve_api_key_name,
+    resolve_release=release_resolver,
 )
 
 app.add_middleware(
