@@ -101,9 +101,15 @@ app.include_router(get_radar_router(get_conn), dependencies=_secured)
 from operations import get_operations_router
 app.include_router(get_operations_router(get_conn), dependencies=_secured)
 
-from release_info import get_release_router, make_release_resolver
+from release_info import ReleaseCacheMiddleware, get_release_router, make_release_resolver
 release_resolver = make_release_resolver(DB_PATH)
 app.include_router(get_release_router(release_resolver), dependencies=_secured)
+
+app.add_middleware(
+    ReleaseCacheMiddleware,
+    resolve_metadata=release_resolver,
+    is_authorized=lambda request: not API_KEY or request.headers.get("X-API-Key") == API_KEY,
+)
 
 app.add_middleware(
     CORSMiddleware,

@@ -8,11 +8,18 @@ from fastapi.testclient import TestClient
 REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPOSITORY_ROOT))
 
+from fastapi import Depends, HTTPException
+from starlette.requests import Request
+
 from release_info import (
+    CACHE_CONTROL,
     REPRESENTATION_VERSION,
+    ReleaseCacheMiddleware,
+    ReleaseMetadata,
     get_release_router,
     load_release_metadata,
     make_release_resolver,
+    release_etag,
 )
 from pipeline.manifests import (
     ManifestDocument,
@@ -213,3 +220,138 @@ def test_resolver_caches_success_for_process_lifetime_but_retries_failure(
     # cutover restarts the service to pick up a new release.
     (root / "release-current").unlink()
     assert resolver() is first
+
+
+# --- Cache validators (ETag / If-None-Match) ---
+
+RELEASE = ReleaseMetadata(release_id=DEPLOYMENT_ID)
+EXPECTED_ETAG = f'"{DEPLOYMENT_ID}:{REPRESENTATION_VERSION}"'
+
+
+def _cached_app(
+    metadata: ReleaseMetadata | None,
+    *,
+    require_key: str | None = None,
+) -> tuple[TestClient, dict[str, int]]:
+    """App with one counted data route, mirroring main.py's auth wiring."""
+
+    queries = {"count": 0}
+    app = FastAPI()
+
+    async def check_key(request: Request) -> None:
+        if require_key and request.headers.get("X-API-Key") != require_key:
+            raise HTTPException(status_code=401, detail="Invalid or missing API key")
+
+    @app.get("/practices", dependencies=[Depends(check_key)])
+    async def practices():
+        queries["count"] += 1
+        return {"contract_version": 2, "practices": []}
+
+    @app.get("/health")
+    async def health():
+        return {"status": "ok"}
+
+    app.add_middleware(
+        ReleaseCacheMiddleware,
+        resolve_metadata=lambda: metadata,
+        is_authorized=lambda request: not require_key
+        or request.headers.get("X-API-Key") == require_key,
+    )
+    return TestClient(app), queries
+
+
+def test_data_responses_carry_release_etag_and_cache_control() -> None:
+    client, _ = _cached_app(RELEASE)
+    response = client.get("/practices")
+
+    assert response.status_code == 200
+    assert response.headers["ETag"] == EXPECTED_ETAG
+    assert response.headers["Cache-Control"] == CACHE_CONTROL
+    assert response.json()["contract_version"] == 2
+
+
+def test_matching_if_none_match_returns_304_without_querying(tmp_path: Path) -> None:
+    client, queries = _cached_app(RELEASE)
+    first = client.get("/practices")
+    assert queries["count"] == 1
+
+    revalidation = client.get(
+        "/practices", headers={"If-None-Match": first.headers["ETag"]}
+    )
+
+    assert revalidation.status_code == 304
+    assert revalidation.content == b""
+    assert revalidation.headers["ETag"] == EXPECTED_ETAG
+    assert revalidation.headers["Cache-Control"] == CACHE_CONTROL
+    assert queries["count"] == 1  # the route (and DuckDB) never ran
+
+
+def test_weak_and_listed_if_none_match_forms_match() -> None:
+    client, queries = _cached_app(RELEASE)
+    header = f'"stale:1", W/{EXPECTED_ETAG}'
+
+    assert client.get("/practices", headers={"If-None-Match": header}).status_code == 304
+    assert client.get("/practices", headers={"If-None-Match": "*"}).status_code == 304
+    assert queries["count"] == 0
+
+
+def test_stale_validator_is_answered_fresh() -> None:
+    client, queries = _cached_app(RELEASE)
+    response = client.get(
+        "/practices", headers={"If-None-Match": '"deployment-old:1"'}
+    )
+
+    assert response.status_code == 200
+    assert response.headers["ETag"] == EXPECTED_ETAG
+    assert queries["count"] == 1
+
+
+def test_etag_is_stable_within_a_release_and_changes_across_releases() -> None:
+    other = ReleaseMetadata(release_id="deployment-20260801T000000Z-abcdef0123")
+
+    assert release_etag(RELEASE) == EXPECTED_ETAG
+    assert release_etag(ReleaseMetadata(release_id=DEPLOYMENT_ID)) == EXPECTED_ETAG
+    assert release_etag(other) != EXPECTED_ETAG
+
+    client, queries = _cached_app(other)
+    response = client.get("/practices", headers={"If-None-Match": EXPECTED_ETAG})
+    assert response.status_code == 200
+    assert response.headers["ETag"] == release_etag(other)
+    assert queries["count"] == 1
+
+
+def test_without_release_metadata_responses_are_unchanged() -> None:
+    client, queries = _cached_app(None)
+    response = client.get("/practices", headers={"If-None-Match": EXPECTED_ETAG})
+
+    assert response.status_code == 200
+    assert "ETag" not in response.headers
+    assert "Cache-Control" not in response.headers
+    assert queries["count"] == 1
+
+
+def test_unauthorized_conditional_requests_get_401_not_304() -> None:
+    client, queries = _cached_app(RELEASE, require_key="secret")
+
+    denied = client.get("/practices", headers={"If-None-Match": EXPECTED_ETAG})
+    assert denied.status_code == 401
+    assert "ETag" not in denied.headers
+
+    allowed = client.get(
+        "/practices",
+        headers={"If-None-Match": EXPECTED_ETAG, "X-API-Key": "secret"},
+    )
+    assert allowed.status_code == 304
+    assert queries["count"] == 0
+
+
+def test_health_and_non_get_requests_are_exempt() -> None:
+    client, _ = _cached_app(RELEASE)
+
+    health = client.get("/health", headers={"If-None-Match": EXPECTED_ETAG})
+    assert health.status_code == 200
+    assert "ETag" not in health.headers
+
+    post = client.post("/practices", headers={"If-None-Match": EXPECTED_ETAG})
+    assert post.status_code == 405
+    assert "ETag" not in post.headers

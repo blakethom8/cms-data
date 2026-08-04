@@ -21,6 +21,9 @@ from pathlib import Path
 from typing import Callable
 
 from fastapi import APIRouter, HTTPException
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
 
 from pipeline.manifests import ManifestStore
 
@@ -194,6 +197,77 @@ def make_release_resolver(duckdb_path: str) -> Callable[[], ReleaseMetadata | No
         return metadata
 
     return resolve
+
+
+# Responses may be stored but must be revalidated before reuse; within one
+# immutable release the revalidation is a free 304.
+CACHE_CONTROL = "private, no-cache"
+
+# Process-status and documentation surfaces are not data responses.
+_VALIDATOR_EXEMPT_PATHS = frozenset({"/health", "/openapi.json", "/redoc"})
+
+
+def release_etag(metadata: ReleaseMetadata) -> str:
+    """Strong validator naming both the data (release) and its shape."""
+
+    return f'"{metadata.release_id}:{REPRESENTATION_VERSION}"'
+
+
+def _if_none_match_matches(header: str | None, etag: str) -> bool:
+    if not header:
+        return False
+    if header.strip() == "*":
+        return True
+    candidates = (candidate.strip() for candidate in header.split(","))
+    return etag in {
+        candidate[2:] if candidate.startswith("W/") else candidate
+        for candidate in candidates
+    }
+
+
+class ReleaseCacheMiddleware(BaseHTTPMiddleware):
+    """Attach release-keyed cache validators and honor conditional requests.
+
+    A GET whose `If-None-Match` names the current release returns 304 without
+    entering the route — no DuckDB query runs. The short-circuit applies only
+    to authorized requests: auth dependencies run inside routing, after this
+    middleware, so an unauthorized conditional request must fall through to
+    receive its normal 401 rather than a confirmation that its validator is
+    current.
+    """
+
+    def __init__(
+        self,
+        app,
+        resolve_metadata: Callable[[], ReleaseMetadata | None],
+        is_authorized: Callable[[Request], bool],
+    ) -> None:
+        super().__init__(app)
+        self._resolve_metadata = resolve_metadata
+        self._is_authorized = is_authorized
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        path = request.url.path
+        if (
+            request.method != "GET"
+            or path in _VALIDATOR_EXEMPT_PATHS
+            or path.startswith("/docs")
+        ):
+            return await call_next(request)
+        metadata = self._resolve_metadata()
+        if metadata is None or not self._is_authorized(request):
+            return await call_next(request)
+        etag = release_etag(metadata)
+        if _if_none_match_matches(request.headers.get("if-none-match"), etag):
+            return Response(
+                status_code=304,
+                headers={"ETag": etag, "Cache-Control": CACHE_CONTROL},
+            )
+        response = await call_next(request)
+        if response.status_code == 200:
+            response.headers["ETag"] = etag
+            response.headers["Cache-Control"] = CACHE_CONTROL
+        return response
 
 
 def get_release_router(
