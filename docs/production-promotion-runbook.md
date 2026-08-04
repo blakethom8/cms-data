@@ -268,6 +268,102 @@ Actual recovery restores the complete recorded predecessor ledger and the one bu
 recovery, restart and smoke the selected predecessor. Never edit the ledger, journal, or symlink by
 hand and never copy a database over an existing artifact.
 
+## Code-only serving deployment
+
+> Added 2026-08-03 for the serving-contract upgrade (first use: serving commit
+> `2427719ed9be17754e6e46258cd871b980a99c99`, which adds `GET /release` and release-keyed
+> cache validators). Use this flow whenever new API code ships against the **unchanged**
+> selected warehouse. It is the same prepare → rehearse → cutover mechanism with the
+> data-refresh steps removed; there is still no in-place "update production" path.
+
+**Consumer note:** a code-only deployment creates a new deployment ID, so `GET /release`
+reports a new `release_id` and every `ETag` changes. Consumer caches keyed on
+`release_id` + `representation_version` invalidate on the next revalidation — safe
+over-invalidation, never stale data. Bump `representation_version` in `api/release_info.py`
+in the same commit whenever the code changes any response shape.
+
+1. Record current state and reusable targets:
+
+```bash
+/usr/bin/python3 /srv/cms-data-platform/production-ops/current/pipeline/production_manager.py \
+  status --production-root /srv/cms-data-platform/production --json
+
+readlink /srv/cms-data-platform/production/releases/CURRENT_DEPLOYMENT_ID/warehouse
+readlink /srv/cms-data-platform/production/releases/CURRENT_DEPLOYMENT_ID/runtime
+```
+
+Record `selected_deployment_id` (the rollback target) and `selected_warehouse_release_id`.
+The staging data root must still retain `releases/WAREHOUSE_RELEASE_ID/` with its
+`release.json` and `comparison.json`; prepare revalidates that evidence.
+
+2. Create the candidate code artifact exactly as in Phase 2 step 5: a clean detached checkout
+   of the approved full commit at `production-artifacts/code/CANDIDATE_COMMIT`, without
+   `.env*`, data, logs, caches, or virtual environments, sealed `root:dataops`.
+
+3. Reuse the selected runtime artifact only after proving the dependency set is unchanged
+   between the served commit and the candidate commit:
+
+```bash
+git diff --stat SERVED_COMMIT..CANDIDATE_COMMIT -- api/requirements.txt
+```
+
+Any change means building a new versioned runtime artifact instead; never mutate the
+existing one.
+
+4. Prepare the candidate with the **current** warehouse and runtime targets and the new code
+   path (dry-run first, then real). This is the Phase 2 step 8 command with
+   `--warehouse-path`, `--warehouse-release-id`, and `--runtime-path` taken from step 1's
+   recorded values. Record the returned `CANDIDATE_DEPLOYMENT_ID`.
+
+5. Seal the deployment-scoped provenance snapshot. The warehouse is byte-identical to the
+   predecessor's, so the predecessor's reconciled snapshot **is** the candidate's:
+
+```bash
+install -d -o root -g dataops -m 0750 \
+  /srv/cms-data-platform/production/evidence/CANDIDATE_DEPLOYMENT_ID
+install -o root -g dataops -m 0440 \
+  /srv/cms-data-platform/production/evidence/CURRENT_DEPLOYMENT_ID/source-manifests.json \
+  /srv/cms-data-platform/production/evidence/CANDIDATE_DEPLOYMENT_ID/source-manifests.json
+```
+
+6. Rehearse the prepared bundle on an unused loopback port and run the complete smoke suite
+   plus `verify`, exactly as in Phase 2 step 7 but with the candidate bundle and IDs. The
+   warehouse is unchanged, so **candidate counts equal rollback counts** and both
+   `--expected-table-counts` arguments point at the same
+   `releases/WAREHOUSE_RELEASE_ID/release.json`. While the rehearsal process is up, also
+   check the serving contract against the rehearsal port: `GET /release` must return the
+   candidate deployment ID (the resolver derives it from the bundle directory), and a data
+   GET must carry `ETag: "CANDIDATE_DEPLOYMENT_ID:REPRESENTATION_VERSION"`.
+
+7. Reconfirm live PID, hashes, journal, sentinel, and disk as in Phase 3, then run the
+   one-shot `pipeline.production_cutover` from the Phase 3 section with identical candidate
+   and rollback count values.
+
+8. Post-cutover serving-contract checks (in addition to the recorded smoke evidence; load
+   the key from the environment file without printing it):
+
+```bash
+set -a; . /etc/cms-data/cms-api.env; set +a
+curl -fsS -H "X-API-Key: $CMS_API_KEY" http://127.0.0.1:8080/release
+curl -fsSi -o /dev/null -D - -H "X-API-Key: $CMS_API_KEY" \
+  http://127.0.0.1:8080/practices/capabilities | grep -i '^etag'
+curl -s -o /dev/null -w '%{http_code}\n' -H "X-API-Key: $CMS_API_KEY" \
+  -H "If-None-Match: \"CANDIDATE_DEPLOYMENT_ID:1\"" \
+  http://127.0.0.1:8080/practices/capabilities
+```
+
+Expect: `release_id` equal to the new deployment ID with `representation_version` `1`, an
+`ETag` of `"CANDIDATE_DEPLOYMENT_ID:1"`, and `304` from the conditional request. Then the
+one-time §8.5 check from the serving-contract proposal: if `/release` reports `promoted_at`
+and `build.checksum` as `null`, `production/deployments.json` is not group-readable by the
+service user — the endpoint stays correct via the bundle name, but record the finding and
+decide (owner) between loosening that one file's group mode and stamping
+`CMS_RELEASE_METADATA_PATH` at deploy time.
+
+Rollback is unchanged: the cutover auto-selects and re-verifies the predecessor on any
+required failure, and manual `rollback` restores the prior bundle pointer, which also
+restores the prior `/release` identity.
+
 ## Recurring staging-to-production promotion
 
 After the initial cutover, every refresh uses the same release mechanism; there is no in-place

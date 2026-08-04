@@ -41,7 +41,10 @@ All changes are additive. Existing routes, payloads, the shared `X-API-Key`, and
 }
 ```
 
-- `release_id` is the production **deployment ID** (the `release-current` bundle name).
+- `release_id` is the production **deployment ID** (the `release-current` bundle name). It
+  names the deployed bundle (code + warehouse + runtime), so a code-only deploy also rotates
+  it even though the data is unchanged — caches keyed on it over-invalidate safely, never
+  serve stale.
 - `representation_version` names the response **shape** and is bumped on any shape change.
   Consumers must key caches on `release_id` **and** `representation_version`; nothing else in
   this payload is a cache key. `compatibility` is operator free-text.
