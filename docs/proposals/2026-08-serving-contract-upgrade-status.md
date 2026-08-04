@@ -1,9 +1,18 @@
 # Serving-contract upgrade — implementation status and consumer handoff
 
-**Date:** 2026-08-03
+**Date:** 2026-08-03 · **Deployed to production: 2026-08-04**
 **Spec:** `docs/proposals/2026-08-serving-contract-upgrade.md` (committed, verified, amended)
 **Audience:** consumer-side implementers (provider-search) and the platform owner. This file is
 self-contained: everything a consumer needs to build against the new contract is here.
+
+> **LIVE IN PRODUCTION** since 2026-08-04T16:47:18Z as
+> `deployment-20260804T163418Z-2ad954a774` (serving code `f081f8c`, warehouse
+> `warehouse-20260723T000948Z-24c46c1cda` unchanged — a code-only deployment per the cutover
+> runbook's new section). Full smoke suite passed at cutover; `/release`, the ETag validator,
+> the 304 short-circuit, and 401-not-304 for bad keys are all verified against live traffic.
+> Consumers can build against this contract now. §8.5 is answered by observation: the service
+> user reads the deployment ledger, so `promoted_at`/`build.*` are populated — no permission
+> change or metadata stamping needed.
 
 ## What shipped
 
@@ -105,8 +114,9 @@ All changes are additive. Existing routes, payloads, the shared `X-API-Key`, and
 2. Consumer-side scoped-key storage and rotation cadence — blocks S3.
 3. Confirm `/release` stays key-gated (`/health` already serves as the unauthenticated probe).
 4. Who retires the shared key after S3, and when.
-5. One-time box check: is `production/deployments.json` group-readable by `dataops`? If not,
-   ledger-derived fields stay `null` until the deploy stamps `CMS_RELEASE_METADATA_PATH`.
+5. ~~One-time box check: is `production/deployments.json` group-readable by `dataops`?~~
+   **Answered 2026-08-04 in production:** yes — the live `/release` reports `promoted_at` and
+   `build.*` from the ledger. No change needed.
 6. GET-only conditional semantics acceptable, or do POST data routes need validators?
 7. Dev boxes: stamp the metadata override, or accept 503 on `/release` in dev?
 8. Enforcement mechanism for `representation_version` bump discipline.
