@@ -50,6 +50,11 @@ All changes are additive. Existing routes, payloads, the shared `X-API-Key`, and
 - **503** (with a JSON `detail`) when the process cannot name its release at all (e.g. a dev
   box serving a bare DuckDB path). Never a guessed identity. Poll daily and on your own
   deploys; it is cheap (no DuckDB query).
+- **Consumer rule for 503:** treat a `/release` 503 as "no release-keyed caching available"
+  and fall back to plain TTL caching — do not invent a release key and do not treat it as an
+  outage (data routes still work). Note for provider-search's Tier-M cache (Gate D): the
+  development tunnel serves a bare `DUCKDB_PATH` today and will sit in exactly this 503 state
+  unless the dev deploy stamps `CMS_RELEASE_METADATA_PATH` (spec §8.7).
 
 ### Cache validators on data responses
 
@@ -68,6 +73,9 @@ All changes are additive. Existing routes, payloads, the shared `X-API-Key`, and
 
 - One shared `X-API-Key` secret; no per-consumer keys yet, no key-name logging, no
   `X-Request-ID` echo. Do not build against those until S3 ships.
+- S3 brief addition: the auth predicate is currently duplicated in `api/main.py`
+  (`check_api_key` dependency + the middleware's `is_authorized` lambda). S3 must extract one
+  shared predicate first so scoped keys cannot drift between the two (see spec §7 note).
 
 ## Implementation notes (platform side)
 

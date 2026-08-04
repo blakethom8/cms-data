@@ -199,6 +199,13 @@ data from a correct cache. Treat that bump as non-optional, the same class of ob
 | **S1** | Release metadata reachable by the serving process + `GET /release` + tests | endpoint returns the active release on a box with promotion metadata; clean error (`503`, not a guess) without it |
 | **S2** | ETag/`If-None-Match` middleware + `representation_version` constant + tests | 304 short-circuit verified to skip DuckDB; ETag stable within a release, changed across releases |
 | **S3** | Scoped keys with overlap rotation + key-name logging + `X-Request-ID` echo | old shared key and new scoped keys valid simultaneously; log lines carry key name + request id |
+
+> **S3 implementer note (added 2026-08-03, post-S2):** the auth predicate now exists in two
+> places in `api/main.py` — the `check_api_key` dependency and the `is_authorized` lambda
+> passed to `ReleaseCacheMiddleware` (needed so the 304 short-circuit cannot bypass
+> key-gating). They are adjacent today, but scoped keys must change **both in lockstep**:
+> extract one shared predicate as the first step of S3, then build key mapping, overlap
+> rotation, and key-name logging on top of it.
 | **S4** | Operating-model doc: invariants (§2.5), retention rule, rollback note | doc review |
 
 S1 → S2 is the natural order (S2 needs release identity). S3 and S4 are independent of both.
