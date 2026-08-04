@@ -347,6 +347,43 @@ DuckDB is pinned to `1.4.4`, matching the runtime already used by the Hetzner AP
 release rehearsal. Candidate builds record that version so runtime drift is visible in release
 evidence.
 
+## Serving-Box Invariants
+
+> Added 2026-08-03 with the serving-contract upgrade
+> (`docs/proposals/2026-08-serving-contract-upgrade.md`). These rules were already true by
+> design; they are written down because consumers now cache responses keyed on
+> `release_id` + `representation_version` (observed via `GET /release` and the `ETag`
+> validator), so a future change that silently violated one of them would corrupt correct
+> consumer caches, not just this box.
+
+1. **The serving process is read-only and holds no publisher credentials.** It opens the
+   promoted DuckDB release with `read_only=True`, no API request handler writes anything, and
+   acquisition happens only in operator-triggered pipeline runs elsewhere. The service
+   environment may hold outbound third-party keys (Google Places, OpenAI, the AACT read-only
+   Postgres reader) for enrichment endpoints — but never credentials that could publish,
+   acquire, or mutate platform data.
+2. **The serving box holds zero client data.** Everything served is public CMS, NPPES, Open
+   Payments, and ClinicalTrials.gov data; the worst-case compromise of the box is a copy of
+   public data plus the API key material. Private customer claims, PHI, and uploaded client
+   datasets are excluded from this warehouse by policy (see Repository Boundaries).
+3. **Releases are immutable; the active production DuckDB is never modified in place.** Every
+   change ships as a new checksummed candidate bundle, and promotion changes only the
+   `release-current` pointer. Within one release, a given response cannot change — this is the
+   property that makes consumer-side caching correct by construction.
+4. **Retention and rollback.** On-box, the active and at least two previous validated releases
+   are retained (Refresh Lifecycle step 8); verified warehouse baselines also live under
+   `backups/<backup-id>/`. The off-box disaster-recovery count N is an owner decision still
+   pending in the proposal's §8. Rollback is repoint-to-previous-release: `pipeline.production`
+   rollback atomically restores the prior `release-current` bundle pointer (which also restores
+   that deployment's evidence snapshot), and `pipeline.production_cutover` owns the one restart
+   and re-verification. Rollback never rebuilds data and never opens DuckDB.
+
+Consumers additionally rely on two serving-contract rules: release changes are learned by
+polling `GET /release` and observing the `ETag` change (a push webhook may be added as sugar,
+but nothing may depend on it), and any response-shape change must bump the
+`representation_version` constant in `api/release_info.py` — the same class of obligation as
+the `contract_version: 2` pin on practice-shaped payloads.
+
 ## Data-Use Guardrails
 
 CMS public-use data and FOIA-disclosable NPPES data generally do not require a business agreement,
