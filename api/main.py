@@ -101,6 +101,10 @@ app.include_router(get_radar_router(get_conn), dependencies=_secured)
 from operations import get_operations_router
 app.include_router(get_operations_router(get_conn), dependencies=_secured)
 
+from release_info import get_release_router, make_release_resolver
+release_resolver = make_release_resolver(DB_PATH)
+app.include_router(get_release_router(release_resolver), dependencies=_secured)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Tighten in production
