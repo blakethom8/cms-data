@@ -255,3 +255,12 @@ New questions raised by implementation:
    the bump rule documented, but nothing mechanical enforces it. **OWNER:** decide whether a
    review-checklist note is enough or whether a contract test should pin the expected response
    shapes per version.
+9. AACT and the ETag (raised 2026-08-04, post-deploy): clinical-trials responses are served
+   from the separate AACT PostgreSQL database, which is *not* part of the DuckDB release the
+   ETag names. Today this is sound — AACT swaps ride the combined-cutover coherence boundary
+   with a restart and, in practice, a new deployment, so `release_id` rotates. But if AACT
+   ever refreshes *independently* (the operating model's daily-refresh aspiration) without a
+   new deployment, a matching `If-None-Match` on clinical-trials routes would 304 against
+   changed data — stale answers from a correct cache. **OWNER:** before enabling independent
+   AACT refreshes, either rule that every AACT swap rides a new deployment, or exclude
+   clinical-trials routes from the cache validators.

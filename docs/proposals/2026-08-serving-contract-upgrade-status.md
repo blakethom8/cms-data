@@ -120,3 +120,11 @@ All changes are additive. Existing routes, payloads, the shared `X-API-Key`, and
 6. GET-only conditional semantics acceptable, or do POST data routes need validators?
 7. Dev boxes: stamp the metadata override, or accept 503 on `/release` in dev?
 8. Enforcement mechanism for `representation_version` bump discipline.
+9. AACT caching caveat (spec §8.9, raised post-deploy): clinical-trials data lives in the
+   separate AACT PostgreSQL database, outside the release the ETag names. Safe today because
+   AACT swaps come with a restart and a new deployment (so `release_id` rotates), but an
+   *independent* AACT refresh without a new deployment would make 304s on clinical-trials
+   routes serve stale data. **Consumer note:** if you cache clinical-trials responses, also
+   key them on `source_vintages.aact_clinical_trials_snapshot` from `/release`. **Owner:**
+   before enabling independent AACT refreshes, either rule that every AACT swap rides a new
+   deployment, or exclude clinical-trials routes from the cache validators.
