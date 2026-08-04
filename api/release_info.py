@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Callable
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
@@ -40,6 +41,31 @@ DEPLOYMENT_ID_PATTERN = re.compile(r"^[a-z]+-[0-9]{8}T[0-9]{6}Z-[a-f0-9]{10}$")
 
 PRODUCTION_LEDGER_NAME = "deployments.json"
 SOURCE_MANIFEST_EVIDENCE = "source-manifests.json"
+
+
+class ReleaseBuild(BaseModel):
+    """Provenance of the warehouse this process serves."""
+
+    checksum: str | None = None
+    pipeline_ref: str | None = None
+    warehouse_release_id: str | None = None
+
+
+class ReleaseManifest(BaseModel):
+    """The `GET /release` payload.
+
+    Declared as a model so the response shape is published in the OpenAPI
+    document and covered by the `representation_version` snapshot; a payload
+    change here is then a test failure rather than a silent cache hazard.
+    """
+
+    release_id: str
+    promoted_at: str | None = None
+    verified_at: str | None = None
+    representation_version: int
+    source_vintages: dict[str, str] = Field(default_factory=dict)
+    build: ReleaseBuild
+    compatibility: str
 
 
 @dataclass(frozen=True)
@@ -277,7 +303,7 @@ def get_release_router(
 
     router = APIRouter(tags=["Release"])
 
-    @router.get("/release")
+    @router.get("/release", response_model=ReleaseManifest)
     async def release():
         metadata = resolve_metadata()
         if metadata is None:
