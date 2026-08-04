@@ -24,7 +24,7 @@ self-contained: everything a consumer needs to build against the new contract is
 | **S2** — ETag / `If-None-Match` / 304 short-circuit | **done** | `617a48a` |
 | §8 open questions answered / extended | done | `aff6ed3` |
 | **S4** — serving-box invariants in the operating model | **done** | `83a7aa7` (+ `f49bb97` cleanup) |
-| **S3** — scoped keys, rotation, `X-Request-ID` echo | **started: shared predicate extracted (`api/auth.py`); the rest blocked on owner** | `6bf6f81`; open: key distribution (§8.2), shared-key retirement (§8.4) |
+| **S3** — scoped keys, rotation, `X-Request-ID` echo | **cms-data half complete and inert; awaits key issuance + one consumer change** | `6bf6f81`, `67f58c2`; open: key distribution (§8.2), shared-key retirement (§8.4) |
 
 All changes are additive. Existing routes, payloads, the shared `X-API-Key`, and
 `contract_version: 2` are untouched; the serving process remains read-only. Test suite:
@@ -80,6 +80,29 @@ All changes are additive. Existing routes, payloads, the shared `X-API-Key`, and
 - `/health` (unauthenticated) and docs surfaces carry no validators.
 - The `contract_version: 2` field inside practice-shaped payloads is unchanged and still must
   be validated after a 200 — it is orthogonal to the transport-level ETag.
+
+### Scoped keys and correlation (S3 — serving side ready, not yet enabled)
+
+Shipped in `67f58c2`, dormant until `CMS_API_KEYS` is populated on the box:
+
+- **Scoped keys.** `CMS_API_KEYS=ps-prod:<value>,ps-dev:<value>,command-center:<value>`.
+  Adopting one is a value change in your existing `CMS_API_KEY` env setting — **no consumer
+  code change**; all three consumers already read a single env var and send `X-API-Key`.
+- **Rotation with overlap.** Listing a name twice gives that consumer two valid keys at once,
+  so rotation is issue-new → migrate → retire-old with no broken window.
+- **The shared key keeps working** and logs as `shared`, so you can see at a glance who has
+  not migrated. Retiring it stays a separate owner-coordinated step (§8.4).
+- **`X-Request-ID` is echoed** — validated against the same pattern provider-search uses, and
+  generated when absent. It is echoed on **304 responses too**, so conditional requests stay
+  traceable.
+- **Each request logs** key name, request ID, release ID, status, and duration. Key values
+  are never logged, including rejected ones.
+
+**Remaining consumer work is one change:** provider-search already mints, validates, echoes,
+and logs `X-Request-ID` (`api/core/request_context.py`) — it just doesn't forward it upstream.
+Adding it in `api/core/upstream.py` (the single outbound chokepoint) instruments every
+upstream at once. After that, joining the two log streams on the request ID traces a specific
+user's query to the release that answered it, without any user identity crossing the boundary.
 
 ### What did NOT change (S3 pending)
 
