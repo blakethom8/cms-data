@@ -49,20 +49,26 @@ app = FastAPI(
 )
 
 # --- Auth (defined before router includes so they can require it) ---
+import sys, os
+sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+
+from auth import make_key_validator
+
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+# The one key-validity predicate. Every enforcement point (route dependency
+# and cache middleware) must go through this; scoped keys (S3) replace only
+# the validator construction in auth.py.
+is_valid_api_key = make_key_validator(API_KEY)
 
 
 async def check_api_key(key: Optional[str] = Security(api_key_header)):
-    if not API_KEY:
-        return  # No key configured = open access (dev mode)
-    if key != API_KEY:
+    if not is_valid_api_key(key):
         raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
 
 # Data routers — every route requires the X-API-Key header.
-import sys, os
-sys.path.insert(0, os.path.dirname(__file__))
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 _secured = [Depends(check_api_key)]
 
 from match import get_match_router
@@ -108,7 +114,7 @@ app.include_router(get_release_router(release_resolver), dependencies=_secured)
 app.add_middleware(
     ReleaseCacheMiddleware,
     resolve_metadata=release_resolver,
-    is_authorized=lambda request: not API_KEY or request.headers.get("X-API-Key") == API_KEY,
+    is_authorized=lambda request: is_valid_api_key(request.headers.get("X-API-Key")),
 )
 
 app.add_middleware(
