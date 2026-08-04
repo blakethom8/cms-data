@@ -15,7 +15,7 @@ self-contained: everything a consumer needs to build against the new contract is
 | **S2** — ETag / `If-None-Match` / 304 short-circuit | **done** | `617a48a` |
 | §8 open questions answered / extended | done | `aff6ed3` |
 | **S4** — serving-box invariants in the operating model | **done** | `83a7aa7` (+ `f49bb97` cleanup) |
-| **S3** — scoped keys, rotation, `X-Request-ID` echo | **not started** | blocked on owner: key distribution (§8.2), shared-key retirement (§8.4) |
+| **S3** — scoped keys, rotation, `X-Request-ID` echo | **started: shared predicate extracted (`api/auth.py`); the rest blocked on owner** | `6bf6f81`; open: key distribution (§8.2), shared-key retirement (§8.4) |
 
 All changes are additive. Existing routes, payloads, the shared `X-API-Key`, and
 `contract_version: 2` are untouched; the serving process remains read-only. Test suite:
@@ -73,9 +73,11 @@ All changes are additive. Existing routes, payloads, the shared `X-API-Key`, and
 
 - One shared `X-API-Key` secret; no per-consumer keys yet, no key-name logging, no
   `X-Request-ID` echo. Do not build against those until S3 ships.
-- S3 brief addition: the auth predicate is currently duplicated in `api/main.py`
-  (`check_api_key` dependency + the middleware's `is_authorized` lambda). S3 must extract one
-  shared predicate first so scoped keys cannot drift between the two (see spec §7 note).
+- S3's first step is done: the previously duplicated auth predicate is extracted to
+  `api/auth.py` (`make_key_validator`), and both enforcement points — the `check_api_key`
+  dependency and the cache middleware's `is_authorized` — consume it, with a lockstep test in
+  `api/test_auth.py`. Scoped keys will change only the validator construction. No behavior
+  change: shared key and open-access dev mode work exactly as before.
 
 ## Implementation notes (platform side)
 

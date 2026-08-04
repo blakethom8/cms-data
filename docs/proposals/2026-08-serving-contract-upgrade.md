@@ -200,12 +200,14 @@ data from a correct cache. Treat that bump as non-optional, the same class of ob
 | **S2** | ETag/`If-None-Match` middleware + `representation_version` constant + tests | 304 short-circuit verified to skip DuckDB; ETag stable within a release, changed across releases |
 | **S3** | Scoped keys with overlap rotation + key-name logging + `X-Request-ID` echo | old shared key and new scoped keys valid simultaneously; log lines carry key name + request id |
 
-> **S3 implementer note (added 2026-08-03, post-S2):** the auth predicate now exists in two
-> places in `api/main.py` — the `check_api_key` dependency and the `is_authorized` lambda
+> **S3 implementer note (added 2026-08-03, post-S2):** the auth predicate briefly existed in
+> two places in `api/main.py` — the `check_api_key` dependency and the `is_authorized` lambda
 > passed to `ReleaseCacheMiddleware` (needed so the 304 short-circuit cannot bypass
-> key-gating). They are adjacent today, but scoped keys must change **both in lockstep**:
-> extract one shared predicate as the first step of S3, then build key mapping, overlap
-> rotation, and key-name logging on top of it.
+> key-gating). Scoped keys must change **both in lockstep**, so the shared predicate was
+> extracted as S3's first step (done 2026-08-03: `api/auth.py`, both call sites rewired,
+> lockstep covered by `api/test_auth.py`). The remainder of S3 — key mapping, overlap
+> rotation, key-name logging, `X-Request-ID` echo — builds on `make_key_validator` and stays
+> blocked on the §8 owner decisions.
 | **S4** | Operating-model doc: invariants (§2.5), retention rule, rollback note | doc review |
 
 S1 → S2 is the natural order (S2 needs release identity). S3 and S4 are independent of both.
