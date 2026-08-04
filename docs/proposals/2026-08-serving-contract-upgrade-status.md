@@ -119,7 +119,13 @@ All changes are additive. Existing routes, payloads, the shared `X-API-Key`, and
    `build.*` from the ledger. No change needed.
 6. GET-only conditional semantics acceptable, or do POST data routes need validators?
 7. Dev boxes: stamp the metadata override, or accept 503 on `/release` in dev?
-8. Enforcement mechanism for `representation_version` bump discipline.
+8. ~~Enforcement mechanism for `representation_version` bump discipline.~~
+   **Resolved 2026-08-04:** response shapes are now pinned per version in
+   `api/response_shapes/v<version>.json` and enforced by `api/test_response_shapes.py`. A
+   changed response shape fails the suite until the version is bumped and a new snapshot
+   recorded; new endpoints are exempt. **Consumer note:** this makes the
+   `representation_version` you cache on trustworthy — it cannot silently stay put while a
+   response shape moves underneath it.
 9. AACT caching caveat (spec §8.9, raised post-deploy): clinical-trials data lives in the
    separate AACT PostgreSQL database, outside the release the ETag names. Safe today because
    AACT swaps come with a restart and a new deployment (so `release_id` rotates), but an

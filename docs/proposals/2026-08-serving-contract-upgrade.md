@@ -251,10 +251,13 @@ New questions raised by implementation:
 7. Development serving (`ps-dev` tunnel): if the dev box serves a bare DuckDB path rather than
    a production bundle, `GET /release` returns `503` there by design. **OWNER:** either accept
    that in dev or stamp `CMS_RELEASE_METADATA_PATH` in the dev deploy.
-8. `representation_version` bump discipline: the constant lives in `api/release_info.py` with
-   the bump rule documented, but nothing mechanical enforces it. **OWNER:** decide whether a
-   review-checklist note is enough or whether a contract test should pin the expected response
-   shapes per version.
+8. ~~`representation_version` bump discipline: nothing mechanical enforces it.~~
+   **Resolved 2026-08-04 by pinning response shapes per version.**
+   `api/response_shapes/v<version>.json` records the resolved response schemas for each
+   `representation_version`; `api/test_response_shapes.py` fails when an already-published
+   operation's shape changes without a bump, and fails again until the bumped version gets
+   its own snapshot. New operations are exempt — they cannot invalidate a cache nobody holds.
+   Regenerate with `cd api && ../.venv/bin/python response_shapes.py --write`.
 9. AACT and the ETag (raised 2026-08-04, post-deploy): clinical-trials responses are served
    from the separate AACT PostgreSQL database, which is *not* part of the DuckDB release the
    ETag names. Today this is sound — AACT swaps ride the combined-cutover coherence boundary
