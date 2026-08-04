@@ -27,10 +27,17 @@ All consumers currently present **the same shared `X-API-Key`**, and data respon
 cache validators** — every identical question is answered by a fresh DuckDB query, and no consumer
 can tell which release answered it.
 
-Releases themselves are already first-class in the *pipeline* layer: `pipeline/manifests.py`
-defines `RunManifest` (with `release_id`), `PromotionState`, `active_release_id`, and a
-`ManifestStore`. What is missing is the last step: **the serving process cannot name the release
-it is serving.** `api/main.py` resolves a bare `DUCKDB_PATH` and knows nothing else.
+Releases themselves are already first-class in the *pipeline* layer — but in two distinct
+tiers (corrected 2026-08-03 during in-repo verification; the original draft conflated them):
+`pipeline/manifests.py` (`RunManifest.release_id`, `active_release_id`, `ManifestStore`) tracks
+**source-run** releases, one per acquired source version. The **serving** release identity lives
+in `pipeline/releases.py` (`WarehouseRelease`, with `release.json` beside each immutable
+candidate) and `pipeline/production_manager.py` (the deployment ledger `deployments.json` and
+the `release-current` bundle pointer, whose target directory name *is* the deployment ID). What
+is missing is the last step: **the serving process cannot name the release it is serving.**
+`api/main.py` resolves a bare `DUCKDB_PATH` and knows nothing else. (`api/operations.py` does
+read manifest evidence at request time, but only source-run manifests — not the serving
+release — and its default path is absent on the production box.)
 
 Because releases are immutable — within one release, a given response cannot change — exposing
 release identity makes consumer-side caching *correct by construction*: invalidation degenerates
@@ -56,10 +63,15 @@ pipeline, the active DuckDB file, or the promotion workflow.
 }
 ```
 
-- Served from the promotion metadata the pipeline already produces (`ManifestStore` /
-  `active_release_id`). If the deployed box does not currently have that metadata adjacent to the
-  DuckDB it serves, the deploy step must start placing it there — that is part of this change, not
-  a blocker to route around.
+- Served from the promotion metadata the production control plane already places on the box
+  (verified 2026-08-03; no deploy-step change is needed): `DUCKDB_PATH` points at
+  `production/release-current/warehouse`, which resolves into
+  `production/releases/<deployment-id>/`, so the bundle directory name is the release
+  (deployment) ID; `production/deployments.json` carries `warehouse_release_id`,
+  `selected_at`, `verified_at`, and checksums; and
+  `production/evidence/<deployment-id>/source-manifests.json` carries source vintages. If any
+  of those are unreadable, the endpoint degrades honestly (partial fields or `503`) — never a
+  guess. An explicit metadata-file override remains available for non-bundle deployments.
 - `representation_version` is a serving-API constant (start at `1`): it names the **shape** of
   data responses, and is bumped whenever any endpoint's response shape changes. Data can change
   without code (a new release) and code can change without data (a deploy) — consumers need both
@@ -138,6 +150,30 @@ and the spec should be corrected rather than worked around:
    the load-bearing item: §2.1 and §2.2 both stand on it.
 5. The only payload-level version pin any consumer relies on is `contract_version: 2` on
    practice-shaped responses.
+
+### Verification results (in-repo, 2026-08-03)
+
+1. **Confirmed.** One `check_api_key` (`api/main.py`) guards 12 router mounts plus the three
+   direct data routes (`/query`, `/tables`, `/tables/{name}/schema`); a single shared
+   `CMS_API_KEY` is the only secret. `/health` is unauthenticated and does query DuckDB —
+   relevant precedent for §8 question 3.
+2. **Confirmed.** No `ETag`, `Cache-Control`, or conditional-request handling anywhere in `api/`.
+3. **Confirmed.** The DuckDB connection is opened `read_only=True`, `/query` rejects write
+   statements, no handler writes files, and no publisher credentials exist (outbound third-party
+   keys — Google Places, OpenAI, the AACT read-only Postgres URL — may be present in the service
+   environment; they are not publisher credentials, but §2.5's invariant wording should not imply
+   the box holds *zero* secrets beyond the API key).
+4. **Confirmed, with two corrections folded into §1 and §2.1 above.** The serving release is
+   unnameable at request time, but the promotion metadata is *already adjacent* on the deployed
+   box via the `release-current` bundle structure, ledger, and evidence snapshot — no deploy-step
+   change is required. The original draft's pointer to `pipeline/manifests.py` as the release
+   layer was wrong (source-run tier, not serving tier). One residual unknown that cannot be
+   proved from the repository: whether `production/deployments.json` (mode `0640`, control
+   group) is group-readable by the `dataops` service user on the real box. S1 therefore treats
+   ledger enrichment as optional and must never take control-plane locks.
+5. **Confirmed, with a footnote.** `market_snapshot` payloads also carry a `contract_version: 1`
+   field, but no consumer pins it; `practices.py` `CONTRACT_VERSION = 2` is the only relied-upon
+   pin.
 
 ## 5. Deliberately not doing
 
