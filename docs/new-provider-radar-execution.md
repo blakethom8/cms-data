@@ -1,6 +1,6 @@
 # New Provider Radar — cms-data execution handoff
 
-> **Last reviewed: 2026-08-10** · **Status: implementation handoff — remaining data-plane work**
+> **Last reviewed: 2026-08-11** · **Status: T1 + T2 complete; T3 ready; T4 awaiting market ZIPs**
 
 This is the build brief for finishing the cms-data side of New Provider Radar. Design authority
 is [new-provider-radar.md](new-provider-radar.md) — event vocabulary, warehouse model, API
@@ -25,12 +25,8 @@ Built and tested:
 - `pipeline/discovery.py` — already parses the official NPPES download index and recognizes the
   `nppes_monthly_v2` and `nppes_weekly_incremental_v2` filename shapes.
 
-Not built (the gap this doc closes):
+Remaining work:
 
-- No scheduled acquisition: the radar CLI takes a hand-extracted CSV and has only been run
-  against staging candidates.
-- Radar tables are not installed in the production warehouse; they are not part of the
-  staging → promotion flow.
 - No city/state query support on the API (new product requirement, T3).
 - No precision measurement against a real market (T4).
 
@@ -78,25 +74,28 @@ Bring the radar tables into the versioned warehouse flow per
 
 Acceptance:
 
-- [ ] Production serves `/radar/providers` from promoted data with source freshness coming from
+- [x] Production serves `/radar/providers` from promoted data with source freshness coming from
       `nppes_radar_releases`.
-- [ ] Two consecutive weekly releases applied end-to-end (T1 acquisition → processor → promoted)
+- [x] Two consecutive weekly releases applied end-to-end (T1 acquisition → processor → promoted)
       with no manual file handling.
-- [ ] A rehearsed rollback leaves the prior promoted database serving.
+- [x] A rehearsed rollback leaves the prior promoted database serving.
 
-Implementation status (2026-08-10): the versioned full-platform builder now accepts one monthly
-baseline plus all consecutive weekly runs selected after it, applies them in source-period order,
-and records staging gates for baseline/event counts, release-ledger consistency, orphan release
-references, ordering, and duplicate logical events. `pipeline.radar_reconciliation` selects only
-validated publisher runs, builds and compares a fresh staging candidate, and records a no-op when
-the identical source/run/commit evidence was already reconciled. The checked-in
-`cms-nppes-radar-reconciliation.timer` polls publisher metadata and invokes that staging-only flow;
-it contains no promotion or production-cutover command.
+Completed 2026-08-11: immutable acquisition runs installed a July monthly baseline and three
+consecutive weekly releases through 2026-08-02. The targeted staging release
+`warehouse-20260811T021837Z-f44c147e30` passed comparison policy
+`nppes_radar_targeted_v1`, including zero duplicate logical events, zero orphan release
+references, ordered release-ledger checks, and an event-ledger delta of zero. It contains 69,374
+events across four source releases.
 
-Blockers: the three acceptance items above require real monthly and two consecutive weekly
-artifacts on the data server, a prepared/compared production candidate, authenticated production
-smoke evidence, and a rollback rehearsal. Production selection/restart is the runbook's explicit
-approval gate, so none is checked and no cutover has been attempted. T3 and T4 remain gated on T2.
+After explicit approval, the runbook cutover selected and verified production deployment
+`deployment-20260811T023712Z-b68e0ca9c3` (warehouse SHA-256
+`91e2ee4e22fd7b7f612765635e19601ce081730c8b0ddc634dc54d891a345ef2`). Both the candidate and
+predecessor passed complete loopback smoke rehearsals; activation and rollback directions passed
+manager dry-runs while the predecessor remained selected. The one-shot cutover then recorded
+fresh authenticated smoke evidence and retained verified deployment
+`deployment-20260804T163418Z-2ad954a774` as the immutable rollback bundle. A live Radar query for
+ZIP 20852 returned 628 events and `source_fresh_through: 2026-08-02`, proving freshness is served
+from the release ledger. No T2 blockers remain; T3 and T4 are now unblocked in track order.
 
 ### T3 — Contract addition: city/state scope
 
