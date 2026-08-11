@@ -1,8 +1,8 @@
 # Command Center source observability deployment — 2026-08-11
 
-> **Status: AWAITING EXPLICIT PRODUCTION CUTOVER APPROVAL** for API candidate
-> `deployment-20260811T155814Z-6baa26aa69`. The password gate and static dashboard
-> release are live; the serving API selector is unchanged.
+> **Status: PROMOTED AND VERIFIED** — API deployment
+> `deployment-20260811T155814Z-6baa26aa69`, static dashboard release
+> `command-center-20260811T1550Z-bcd338f`, and the temporary password gate are live.
 
 ## Outcome and boundary
 
@@ -193,15 +193,56 @@ The rehearsal process stopped cleanly, port 18080 was released, and the sealed A
 has zero writable and zero bytecode/cache paths. Activate and rollback dry-runs both returned exit
 code 0 with `error_summary: null`. The live selector still resolves to the verified predecessor.
 
-## Approval gate
+## Approval gate and completed cutover
 
-Do not run `pipeline.production_cutover` until Blake explicitly approves production cutover to
-`deployment-20260811T155814Z-6baa26aa69` in his own words. The cutover must use identical candidate
-and rollback warehouse counts and the same warehouse `release.json`, following the code-only section
-of `docs/production-promotion-runbook.md`.
+Blake explicitly approved the cutover after reviewing the candidate evidence. Final preconditions
+matched: the verified predecessor remained selected on API PID `3226584`, manager health and
+artifact integrity passed, there were zero blocking transactions, no transition sentinel, no port
+18080 listener, approximately 80 GiB free, the candidate snapshot and rehearsal smoke hashes were
+unchanged, the candidate artifact had zero writable/cache paths, and the predecessor bundle was
+intact.
 
-After approval, run the one-shot cutover, then confirm the selected deployment, new API PID, manager
-verification, smoke evidence path and SHA-256, representation version 3, new deployment-keyed ETag,
-304 round trip, 18 active source contracts, 20 manifest runs, 16 proven source landings, Command
-Center API health, Provider Search readiness, and intact predecessor rollback bundle. Update this
-document with the final evidence, commit as `docs(platform)`, and push `origin/main`.
+The first `pipeline.production_cutover` invocation exited with code 2 before selection and reported:
+
+```text
+{"state": "error", "error_summary": "API key environment variable is empty: CMS_API_KEY"}
+```
+
+The shell had not loaded the required environment file. No secret was printed. A post-exit audit
+proved the selector, API PID, ledger, and sentinel were unchanged and the manager remained healthy.
+The command was rerun after loading `/etc/cms-data/cms-api.env` and `/etc/aact/reader.env` with
+`set -a; . file; set +a`, as required. It returned exit code 0:
+
+```json
+{
+  "rollback_available": true,
+  "selected_deployment_id": "deployment-20260811T155814Z-6baa26aa69",
+  "smoke_evidence": "/srv/cms-data-platform/production/evidence/deployment-20260811T155814Z-6baa26aa69/smoke.json",
+  "state": "promoted"
+}
+```
+
+Post-cutover manager status is healthy and verified at `2026-08-11T16:06:39+00:00`, with artifact
+integrity passed, zero blocking transactions, pointer matching the ledger, no transition sentinel,
+and selected code commit `bcd338fa8670caa2c533ff47aa551b77077503d4`. The API PID is `3240475`.
+The unchanged immutable warehouse remains `warehouse-20260811T021837Z-f44c147e30`.
+
+The cutover-owned smoke evidence is:
+
+```text
+/srv/cms-data-platform/production/evidence/deployment-20260811T155814Z-6baa26aa69/smoke.json
+SHA-256 d7e925274854bb35b5f16dd5d346059587fb0787d43d679e2a6c6be243b4ee14
+```
+
+Live serving-contract checks returned representation version 3, 18 source vintages, warehouse
+release `warehouse-20260811T021837Z-f44c147e30`, ETag
+`"deployment-20260811T155814Z-6baa26aa69:3"`, and a `304` conditional round trip.
+
+Live source evidence returned 18 registered and 18 proven-active sources, 20 manifest runs, latest
+pipeline event `2026-08-11T02:41:41+00:00`, 16 proven source landings, 33 observed warehouse tables,
+83 declared lineage edges, and no evidence error. The Command Center gateway independently returned
+18 source contracts with all 18 validated active. Unauthenticated public HTTPS still returned 401.
+Provider Search `https://mydoclist.com/ready` returned 200 with `cms_data.status=ok`.
+
+The predecessor `deployment-20260811T145509Z-187674a921` remains intact with its original sealed
+code artifact, runtime, and unchanged warehouse link for rollback.
