@@ -1,7 +1,7 @@
 # Command Center temporary publication — 2026-08-11
 
-> **Status: SERVER DEPLOYED on combined NPPES-first v3 deployment
-> `deployment-20260811T145509Z-187674a921`; awaiting owner DNS repoint.**
+> **Status: PUBLICATION VALIDATED on combined NPPES-first v3 deployment
+> `deployment-20260811T145509Z-187674a921`; DNS propagation is in progress.**
 
 ## Decision and boundary
 
@@ -292,10 +292,30 @@ Content Security Policy, Permissions Policy, Referrer Policy, HSTS, MIME-sniffin
 were present. The gateway and nginx both emit some defense headers, so duplicate header lines are
 expected and harmless.
 
-Owner DNS action remains: the apex A record still resolved to `204.168.128.251` at the end of these
-checks. Point `healthcaredataai.com` to `5.78.148.70`. After propagation, rerun the external checks
-in this runbook and replace the stale certificate renewal hook before the September expiry. GitHub
-issue #13 continues to track the later Cloudflare Tunnel and Access migration.
+At the end of the initial server checks, the apex A record still resolved to `204.168.128.251`; the
+remaining owner action was to point `healthcaredataai.com` to `5.78.148.70`. The propagation and
+external-validation record follows. The stale certificate renewal hook still needs replacement
+before the September expiry, and GitHub issue #13 tracks the later Cloudflare Tunnel and Access
+migration.
+
+### DNS propagation and external validation — 2026-08-11
+
+Blake changed the apex A record. Cloudflare (`1.1.1.1`), Google (`8.8.8.8`), and Quad9 (`9.9.9.9`)
+all returned `5.78.148.70`. Some recursive/client caches still returned the former
+`204.168.128.251` immediately afterward, so global propagation was not yet complete.
+
+External checks pinned only DNS resolution to `5.78.148.70` while preserving the real
+`healthcaredataai.com` host name and TLS verification. HTTPS and the Let's Encrypt certificate
+validated successfully; HTTP redirected to HTTPS. The application, static assets, health, Alicia
+NPPES-first search, Alicia provider evidence, and all four operations routes returned 200. Query,
+docs, OpenAPI, release metadata, Radar, and hidden files returned 404; POST returned 403. All required
+security headers were present. A direct connection to public port 8080 timed out, proving the CMS API
+remained outside the public listener boundary. Provider Search `/ready` continued to report CMS data
+`ok`.
+
+No additional server change is required for DNS. Allow prior TTLs and local resolver/browser caches
+to expire, then repeat an unpinned public request. Certificate-renewal remediation and Cloudflare
+Access remain the two infrastructure follow-ups.
 
 ## Rollback
 
