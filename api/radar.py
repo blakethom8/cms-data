@@ -87,7 +87,9 @@ def get_radar_router(get_conn: Callable) -> APIRouter:
 
     @router.get("/providers", response_model=RadarProviderEventResponse)
     async def provider_events(
-        zip5: list[str] = Query(...),
+        zip5: list[str] | None = Query(None),
+        city: str | None = None,
+        state: str | None = None,
         event_type: list[RadarEventType] | None = Query(None),
         taxonomy_code: list[str] | None = Query(None),
         since: date | None = None,
@@ -96,12 +98,53 @@ def get_radar_router(get_conn: Callable) -> APIRouter:
         offset: int = Query(0, ge=0),
         limit: int = Query(100, ge=1, le=250),
     ) -> RadarProviderEventResponse:
-        """Return provider changes whose resulting primary ZIP is in a saved market."""
-        normalized_zips = list(dict.fromkeys(value.strip() for value in zip5))
-        if not normalized_zips or len(normalized_zips) > 100:
-            raise HTTPException(status_code=422, detail="Provide 1 to 100 ZIP codes")
-        if any(len(value) != 5 or not value.isdigit() for value in normalized_zips):
-            raise HTTPException(status_code=422, detail="ZIP codes must contain five digits")
+        """Return provider changes for one ZIP-set or exact city/state scope.
+
+        NPPES city values are noisy and city scope can miss abbreviations,
+        neighborhoods, and suburbs. A ZCTA/metro crosswalk is the upgrade path.
+        """
+        zip_scope = zip5 is not None
+        city_scope = city is not None or state is not None
+        if zip_scope == city_scope:
+            raise HTTPException(
+                status_code=422,
+                detail="Provide exactly one scope: zip5 or city with state",
+            )
+
+        where: list[str] = []
+        params: list = []
+        if zip_scope:
+            normalized_zips = list(dict.fromkeys(value.strip() for value in zip5 or []))
+            if not normalized_zips or len(normalized_zips) > 100:
+                raise HTTPException(status_code=422, detail="Provide 1 to 100 ZIP codes")
+            if any(len(value) != 5 or not value.isdigit() for value in normalized_zips):
+                raise HTTPException(status_code=422, detail="ZIP codes must contain five digits")
+            where.append(
+                "e.new_zip5 IN (" + ",".join(["?"] * len(normalized_zips)) + ")"
+            )
+            params.extend(normalized_zips)
+        else:
+            if city is None or state is None:
+                raise HTTPException(
+                    status_code=422,
+                    detail="City scope requires both city and state",
+                )
+            normalized_city = city.strip().upper()
+            normalized_state = state.strip().upper()
+            if not normalized_city:
+                raise HTTPException(status_code=422, detail="City must not be blank")
+            if len(normalized_state) != 2 or not normalized_state.isalpha():
+                raise HTTPException(
+                    status_code=422,
+                    detail="State must be a two-letter code",
+                )
+            where.extend(
+                [
+                    "UPPER(TRIM(p.practice_city)) = ?",
+                    "UPPER(TRIM(p.practice_state)) = ?",
+                ]
+            )
+            params.extend([normalized_city, normalized_state])
 
         selected_events = list(dict.fromkeys(event_type or DEFAULT_EVENT_TYPES))
         start_date = since or date.today() - timedelta(days=30)
@@ -109,12 +152,13 @@ def get_radar_router(get_conn: Callable) -> APIRouter:
         if start_date > end_date:
             raise HTTPException(status_code=422, detail="since cannot be after until")
 
-        where = [
-            "e.new_zip5 IN (" + ",".join(["?"] * len(normalized_zips)) + ")",
-            "e.event_type IN (" + ",".join(["?"] * len(selected_events)) + ")",
-            "e.effective_date BETWEEN ? AND ?",
-        ]
-        params: list = [*normalized_zips, *selected_events, start_date, end_date]
+        where.extend(
+            [
+                "e.event_type IN (" + ",".join(["?"] * len(selected_events)) + ")",
+                "e.effective_date BETWEEN ? AND ?",
+            ]
+        )
+        params.extend([*selected_events, start_date, end_date])
         if not include_deactivated:
             where.append("p.deactivation_date IS NULL")
         normalized_taxonomies = list(

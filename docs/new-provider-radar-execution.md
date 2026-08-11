@@ -1,6 +1,6 @@
 # New Provider Radar — cms-data execution handoff
 
-> **Last reviewed: 2026-08-11** · **Status: T1 + T2 complete; T3 ready; T4 awaiting market ZIPs**
+> **Last reviewed: 2026-08-11** · **Status: T1-T3 complete; T4 awaiting market ZIPs**
 
 This is the build brief for finishing the cms-data side of New Provider Radar. Design authority
 is [new-provider-radar.md](new-provider-radar.md) — event vocabulary, warehouse model, API
@@ -27,7 +27,6 @@ Built and tested:
 
 Remaining work:
 
-- No city/state query support on the API (new product requirement, T3).
 - No precision measurement against a real market (T4).
 
 ## Tracks
@@ -115,10 +114,16 @@ set.
 
 Acceptance:
 
-- [ ] City scope returns exactly the normalized-match rows; state without city and city without
+- [x] City scope returns exactly the normalized-match rows; state without city and city without
       state are 422s; combined zip+city scope is a 422.
-- [ ] Tests cover casing/whitespace normalization and the unchanged response shape.
-- [ ] This doc and `new-provider-radar.md`'s API section updated with the final contract.
+- [x] Tests cover casing/whitespace normalization and the unchanged response shape.
+- [x] This doc and `new-provider-radar.md`'s API section updated with the final contract.
+
+Completed 2026-08-11: `/radar/providers` now requires exactly one geographic scope: 1-100
+`zip5` values or `city` plus two-letter `state`. City/state matching trims and uppercases both
+request and current NPPES primary-practice values; ZIP filtering and every other filter retain
+their existing semantics. Invalid partial or combined scopes fail with 422, and the response model
+is unchanged. No T3 blockers remain.
 
 ### T4 — Precision spike (R1 in the product plan)
 
@@ -148,11 +153,9 @@ cache, Type 2 organization events. Also deferred: any ZCTA/metro crosswalk (see 
 **App-side status (2026-08-10):** R2 is BUILT — draft PR
 [provider-search#201](https://github.com/blakethom8/provider-search/pull/201) ships the
 `/md-watch` page ("MD Watch", Search rail), the proxy router, and the workspace state tables
-(migration `20260810070000`, applied to the hosted dev project). The app is live against the
-ZIP-mode contract and correctly renders "source data not available" until a release is
-installed here. **What the app is waiting on from this repo: T1 + T2 (real data). T3 gates
-only the not-yet-built ad-hoc city mode; T4 gates only the digest.** Build order T1 → T2
-first — data is the thing MD Watch lacks — then T3, then T4.
+(migration `20260810070000`, applied to the hosted dev project). The app shipped against the
+ZIP-mode contract; T1 + T2 now provide its production data. **T3's additive city/state API mode
+is complete here and awaits app-side adoption; T4 still gates only the digest.**
 
 - `event_id` is a durable foreign key for workspace state in the application — treat its
   determinism rule (release, provider, event type, effective date, before/after values) as a
@@ -167,5 +170,8 @@ first — data is the thing MD Watch lacks — then T3, then T4.
   installed") is treated as a durable verdict. Once T2 makes 503 a genuinely transient state,
   nothing breaks — the rep refreshes — but do not start returning 503 for momentary conditions
   by design.
+- T3 is complete here, but provider-search still needs to opt its ad-hoc search UI into the
+  additive `city` + `state` request mode. Existing ZIP-mode calls and the response shape are
+  unchanged.
 - Progress and blockers: note them in commit messages and this doc's track checkboxes;
   provider-search sessions read this file to know track status.

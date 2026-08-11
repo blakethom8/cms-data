@@ -177,9 +177,11 @@ promotion remain follow-up pipeline work.
 
 ## Read API contract
 
-`GET /radar/providers` returns source events whose resulting primary ZIP matches the supplied ZIP
-set. It is intentionally market-agnostic: Provider Search resolves and authorizes the workspace
-market, then passes its ZIPs to this service.
+`GET /radar/providers` returns source events for exactly one scope: either events whose resulting
+primary ZIP matches a supplied ZIP set, or events whose current primary practice city/state is an
+exact normalized match. It is intentionally market-agnostic: Provider Search resolves and
+authorizes the workspace market, then passes its ZIPs to this service; city scope supports the
+ad-hoc search mode when no saved ZIP market exists.
 
 Example:
 
@@ -194,6 +196,22 @@ GET /radar/providers
   &until=2026-07-31
 ```
 
+City scope uses the same filters and unchanged response shape:
+
+```http
+GET /radar/providers
+  ?city=Denver
+  &state=CO
+  &since=2026-07-01
+  &until=2026-07-31
+```
+
+The request must provide either 1-100 `zip5` values or both `city` and a two-letter `state`, never
+both scopes. City and state comparisons trim whitespace and normalize case, but do not use fuzzy
+matching. NPPES city strings are noisy (including abbreviations and neighborhood names), and an
+exact city scope omits suburbs. A ZCTA/metro crosswalk is the named upgrade path if product needs
+broader geographic matching.
+
 The response includes:
 
 - total, offset, limit, and the latest installed NPPES source period;
@@ -203,7 +221,7 @@ The response includes:
 - a deterministic human-readable reason.
 
 The endpoint defaults to the V1 event types and the last 30 days, excludes currently deactivated
-providers, accepts 1-100 ZIPs, and is protected by the existing API-key dependency in `api/main.py`.
+providers, and is protected by the existing API-key dependency in `api/main.py`.
 
 ### Provider Search persistence contract
 

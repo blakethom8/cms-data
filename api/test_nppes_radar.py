@@ -315,6 +315,55 @@ def test_radar_api_filters_by_market_zip_event_and_taxonomy(
     }
 
 
+def test_radar_api_city_scope_normalizes_exact_match_and_preserves_shape(
+    radar_connection: duckdb.DuckDBPyConnection,
+) -> None:
+    app = FastAPI()
+    app.include_router(get_radar_router(lambda: radar_connection))
+    client = TestClient(app)
+    common = [("since", "2026-07-13"), ("until", "2026-07-19")]
+
+    city_response = client.get(
+        "/radar/providers",
+        params=[("city", "  denver "), ("state", " co "), *common],
+    )
+    zip_response = client.get(
+        "/radar/providers",
+        params=[("zip5", "80220"), *common],
+    )
+
+    assert city_response.status_code == 200
+    city_payload = city_response.json()
+    assert city_payload["total"] == 2
+    assert {event["npi"] for event in city_payload["events"]} == {
+        "1111111111",
+        "3333333333",
+    }
+    assert city_payload.keys() == zip_response.json().keys()
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        [],
+        [("city", "Denver")],
+        [("state", "CO")],
+        [("zip5", "80220"), ("city", "Denver"), ("state", "CO")],
+        [("city", "   "), ("state", "CO")],
+        [("city", "Denver"), ("state", "Colorado")],
+    ],
+)
+def test_radar_api_requires_one_complete_valid_scope(
+    radar_connection: duckdb.DuckDBPyConnection,
+    params: list[tuple[str, str]],
+) -> None:
+    app = FastAPI()
+    app.include_router(get_radar_router(lambda: radar_connection))
+    response = TestClient(app).get("/radar/providers", params=params)
+
+    assert response.status_code == 422
+
+
 def test_weekly_release_requires_a_monthly_baseline(tmp_path: Path) -> None:
     connection = duckdb.connect(":memory:")
     weekly_csv = _write_csv(
