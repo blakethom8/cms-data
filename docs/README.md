@@ -22,6 +22,7 @@ When documents disagree, the operating model and the source code win.
 | [operations/cms-private-network-runbook.md](operations/cms-private-network-runbook.md) | Current private WireGuard API boundary, verification, rollback, and retention procedure. |
 | [operations/cms-private-network-cutover-2026-08-05.md](operations/cms-private-network-cutover-2026-08-05.md) | Executed private-network and credential cutover record. |
 | [operations/public-sites-retirement-2026-08-05.md](operations/public-sites-retirement-2026-08-05.md) | Executed public-site retirement record and remaining owner actions. |
+| [operations/command-center-temporary-publication-2026-08-11.md](operations/command-center-temporary-publication-2026-08-11.md) | Temporary direct HTTPS Command Center boundary, validation, DNS handoff, and rollback. |
 | [operations/nginx-disentanglement-handoff.md](operations/nginx-disentanglement-handoff.md) | Historical implementation prompt, retained as superseded decision context. |
 
 ## Documentation rules

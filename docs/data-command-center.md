@@ -35,6 +35,11 @@ The application reads these authenticated endpoints:
 | `GET /operations/sources` | Source contracts plus latest recorded evidence |
 | `GET /operations/runs` | Newest-first manifest run ledger |
 
+The temporary hosted publication is documented in
+[operations/command-center-temporary-publication-2026-08-11.md](operations/command-center-temporary-publication-2026-08-11.md).
+Its gateway exposes only the reviewed GET/HEAD routes used by this application; the browser never
+receives the scoped CMS API credential, and arbitrary `/api/*` forwarding is prohibited.
+
 The `/operations/*` routes only read DuckDB metadata, the typed source registry, and the configured
 manifest store. Set `CMS_MANIFEST_PATH` when the production manifest is not located at the repository
 default `data/manifests.json`. The API does not return the manifest's filesystem path.
