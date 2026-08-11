@@ -130,11 +130,16 @@ def _write_release(
     (release_dir / "comparison.json").write_text(json.dumps(comparison))
 
 
-def test_prepare_accepts_targeted_ppef_comparison_policy(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize(
+    "comparison_policy", ("ppef_additive_v1", "nppes_radar_targeted_v1")
+)
+def test_prepare_accepts_targeted_comparison_policy(
+    comparison_policy: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     paths, _ = _bootstrap_verified(tmp_path, monkeypatch)
-    _write_release(paths, comparison_policy="ppef_additive_v1")
+    _write_release(paths, comparison_policy=comparison_policy)
 
     deployment = production.prepare_release(
         paths["production"],

@@ -488,6 +488,7 @@ def _validate_warehouse_release(
         "full_cms_v1",
         "full_platform_v1",
         "ppef_additive_v1",
+        "nppes_radar_targeted_v1",
     }:
         raise ProductionError("Warehouse comparison has an unsupported policy")
     comparison_candidate = comparison.get("candidate")
