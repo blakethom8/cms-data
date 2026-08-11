@@ -98,6 +98,8 @@ FULL_PLATFORM_SMOKE_TABLES = (
     "industry_relationships",
     "hospital_affiliations",
     "provider_hospital_evidence",
+    "provider_address_evidence",
+    "provider_organization_evidence",
     "provider_service_detail",
     "provider_drug_detail",
     "provider_quality_scores",
@@ -131,6 +133,8 @@ AFFILIATION_CHANGED_TABLES = frozenset(
         "raw_hospital_enrollments",
         "hospital_affiliations",
         "provider_hospital_evidence",
+        "provider_address_evidence",
+        "provider_organization_evidence",
     }
 )
 FULL_CMS_CHANGED_TABLES = frozenset(
@@ -141,6 +145,8 @@ FULL_CMS_CHANGED_TABLES = frozenset(
         "industry_relationships",
         "hospital_affiliations",
         "provider_hospital_evidence",
+        "provider_address_evidence",
+        "provider_organization_evidence",
         "provider_service_detail",
         "provider_drug_detail",
         "provider_quality_scores",
@@ -1092,10 +1098,19 @@ def build_warehouse_release(
                     connection,
                     data_year=_hospital_data_year(manifest.source_data_period),
                 )
-                from .transform import build_provider_hospital_evidence
+                from .transform import (
+                    build_provider_evidence_outputs,
+                    build_provider_hospital_evidence,
+                )
 
                 transform_counts["provider_hospital_evidence"] = (
                     build_provider_hospital_evidence(
+                        connection,
+                        _hospital_data_year(manifest.source_data_period),
+                    )
+                )
+                transform_counts.update(
+                    build_provider_evidence_outputs(
                         connection,
                         _hospital_data_year(manifest.source_data_period),
                     )
@@ -1354,6 +1369,7 @@ def _load_full_cms_content(
 ) -> tuple[dict[str, int], dict[str, object]]:
     from .candidate_sources import load_cms_raw_tables
     from .transform import (
+        build_provider_evidence_outputs,
         build_provider_hospital_evidence,
         clear_refresh_targets,
         transform_all,
@@ -1413,12 +1429,17 @@ def _load_full_cms_content(
             ),
             quality_year=_period_year(by_source_id["cms_qpp_experience"]),
             include_hospital_affiliations=False,
+            include_provider_evidence_outputs=False,
         )
         affiliation_counts = _rebuild_hospital_affiliations(
             connection,
             data_year=_period_year(hospital_manifest),
         )
         provider_hospital_evidence_count = build_provider_hospital_evidence(
+            connection,
+            _period_year(hospital_manifest),
+        )
+        provider_evidence_counts = build_provider_evidence_outputs(
             connection,
             _period_year(hospital_manifest),
         )
@@ -1432,6 +1453,7 @@ def _load_full_cms_content(
         **transform_counts,
         "hospital_affiliations": affiliation_counts["hospital_affiliations"],
         "provider_hospital_evidence": provider_hospital_evidence_count,
+        **provider_evidence_counts,
     }
     required_nonempty = (
         "core_providers",
@@ -1445,6 +1467,8 @@ def _load_full_cms_content(
         "order_referring_eligibility",
         "hospital_affiliations",
         "provider_hospital_evidence",
+        "provider_address_evidence",
+        "provider_organization_evidence",
     )
     empty = [name for name in required_nonempty if table_counts.get(name, 0) <= 0]
     if empty:

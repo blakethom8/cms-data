@@ -411,6 +411,417 @@ def _table_has_columns(
     return all(column.casefold() in available for column in columns)
 
 
+def _ensure_provider_evidence_output_tables(con: duckdb.DuckDBPyConnection) -> None:
+    """Create additive source-preserving evidence outputs for older warehouses."""
+    con.execute(
+        """
+        CREATE TABLE IF NOT EXISTS provider_address_evidence (
+            evidence_key VARCHAR(64) PRIMARY KEY,
+            npi VARCHAR(10) NOT NULL REFERENCES core_providers(npi),
+            address_line_1 VARCHAR(255), address_line_2 VARCHAR(255),
+            city VARCHAR(100), state VARCHAR(2), zip_code VARCHAR(20),
+            country VARCHAR(10), address_id VARCHAR,
+            address_granularity VARCHAR(30) NOT NULL,
+            relationship_type VARCHAR(100) NOT NULL,
+            evidence_kind VARCHAR(40) NOT NULL,
+            source_tables VARCHAR(255) NOT NULL,
+            source_data_period VARCHAR, source_run_id VARCHAR,
+            source_data_periods VARCHAR[] NOT NULL,
+            source_run_ids VARCHAR[] NOT NULL,
+            data_year INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_provider_address_evidence_npi
+            ON provider_address_evidence(npi);
+        CREATE INDEX IF NOT EXISTS idx_provider_address_evidence_location
+            ON provider_address_evidence(state, zip_code);
+
+        CREATE TABLE IF NOT EXISTS provider_organization_evidence (
+            evidence_key VARCHAR(64) PRIMARY KEY,
+            npi VARCHAR(10) NOT NULL REFERENCES core_providers(npi),
+            organization_identifier_type VARCHAR(60) NOT NULL,
+            organization_identifier VARCHAR(255), organization_name VARCHAR(255),
+            relationship_type VARCHAR(100) NOT NULL,
+            evidence_kind VARCHAR(40) NOT NULL,
+            confidence_level VARCHAR(20), source_tables VARCHAR(255) NOT NULL,
+            source_data_period VARCHAR, source_run_id VARCHAR,
+            source_data_periods VARCHAR[] NOT NULL,
+            source_run_ids VARCHAR[] NOT NULL,
+            data_year INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_provider_organization_evidence_npi
+            ON provider_organization_evidence(npi);
+        CREATE INDEX IF NOT EXISTS idx_provider_organization_evidence_identifier
+            ON provider_organization_evidence(
+                organization_identifier_type, organization_identifier
+            );
+        """
+    )
+    con.execute(
+        """
+        ALTER TABLE provider_address_evidence ADD COLUMN IF NOT EXISTS
+            source_data_periods VARCHAR[] DEFAULT [];
+        ALTER TABLE provider_address_evidence ADD COLUMN IF NOT EXISTS
+            source_run_ids VARCHAR[] DEFAULT [];
+        ALTER TABLE provider_organization_evidence ADD COLUMN IF NOT EXISTS
+            source_data_periods VARCHAR[] DEFAULT [];
+        ALTER TABLE provider_organization_evidence ADD COLUMN IF NOT EXISTS
+            source_run_ids VARCHAR[] DEFAULT [];
+        """
+    )
+
+
+def build_provider_evidence_outputs(
+    con: duckdb.DuckDBPyConnection, data_year: int
+) -> dict[str, int]:
+    """Materialize source-preserving provider address and organization evidence.
+
+    These tables make competing provider-location and provider-organization
+    records reviewable in one place. They deliberately do not select a primary
+    address or organization; relationship type and evidence kind remain visible
+    for every row.
+    """
+    logger.info("Building provider address and organization evidence (data_year=%d)", data_year)
+    _ensure_provider_evidence_output_tables(con)
+    con.execute("DELETE FROM provider_address_evidence")
+    con.execute("DELETE FROM provider_organization_evidence")
+
+    if _table_has_columns(
+        con,
+        "raw_nppes",
+        {
+            "npi", "practice_address_1", "practice_address_2", "practice_city",
+            "practice_state", "practice_zip", "practice_country", "source_run_id",
+            "source_data_period",
+        },
+    ):
+        con.execute(
+            """
+            INSERT INTO provider_address_evidence
+            SELECT DISTINCT
+                md5(concat_ws('|', 'nppes_registered_practice_address', CAST(r.npi AS VARCHAR),
+                    coalesce(r.practice_address_1, ''), coalesce(r.practice_address_2, ''),
+                    coalesce(r.practice_city, ''), coalesce(r.practice_state, ''),
+                    coalesce(CAST(r.practice_zip AS VARCHAR), ''), r.source_data_period)),
+                CAST(r.npi AS VARCHAR), nullif(trim(r.practice_address_1), ''),
+                nullif(trim(r.practice_address_2), ''), nullif(trim(r.practice_city), ''),
+                upper(nullif(trim(r.practice_state), '')), nullif(trim(CAST(r.practice_zip AS VARCHAR)), ''),
+                nullif(trim(r.practice_country), ''), NULL, 'street_address',
+                'registered_practice_address', 'publisher_asserted', 'raw_nppes',
+                r.source_data_period, r.source_run_id,
+                [r.source_data_period], [r.source_run_id],
+                coalesce(try_cast(left(r.source_data_period, 4) AS INTEGER), ?)
+            FROM raw_nppes r
+            INNER JOIN core_providers c ON c.npi = CAST(r.npi AS VARCHAR)
+            WHERE nullif(trim(r.practice_address_1), '') IS NOT NULL
+               OR nullif(trim(r.practice_city), '') IS NOT NULL
+            """,
+            [data_year],
+        )
+
+    if _table_has_columns(
+        con,
+        "raw_dac_national",
+        {
+            "NPI", "adr_ln_1", "adr_ln_2", "City/Town", "State", "ZIP Code",
+            "adrs_id", "source_run_id", "source_data_period",
+        },
+    ):
+        con.execute(
+            """
+            INSERT INTO provider_address_evidence
+            SELECT DISTINCT
+                md5(concat_ws('|', 'dac_practice_address', CAST(d."NPI" AS VARCHAR),
+                    coalesce(CAST(d.adrs_id AS VARCHAR), ''), coalesce(d.adr_ln_1, ''),
+                    coalesce(d.adr_ln_2, ''), coalesce(d."City/Town", ''),
+                    coalesce(d."State", ''), coalesce(CAST(d."ZIP Code" AS VARCHAR), ''),
+                    d.source_data_period)),
+                CAST(d."NPI" AS VARCHAR), nullif(trim(d.adr_ln_1), ''),
+                nullif(trim(d.adr_ln_2), ''), nullif(trim(d."City/Town"), ''),
+                upper(nullif(trim(d."State"), '')), nullif(trim(CAST(d."ZIP Code" AS VARCHAR)), ''),
+                NULL, nullif(trim(CAST(d.adrs_id AS VARCHAR)), ''), 'street_address',
+                'clinician_practice_address', 'publisher_asserted', 'raw_dac_national',
+                d.source_data_period, d.source_run_id,
+                [d.source_data_period], [d.source_run_id],
+                coalesce(try_cast(left(d.source_data_period, 4) AS INTEGER), ?)
+            FROM raw_dac_national d
+            INNER JOIN core_providers c ON c.npi = CAST(d."NPI" AS VARCHAR)
+            WHERE nullif(trim(d.adr_ln_1), '') IS NOT NULL
+               OR nullif(trim(d."City/Town"), '') IS NOT NULL
+            """,
+            [data_year],
+        )
+
+    if _table_has_columns(
+        con,
+        "raw_physician_by_provider",
+        {
+            "Rndrng_NPI", "Rndrng_Prvdr_City", "Rndrng_Prvdr_State_Abrvtn",
+            "Rndrng_Prvdr_Zip5", "source_run_id", "source_data_period",
+        },
+    ):
+        con.execute(
+            """
+            INSERT INTO provider_address_evidence
+            SELECT DISTINCT
+                md5(concat_ws('|', 'medicare_rendering_location', CAST(p.Rndrng_NPI AS VARCHAR),
+                    coalesce(p.Rndrng_Prvdr_City, ''), coalesce(p.Rndrng_Prvdr_State_Abrvtn, ''),
+                    coalesce(CAST(p.Rndrng_Prvdr_Zip5 AS VARCHAR), ''), p.source_data_period)),
+                CAST(p.Rndrng_NPI AS VARCHAR), NULL, NULL, nullif(trim(p.Rndrng_Prvdr_City), ''),
+                upper(nullif(trim(p.Rndrng_Prvdr_State_Abrvtn), '')),
+                nullif(trim(CAST(p.Rndrng_Prvdr_Zip5 AS VARCHAR)), ''), NULL, NULL,
+                'city_state_zip', 'medicare_rendering_location', 'publisher_asserted',
+                'raw_physician_by_provider', p.source_data_period, p.source_run_id,
+                [p.source_data_period], [p.source_run_id],
+                coalesce(try_cast(left(p.source_data_period, 4) AS INTEGER), ?)
+            FROM raw_physician_by_provider p
+            INNER JOIN core_providers c ON c.npi = CAST(p.Rndrng_NPI AS VARCHAR)
+            WHERE nullif(trim(p.Rndrng_Prvdr_City), '') IS NOT NULL
+               OR nullif(trim(p.Rndrng_Prvdr_State_Abrvtn), '') IS NOT NULL
+            """,
+            [data_year],
+        )
+
+    if _table_has_columns(
+        con,
+        "raw_open_payments_general",
+        {
+            "Covered_Recipient_NPI", "Recipient_Primary_Business_Street_Address_Line1",
+            "Recipient_Primary_Business_Street_Address_Line2", "Recipient_City",
+            "Recipient_State", "Recipient_Zip_Code", "source_run_id", "source_data_period",
+        },
+    ):
+        con.execute(
+            """
+            INSERT INTO provider_address_evidence
+            SELECT DISTINCT
+                md5(concat_ws('|', 'open_payments_recipient_business_address',
+                    CAST(o.Covered_Recipient_NPI AS VARCHAR),
+                    coalesce(o.Recipient_Primary_Business_Street_Address_Line1, ''),
+                    coalesce(o.Recipient_Primary_Business_Street_Address_Line2, ''),
+                    coalesce(o.Recipient_City, ''), coalesce(o.Recipient_State, ''),
+                    coalesce(CAST(o.Recipient_Zip_Code AS VARCHAR), ''), o.source_data_period)),
+                CAST(o.Covered_Recipient_NPI AS VARCHAR),
+                nullif(trim(o.Recipient_Primary_Business_Street_Address_Line1), ''),
+                nullif(trim(o.Recipient_Primary_Business_Street_Address_Line2), ''),
+                nullif(trim(o.Recipient_City), ''), upper(nullif(trim(o.Recipient_State), '')),
+                nullif(trim(CAST(o.Recipient_Zip_Code AS VARCHAR)), ''), NULL, NULL,
+                'street_address', 'payment_recipient_business_address', 'publisher_asserted',
+                'raw_open_payments_general', o.source_data_period, o.source_run_id,
+                [o.source_data_period], [o.source_run_id],
+                coalesce(try_cast(left(o.source_data_period, 4) AS INTEGER), ?)
+            FROM raw_open_payments_general o
+            INNER JOIN core_providers c ON c.npi = CAST(o.Covered_Recipient_NPI AS VARCHAR)
+            WHERE nullif(trim(o.Recipient_Primary_Business_Street_Address_Line1), '') IS NOT NULL
+               OR nullif(trim(o.Recipient_City), '') IS NOT NULL
+            """,
+            [data_year],
+        )
+
+    if _table_has_columns(
+        con,
+        "pecos_provider_organizations",
+        {
+            "npi", "receiving_enrollment_id", "source_data_period",
+            "relationship_source_run_id", "enrollment_source_run_id",
+        },
+    ) and _table_has_columns(
+        con,
+        "pecos_enrollment_practice_locations",
+        {
+            "receiving_enrollment_id", "city", "state", "zip_code", "location_key",
+            "source_data_period", "location_source_run_id", "enrollment_source_run_id",
+        },
+    ):
+        con.execute(
+            """
+            INSERT INTO provider_address_evidence
+            SELECT DISTINCT
+                md5(concat_ws('|', 'pecos_receiving_organization_location', p.npi,
+                    l.location_key, p.source_data_period)),
+                p.npi, NULL, NULL, nullif(trim(l.city), ''), upper(nullif(trim(l.state), '')),
+                nullif(trim(l.zip_code), ''), NULL, l.location_key, 'city_state_zip',
+                'receiving_organization_published_location', 'normalized_publisher_relationship',
+                'raw_pecos_reassignment + raw_pecos_practice_location', l.source_data_period,
+                l.location_source_run_id,
+                list_sort(list_distinct([p.source_data_period, l.source_data_period])),
+                list_sort(list_distinct([
+                    p.relationship_source_run_id, p.enrollment_source_run_id,
+                    l.location_source_run_id, l.enrollment_source_run_id
+                ])),
+                coalesce(try_cast(left(l.source_data_period, 4) AS INTEGER), ?)
+            FROM pecos_provider_organizations p
+            INNER JOIN pecos_enrollment_practice_locations l
+              ON l.receiving_enrollment_id = p.receiving_enrollment_id
+            INNER JOIN core_providers c ON c.npi = p.npi
+            """,
+            [data_year],
+        )
+
+    if _table_has_columns(
+        con,
+        "raw_dac_national",
+        {"NPI", "org_pac_id", "Facility Name", "source_run_id", "source_data_period"},
+    ):
+        con.execute(
+            """
+            INSERT INTO provider_organization_evidence
+            SELECT DISTINCT
+                md5(concat_ws('|', 'dac_organization_pac', CAST(d."NPI" AS VARCHAR),
+                    coalesce(CAST(d.org_pac_id AS VARCHAR), ''), d.source_data_period)),
+                CAST(d."NPI" AS VARCHAR), 'organization_pac_id',
+                nullif(trim(CAST(d.org_pac_id AS VARCHAR)), ''),
+                nullif(trim(d."Facility Name"), ''), 'clinician_organization_address_association',
+                'publisher_asserted', NULL, 'raw_dac_national', d.source_data_period,
+                d.source_run_id, [d.source_data_period], [d.source_run_id],
+                coalesce(try_cast(left(d.source_data_period, 4) AS INTEGER), ?)
+            FROM raw_dac_national d
+            INNER JOIN core_providers c ON c.npi = CAST(d."NPI" AS VARCHAR)
+            WHERE nullif(trim(CAST(d.org_pac_id AS VARCHAR)), '') IS NOT NULL
+            """,
+            [data_year],
+        )
+
+    if _table_has_columns(
+        con,
+        "raw_reassignment",
+        {
+            "Individual NPI", "Group PAC ID", "Group Legal Business Name",
+            "source_run_id", "source_data_period",
+        },
+    ):
+        con.execute(
+            """
+            INSERT INTO provider_organization_evidence
+            SELECT DISTINCT
+                md5(concat_ws('|', 'reassignment_group_pac', CAST(r."Individual NPI" AS VARCHAR),
+                    coalesce(CAST(r."Group PAC ID" AS VARCHAR), ''), r.source_data_period)),
+                CAST(r."Individual NPI" AS VARCHAR), 'group_pac_id',
+                nullif(trim(CAST(r."Group PAC ID" AS VARCHAR)), ''),
+                nullif(trim(r."Group Legal Business Name"), ''),
+                'benefit_reassignment_to_group', 'publisher_asserted', NULL,
+                'raw_reassignment', r.source_data_period, r.source_run_id,
+                [r.source_data_period], [r.source_run_id],
+                coalesce(try_cast(left(r.source_data_period, 4) AS INTEGER), ?)
+            FROM raw_reassignment r
+            INNER JOIN core_providers c ON c.npi = CAST(r."Individual NPI" AS VARCHAR)
+            WHERE nullif(trim(CAST(r."Group PAC ID" AS VARCHAR)), '') IS NOT NULL
+            """,
+            [data_year],
+        )
+
+    if _table_has_columns(
+        con,
+        "pecos_provider_organizations",
+        {
+            "npi", "receiving_enrollment_id", "receiving_organization_name",
+            "source_data_period", "relationship_source_run_id", "enrollment_source_run_id",
+        },
+    ):
+        con.execute(
+            """
+            INSERT INTO provider_organization_evidence
+            SELECT DISTINCT
+                md5(concat_ws('|', 'pecos_receiving_enrollment', p.npi,
+                    p.receiving_enrollment_id, p.source_data_period)),
+                p.npi, 'pecos_receiving_enrollment_id', p.receiving_enrollment_id,
+                nullif(trim(p.receiving_organization_name), ''),
+                'receiving_medicare_benefits_organization',
+                'normalized_publisher_relationship', NULL,
+                'raw_pecos_reassignment + raw_pecos_enrollment', p.source_data_period,
+                p.relationship_source_run_id, [p.source_data_period],
+                list_sort(list_distinct([
+                    p.relationship_source_run_id, p.enrollment_source_run_id
+                ])),
+                coalesce(try_cast(left(p.source_data_period, 4) AS INTEGER), ?)
+            FROM pecos_provider_organizations p
+            INNER JOIN core_providers c ON c.npi = p.npi
+            """,
+            [data_year],
+        )
+
+    if _table_has_columns(
+        con,
+        "raw_dac_facility_affiliations",
+        {
+            "NPI", "Facility Affiliations Certification Number",
+            "Facility Type Certification Number",
+        },
+    ):
+        con.execute(
+            """
+            INSERT INTO provider_organization_evidence
+            SELECT DISTINCT
+                md5(concat_ws('|', 'dac_facility_certification', CAST(f."NPI" AS VARCHAR),
+                    coalesce(f."Facility Affiliations Certification Number", ''),
+                    coalesce(f."Facility Type Certification Number", ''))),
+                CAST(f."NPI" AS VARCHAR), 'facility_certification_number',
+                nullif(trim(coalesce(f."Facility Affiliations Certification Number",
+                    f."Facility Type Certification Number")), ''), NULL,
+                'clinician_facility_certification_affiliation', 'publisher_asserted', NULL,
+                'raw_dac_facility_affiliations', NULL, NULL,
+                []::VARCHAR[], []::VARCHAR[], ?
+            FROM raw_dac_facility_affiliations f
+            INNER JOIN core_providers c ON c.npi = CAST(f."NPI" AS VARCHAR)
+            WHERE nullif(trim(coalesce(f."Facility Affiliations Certification Number",
+                f."Facility Type Certification Number")), '') IS NOT NULL
+            """,
+            [data_year],
+        )
+
+    if _table_has_columns(
+        con,
+        "provider_hospital_evidence",
+        {
+            "npi", "hospital_npi", "hospital_name", "evidence_method",
+            "confidence_level", "source_data_period", "data_year",
+        },
+    ):
+        con.execute(
+            """
+            INSERT INTO provider_organization_evidence
+            SELECT DISTINCT
+                md5(concat_ws('|', 'provider_hospital_evidence', h.npi, h.hospital_npi,
+                    h.evidence_method, coalesce(h.source_data_period, ''),
+                    CAST(h.data_year AS VARCHAR))),
+                h.npi, 'hospital_npi', h.hospital_npi, nullif(trim(h.hospital_name), ''),
+                'hospital_association', 'derived_or_inferred', h.confidence_level,
+                'provider_hospital_evidence', h.source_data_period, NULL,
+                CASE WHEN h.source_data_period IS NULL THEN []::VARCHAR[]
+                    ELSE [h.source_data_period] END,
+                []::VARCHAR[], h.data_year
+            FROM provider_hospital_evidence h
+            INNER JOIN core_providers c ON c.npi = h.npi
+            """
+        )
+
+    for table in ("provider_address_evidence", "provider_organization_evidence"):
+        invalid_provenance = con.execute(
+            f"""
+            SELECT count(*) FROM {table}
+            WHERE (source_data_period IS NOT NULL
+                   AND NOT list_contains(source_data_periods, source_data_period))
+               OR (source_run_id IS NOT NULL
+                   AND NOT list_contains(source_run_ids, source_run_id))
+            """
+        ).fetchone()[0]
+        if invalid_provenance:
+            raise ValueError(
+                f"{table} has {invalid_provenance} rows whose primary source is "
+                "missing from complete provenance"
+            )
+
+    counts = {
+        "provider_address_evidence": int(
+            con.execute("SELECT count(*) FROM provider_address_evidence").fetchone()[0]
+        ),
+        "provider_organization_evidence": int(
+            con.execute("SELECT count(*) FROM provider_organization_evidence").fetchone()[0]
+        ),
+    }
+    logger.info("Provider evidence output counts: %s", counts)
+    return counts
+
+
 def _ensure_provider_hospital_evidence_table(con: duckdb.DuckDBPyConnection) -> None:
     """Create the additive evidence layer for warehouses predating this model."""
     con.execute(
@@ -875,6 +1286,7 @@ def transform_all(
     practice_year: int | None = None,
     quality_year: int | None = None,
     include_hospital_affiliations: bool = True,
+    include_provider_evidence_outputs: bool = True,
 ) -> dict[str, int]:
     """Run all transforms in dependency order. Returns {table: row_count}."""
     results = {}
@@ -894,6 +1306,10 @@ def transform_all(
         )
         results["provider_hospital_evidence"] = build_provider_hospital_evidence(
             con, practice_year or data_year
+        )
+    if include_provider_evidence_outputs:
+        results.update(
+            build_provider_evidence_outputs(con, practice_year or data_year)
         )
     results["provider_quality_scores"] = build_provider_quality_scores(
         con, quality_year or data_year
@@ -923,6 +1339,8 @@ def clear_refresh_targets(
     dependent tables, commit, and delete ``core_providers`` separately.
     """
     for table in (
+        "provider_address_evidence",
+        "provider_organization_evidence",
         "provider_hospital_evidence",
         "hospital_affiliations",
         "practice_locations",

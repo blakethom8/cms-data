@@ -132,6 +132,41 @@ def _warehouse(path: Path) -> Path:
              'Austin', 'TX', '73301', 'cms_reassignment_legal_name_state', 'medium',
              'PAC2', NULL, NULL, NULL, NULL, '2024', 2024);
 
+        CREATE TABLE provider_address_evidence (
+            evidence_key VARCHAR, npi VARCHAR, address_line_1 VARCHAR,
+            address_line_2 VARCHAR, city VARCHAR, state VARCHAR, zip_code VARCHAR,
+            country VARCHAR, address_id VARCHAR, address_granularity VARCHAR,
+            relationship_type VARCHAR, evidence_kind VARCHAR, source_tables VARCHAR,
+            source_data_period VARCHAR, source_run_id VARCHAR,
+            source_data_periods VARCHAR[], source_run_ids VARCHAR[], data_year INTEGER
+        );
+        INSERT INTO provider_address_evidence VALUES
+            ('address-1', '1000000001', '1 Main', NULL, 'Los Angeles', 'CA', '90001',
+             'US', 'ADDR1', 'street_address', 'clinician_practice_address',
+             'publisher_asserted', 'raw_dac_national', '2024', 'run-dac',
+             ['2024'], ['run-dac'], 2024),
+            ('address-2', '1000000003', '3 Main', NULL, 'Austin', 'TX', '73301',
+             'US', 'ADDR3', 'street_address', 'clinician_practice_address',
+             'publisher_asserted', 'raw_dac_national', '2024', 'run-dac',
+             ['2024'], ['run-dac'], 2024);
+
+        CREATE TABLE provider_organization_evidence (
+            evidence_key VARCHAR, npi VARCHAR, organization_identifier_type VARCHAR,
+            organization_identifier VARCHAR, organization_name VARCHAR,
+            relationship_type VARCHAR, evidence_kind VARCHAR, confidence_level VARCHAR,
+            source_tables VARCHAR, source_data_period VARCHAR, source_run_id VARCHAR,
+            source_data_periods VARCHAR[], source_run_ids VARCHAR[], data_year INTEGER
+        );
+        INSERT INTO provider_organization_evidence VALUES
+            ('organization-1', '1000000001', 'organization_pac_id', 'PAC1',
+             'Alpha Group', 'clinician_organization_address_association',
+             'publisher_asserted', NULL, 'raw_dac_national', '2024', 'run-dac',
+             ['2024'], ['run-dac'], 2024),
+            ('organization-2', '1000000003', 'organization_pac_id', 'PAC3',
+             'Texas Group', 'clinician_organization_address_association',
+             'publisher_asserted', NULL, 'raw_dac_national', '2024', 'run-dac',
+             ['2024'], ['run-dac'], 2024);
+
         CREATE TABLE raw_dac_national (
             "NPI" VARCHAR, "Ind_PAC_ID" VARCHAR, "Ind_enrl_ID" VARCHAR,
             org_pac_id VARCHAR, adrs_id VARCHAR, "Facility Name" VARCHAR,
@@ -451,6 +486,8 @@ def test_profile_preserves_grain_and_source_detail(tmp_path: Path) -> None:
     assert counts[("reporting", "fact_provider_quality_year")] == 1
     assert counts[("reporting", "bridge_provider_hospital")] == 1
     assert counts[("reporting", "bridge_provider_hospital_evidence")] == 1
+    assert counts[("reporting", "bridge_provider_address_evidence")] == 1
+    assert counts[("reporting", "bridge_provider_organization_evidence")] == 1
     assert counts[("reporting", "bridge_provider_practice")] == 2
     assert counts[("reporting", "bridge_provider_pecos_organization")] == 2
     assert counts[("reporting", "bridge_pecos_enrollment_location")] == 2

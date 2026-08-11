@@ -116,6 +116,59 @@ CREATE INDEX IF NOT EXISTS idx_pecos_enrollment_location_state
 
 
 ------------------------------------------------------------
+-- Tables 2d/2e: provider address and organization evidence
+-- Source-preserving outputs; neither assigns a primary relationship.
+------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS provider_address_evidence (
+    evidence_key              VARCHAR(64) PRIMARY KEY,
+    npi                       VARCHAR(10) NOT NULL REFERENCES core_providers(npi),
+    address_line_1            VARCHAR(255),
+    address_line_2            VARCHAR(255),
+    city                      VARCHAR(100),
+    state                     VARCHAR(2),
+    zip_code                  VARCHAR(20),
+    country                   VARCHAR(10),
+    address_id                VARCHAR,
+    address_granularity       VARCHAR(30) NOT NULL,
+    relationship_type         VARCHAR(100) NOT NULL,
+    evidence_kind             VARCHAR(40) NOT NULL,
+    source_tables             VARCHAR(255) NOT NULL,
+    source_data_period        VARCHAR,
+    source_run_id             VARCHAR,
+    source_data_periods       VARCHAR[] NOT NULL,
+    source_run_ids            VARCHAR[] NOT NULL,
+    data_year                 INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_provider_address_evidence_npi
+    ON provider_address_evidence(npi);
+CREATE INDEX IF NOT EXISTS idx_provider_address_evidence_location
+    ON provider_address_evidence(state, zip_code);
+
+CREATE TABLE IF NOT EXISTS provider_organization_evidence (
+    evidence_key                    VARCHAR(64) PRIMARY KEY,
+    npi                             VARCHAR(10) NOT NULL REFERENCES core_providers(npi),
+    organization_identifier_type    VARCHAR(60) NOT NULL,
+    organization_identifier         VARCHAR(255),
+    organization_name               VARCHAR(255),
+    relationship_type               VARCHAR(100) NOT NULL,
+    evidence_kind                   VARCHAR(40) NOT NULL,
+    confidence_level                VARCHAR(20),
+    source_tables                   VARCHAR(255) NOT NULL,
+    source_data_period              VARCHAR,
+    source_run_id                   VARCHAR,
+    source_data_periods             VARCHAR[] NOT NULL,
+    source_run_ids                  VARCHAR[] NOT NULL,
+    data_year                       INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_provider_organization_evidence_npi
+    ON provider_organization_evidence(npi);
+CREATE INDEX IF NOT EXISTS idx_provider_organization_evidence_identifier
+    ON provider_organization_evidence(organization_identifier_type, organization_identifier);
+
+
+------------------------------------------------------------
 -- Table 3: utilization_metrics
 -- Sources: by_provider (Part B) + part_d_by_provider (Rx)
 --          + dme_by_referring_provider

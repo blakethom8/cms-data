@@ -8,6 +8,7 @@ sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from pipeline.transform import (
     build_pecos_provider_relationships,
+    build_provider_evidence_outputs,
     build_practice_locations,
     build_provider_drug_detail,
     build_provider_quality_scores,
@@ -174,6 +175,148 @@ def test_practice_transform_matches_numeric_raw_npi_to_text_core_npi() -> None:
 
     assert count == 1
     assert row == ("1234567890", "Example Group", 8)
+
+
+def test_provider_evidence_outputs_keep_address_and_organization_sources_separate() -> None:
+    connection = _connection()
+    try:
+        connection.execute(
+            """
+            CREATE TABLE raw_nppes (
+                npi VARCHAR, practice_address_1 VARCHAR, practice_address_2 VARCHAR,
+                practice_city VARCHAR, practice_state VARCHAR, practice_zip VARCHAR,
+                practice_country VARCHAR, source_run_id VARCHAR, source_data_period VARCHAR
+            );
+            INSERT INTO raw_nppes VALUES
+                ('1234567890', '101 Registry Way', NULL, 'Los Angeles', 'CA', '90001',
+                 'US', 'nppes-run', '2026-07-01');
+
+            CREATE TABLE raw_dac_national (
+                "NPI" VARCHAR, adr_ln_1 VARCHAR, adr_ln_2 VARCHAR, "City/Town" VARCHAR,
+                "State" VARCHAR, "ZIP Code" VARCHAR, adrs_id VARCHAR, org_pac_id VARCHAR,
+                "Facility Name" VARCHAR, source_run_id VARCHAR, source_data_period VARCHAR
+            );
+            INSERT INTO raw_dac_national VALUES
+                ('1234567890', '202 DAC Way', 'Suite 2', 'Pasadena', 'CA', '91101', 'DAC-ADDR',
+                 'ORG-PAC-1', 'Example DAC Group', 'dac-run', '2026-07-01');
+
+            CREATE TABLE raw_physician_by_provider (
+                Rndrng_NPI VARCHAR, Rndrng_Prvdr_City VARCHAR,
+                Rndrng_Prvdr_State_Abrvtn VARCHAR, Rndrng_Prvdr_Zip5 VARCHAR,
+                source_run_id VARCHAR, source_data_period VARCHAR
+            );
+            INSERT INTO raw_physician_by_provider VALUES
+                ('1234567890', 'Santa Monica', 'CA', '90401', 'medicare-run', '2024');
+
+            CREATE TABLE raw_open_payments_general (
+                Covered_Recipient_NPI VARCHAR,
+                Recipient_Primary_Business_Street_Address_Line1 VARCHAR,
+                Recipient_Primary_Business_Street_Address_Line2 VARCHAR,
+                Recipient_City VARCHAR, Recipient_State VARCHAR,
+                Recipient_Zip_Code VARCHAR, source_run_id VARCHAR,
+                source_data_period VARCHAR
+            );
+            INSERT INTO raw_open_payments_general VALUES
+                ('1234567890', '303 Payments Way', NULL, 'Burbank', 'CA', '91501',
+                 'payments-run', '2023');
+
+            CREATE TABLE raw_reassignment (
+                "Individual NPI" VARCHAR, "Group PAC ID" VARCHAR,
+                "Group Legal Business Name" VARCHAR, source_run_id VARCHAR,
+                source_data_period VARCHAR
+            );
+            INSERT INTO raw_reassignment VALUES
+                ('1234567890', 'GROUP-PAC-1', 'Example Legal Group', 'reassign-run', '2026-07-01');
+
+            CREATE TABLE raw_dac_facility_affiliations (
+                "NPI" VARCHAR, "Facility Affiliations Certification Number" VARCHAR,
+                "Facility Type Certification Number" VARCHAR
+            );
+            INSERT INTO raw_dac_facility_affiliations VALUES
+                ('1234567890', '050001', NULL);
+
+            INSERT INTO pecos_provider_organizations VALUES
+                ('relationship-1', '1234567890', 'IND-1', 'ORG-ENROLL-1', '1098765432',
+                 'Example PECOS Group', 'organization', '12-00', 'Group Practice', 'CA',
+                 '2026-07-01', 'pecos-reassign-run', 'pecos-enroll-run');
+            INSERT INTO pecos_enrollment_practice_locations VALUES
+                ('pecos-location-1', 'ORG-ENROLL-1', '1098765432', 'Example PECOS Group',
+                 'organization', 'Long Beach', 'CA', '90802', '90802', '2026-07-01',
+                 'pecos-location-run', 'pecos-enroll-run');
+
+            INSERT INTO provider_hospital_evidence VALUES
+                ('hospital-evidence-1', '1234567890', '1098765432', '050001',
+                 'Example Hospital', 'Los Angeles', 'CA', '90033', 'reassignment', 'medium',
+                 'GROUP-PAC-1', NULL, NULL, NULL, NULL, '2026-07-01', 2026);
+            """
+        )
+
+        counts = build_provider_evidence_outputs(connection, 2026)
+        assert build_provider_evidence_outputs(connection, 2026) == counts
+        addresses = connection.execute(
+            """
+            SELECT relationship_type, source_tables, data_year
+            FROM provider_address_evidence ORDER BY relationship_type
+            """
+        ).fetchall()
+        organizations = connection.execute(
+            """
+            SELECT organization_identifier_type, organization_identifier, organization_name,
+                   evidence_kind
+            FROM provider_organization_evidence
+            ORDER BY organization_identifier_type
+            """
+        ).fetchall()
+        pecos_provenance = connection.execute(
+            """
+            SELECT source_data_period, source_run_id, source_data_periods, source_run_ids
+            FROM provider_address_evidence
+            WHERE relationship_type = 'receiving_organization_published_location'
+            """
+        ).fetchone()
+        indexes = {
+            row[0]
+            for row in connection.execute(
+                """
+                SELECT index_name FROM duckdb_indexes()
+                WHERE table_name IN (
+                    'provider_address_evidence', 'provider_organization_evidence'
+                )
+                """
+            ).fetchall()
+        }
+    finally:
+        connection.close()
+
+    assert counts == {
+        "provider_address_evidence": 5,
+        "provider_organization_evidence": 5,
+    }
+    assert addresses == [
+        ("clinician_practice_address", "raw_dac_national", 2026),
+        ("medicare_rendering_location", "raw_physician_by_provider", 2024),
+        ("payment_recipient_business_address", "raw_open_payments_general", 2023),
+        (
+            "receiving_organization_published_location",
+            "raw_pecos_reassignment + raw_pecos_practice_location",
+            2026,
+        ),
+        ("registered_practice_address", "raw_nppes", 2026),
+    ]
+    assert ("group_pac_id", "GROUP-PAC-1", "Example Legal Group", "publisher_asserted") in organizations
+    assert ("hospital_npi", "1098765432", "Example Hospital", "derived_or_inferred") in organizations
+    assert pecos_provenance == (
+        "2026-07-01",
+        "pecos-location-run",
+        ["2026-07-01"],
+        ["pecos-enroll-run", "pecos-location-run", "pecos-reassign-run"],
+    )
+    assert indexes == {
+        "idx_provider_address_evidence_location",
+        "idx_provider_address_evidence_npi",
+        "idx_provider_organization_evidence_identifier",
+        "idx_provider_organization_evidence_npi",
+    }
 
 
 def test_pecos_relationship_transform_preserves_assignment_and_location_grains() -> None:

@@ -183,6 +183,60 @@ REPORTING_MODELS: tuple[ReportingModel, ...] = (
         ),
     ),
     ReportingModel(
+        name="bridge_provider_address_evidence",
+        grain="one provider NPI by source-preserving address evidence record",
+        scope_rule="provider NPI belongs to core_providers.state = 'CA'",
+        source_tables=("provider_address_evidence", "core_providers"),
+        key_columns=("evidence_key",),
+        from_sql=(
+            "FROM provider_address_evidence e "
+            "JOIN core_providers cp ON cp.npi = e.npi "
+            "WHERE UPPER(cp.state) = 'CA'"
+        ),
+        notes=(
+            "Source-specific address evidence across NPPES, DAC, Medicare, Open Payments, "
+            "and PECOS. Rows retain relationship type and evidence kind; no row is primary."
+        ),
+        fields=_direct_fields(
+            "provider_address_evidence",
+            "provider_address_evidence",
+            (
+                "evidence_key", "npi", "address_line_1", "address_line_2", "city",
+                "state", "zip_code", "country", "address_id", "address_granularity",
+                "relationship_type", "evidence_kind", "source_tables", "source_data_period",
+                "source_run_id", "source_data_periods", "source_run_ids", "data_year",
+            ),
+            "e",
+        ),
+    ),
+    ReportingModel(
+        name="bridge_provider_organization_evidence",
+        grain="one provider NPI by source-preserving organization evidence record",
+        scope_rule="provider NPI belongs to core_providers.state = 'CA'",
+        source_tables=("provider_organization_evidence", "core_providers"),
+        key_columns=("evidence_key",),
+        from_sql=(
+            "FROM provider_organization_evidence e "
+            "JOIN core_providers cp ON cp.npi = e.npi "
+            "WHERE UPPER(cp.state) = 'CA'"
+        ),
+        notes=(
+            "Published PAC/enrollment/facility relationships and derived hospital evidence "
+            "remain separate. The model does not assign a primary organization."
+        ),
+        fields=_direct_fields(
+            "provider_organization_evidence",
+            "provider_organization_evidence",
+            (
+                "evidence_key", "npi", "organization_identifier_type",
+                "organization_identifier", "organization_name", "relationship_type",
+                "evidence_kind", "confidence_level", "source_tables", "source_data_period",
+                "source_run_id", "source_data_periods", "source_run_ids", "data_year",
+            ),
+            "e",
+        ),
+    ),
+    ReportingModel(
         name="fact_provider_metrics_year",
         grain="one provider NPI by Medicare metric year",
         scope_rule="provider NPI belongs to core_providers.state = 'CA'",
