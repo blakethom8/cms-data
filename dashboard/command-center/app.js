@@ -417,7 +417,8 @@
           <div><span>Observed rows</span><strong>${item.row_count !== undefined ? fullNumber(item.row_count) : "Not observed"}</strong></div>
           <div><span>Columns</span><strong>${item.column_count !== undefined ? fullNumber(item.column_count) : "Not observed"}</strong></div>
           <div><span>Join keys</span><strong>${escapeHtml((item.join_keys || []).join(" · ") || "Not documented")}</strong></div>
-        </div>`;
+        </div>
+        ${freshnessProvenanceSection(item)}`;
       return;
     }
 
@@ -450,13 +451,13 @@
       return;
     }
 
-    const source = sourceForDataset(item);
     body.innerHTML = `<div class="lineage-summary">
       <div><span>Domain</span><strong>${escapeHtml(item.domain || "Not documented")}</strong></div>
       <div><span>Physical landing</span><strong><code>${escapeHtml(item.table)}</code></strong></div>
-      <div><span>Registered source</span><strong>${escapeHtml(source ? pick(source, ["title", "source_id"], "Observed") : "Operational source evidence unavailable")}</strong></div>
-      <div><span>Downstream relation</span><strong>${escapeHtml(source ? (pick(source, ["downstream_tables"], []) || []).join(" · ") || "No downstream table listed" : "Review the Lineage workspace when source contracts are connected")}</strong></div>
-    </div>`;
+      <div><span>Registered sources</span><strong>${escapeHtml(sourcesForDataset(item).map(source => pick(source, ["title", "source_id"], "Unknown source")).join(" · ") || "No source contract connected")}</strong></div>
+      <div><span>Evidence rule</span><strong>Source dates remain separate; no table-wide freshness date is inferred.</strong></div>
+    </div>
+    ${freshnessProvenanceSection(item)}`;
   }
 
   function renderColumnGrid(columns, query) {
@@ -641,11 +642,77 @@
     }).join("")}</tbody></table></div>`;
   }
 
-  function sourceForDataset(dataset) {
-    return state.sources.find(source => {
+  function sourceIdsForDataset(dataset) {
+    const sourceIds = new Set();
+    state.sources.forEach(source => {
       const tables = pick(source, ["downstream_tables"], []) || [];
-      return tables.includes(dataset.table) || tables.some(table => dataset.table.includes(String(table).replace("raw_", ""))) || String(pick(source, ["source_id"], "")).includes(dataset.key);
+      if (tables.includes(dataset.table)) sourceIds.add(String(source.source_id));
     });
+
+    const { nodes, edges } = lineageTopology();
+    const nodesById = new Map(nodes.map(node => [node.id, node]));
+    const incoming = new Map();
+    edges.forEach(edge => {
+      if (!incoming.has(edge.target)) incoming.set(edge.target, []);
+      incoming.get(edge.target).push(edge.source);
+    });
+    const pending = [`table:${dataset.table}`];
+    const visited = new Set();
+    while (pending.length) {
+      const nodeId = pending.pop();
+      if (!nodeId || visited.has(nodeId)) continue;
+      visited.add(nodeId);
+      const node = nodesById.get(nodeId);
+      if (node?.kind === "source" && node.source_id) sourceIds.add(String(node.source_id));
+      (incoming.get(nodeId) || []).forEach(upstreamId => pending.push(upstreamId));
+    }
+    return sourceIds;
+  }
+
+  function sourcesForDataset(dataset) {
+    const sourceIds = sourceIdsForDataset(dataset);
+    return state.sources
+      .filter(source => sourceIds.has(String(source.source_id)))
+      .sort((left, right) => String(left.title || left.source_id).localeCompare(String(right.title || right.source_id)));
+  }
+
+  function freshnessProvenanceSection(dataset) {
+    if (!state.operations.sources?.ok) {
+      return `<section class="freshness-provenance" aria-label="Freshness and provenance">
+        <div class="freshness-heading"><div><span class="eyebrow">Selected-release evidence</span><h3>Freshness &amp; provenance</h3></div></div>
+        <div class="freshness-unavailable"><strong>Source evidence unavailable</strong><p>The dataset remains inspectable, but the selected release did not return source-manifest evidence. No freshness date is inferred.</p></div>
+      </section>`;
+    }
+
+    const sources = sourcesForDataset(dataset);
+    const content = sources.length ? sources.map(source => {
+      const manifest = manifestOf(source) || {};
+      const status = evidenceStatus(source);
+      const latest = manifestEvent(manifest);
+      const cadence = String(pick(source, ["cadence"], "cadence unknown")).replaceAll("_", " ");
+      const evidenceReason = pick(source, ["evidence_reason"], "No selected-release evidence reason returned.");
+      return `<article class="freshness-source-card">
+        <header>
+          <div><strong>${escapeHtml(pick(source, ["title", "source_id"], "Unknown source"))}</strong><small>${escapeHtml(pick(source, ["publisher"], "publisher unknown"))} · ${escapeHtml(cadence)}</small></div>
+          ${statusChip(status, status)}
+        </header>
+        <dl>
+          <div><dt>Publisher data period</dt><dd>${escapeHtml(pick(manifest, ["source_data_period"], "Not recorded"))}</dd></div>
+          <div><dt>Publisher version</dt><dd>${escapeHtml(pick(manifest, ["publisher_version"], "Not recorded"))}</dd></div>
+          <div><dt>Retrieved</dt><dd>${escapeHtml(formatDate(pick(manifest, ["retrieval_timestamp"], null)))}</dd></div>
+          <div><dt>Validated</dt><dd>${escapeHtml(formatDate(pick(manifest, ["validation_timestamp"], null)))}</dd></div>
+          <div><dt>Promoted</dt><dd>${escapeHtml(formatDate(pick(manifest, ["promotion_timestamp"], null)))}</dd></div>
+          <div><dt>Latest recorded event</dt><dd>${escapeHtml(latest ? `${formatDate(latest.value)} · ${latest.label}` : "Not recorded")}</dd></div>
+        </dl>
+        <p title="${escapeHtml(evidenceReason)}">${escapeHtml(evidenceReason)}</p>
+      </article>`;
+    }).join("") : `<div class="freshness-unavailable"><strong>No registered source path</strong><p>This dataset is visible in the warehouse catalog, but the declared lineage does not connect it to a registered source contract. Freshness is unknown rather than inferred from table metadata.</p></div>`;
+
+    return `<section class="freshness-provenance" aria-label="Freshness and provenance">
+      <div class="freshness-heading"><div><span class="eyebrow">Selected-release evidence</span><h3>Freshness &amp; provenance</h3></div><a href="#contracts">Open source contracts <span>→</span></a></div>
+      <p class="freshness-rule">Dates are shown per contributing source. A dataset-wide “last run” is deliberately not calculated.</p>
+      <div class="freshness-source-list">${content}</div>
+    </section>`;
   }
 
   function lineageNodeEvidence(node) {

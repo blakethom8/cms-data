@@ -16,7 +16,8 @@ The first version provides six workspaces:
 1. **Overview** summarizes the live warehouse and available operating evidence.
 2. **Provider Evidence** follows named clinicians across raw sources and curated relationship models
    without flattening their different grains into one ambiguous record.
-3. **Data Catalog** shows each curated dataset's grain, join keys, columns, and sample rows.
+3. **Data Catalog** shows each curated dataset's grain, join keys, columns, sample rows, and
+   source-grain freshness and provenance evidence.
 4. **Lineage** connects registered publisher sources to downstream warehouse tables.
 5. **Contracts** joins source-registry definitions to the latest local manifest evidence.
 6. **Operations** shows recorded runs and the future approval-gated refresh sequence.
@@ -83,6 +84,22 @@ The Command Center distinguishes facts from missing evidence:
   source period or the API deployment time;
 - publisher freshness still requires the separate discovery/status workflow. The request-serving API
 does not perform live publisher discovery.
+
+### Catalog freshness and provenance
+
+The Data Catalog reuses the selected deployment's `/operations/sources` and `/operations/lineage`
+evidence; it does not add a second freshness authority. For each catalog table, the browser walks
+declared lineage upstream and combines those source IDs with exact source-registry downstream-table
+matches. Each contributing source remains a separate evidence card with its publisher data period,
+publisher version, retrieval, validation, promotion, latest lifecycle event, cadence, and
+selected-release evidence status.
+
+The catalog deliberately does not calculate one table-wide “last run” date. A table can depend on
+multiple sources with different periods and lifecycle timestamps, so one date would hide the least
+current dependency. When no registered source path exists, the catalog says that freshness is
+unknown; it does not infer freshness from DuckDB table metadata, row counts, file modification
+times, or similarly named source IDs. The Contracts workspace remains authoritative for source-level
+evidence, while Operations remains authoritative for the individual run ledger.
 
 ## Provider Evidence Workspace
 
