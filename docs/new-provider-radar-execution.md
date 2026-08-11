@@ -1,6 +1,6 @@
 # New Provider Radar — cms-data execution handoff
 
-> **Last reviewed: 2026-08-11** · **Status: T1, T2, T4 complete; T3 built, promotion approval pending**
+> **Last reviewed: 2026-08-11** · **Status: T1–T4 complete; no cms-data blockers**
 
 This is the build brief for finishing the cms-data side of New Provider Radar. Design authority
 is [new-provider-radar.md](new-provider-radar.md) — event vocabulary, warehouse model, API
@@ -13,7 +13,7 @@ docs/new-provider-radar-execution.md." Standing repo rules are in `AGENTS.md`; f
 `data-platform-operating-model.md` for manifests, validation, promotion, and rollback. Never
 overwrite the active production DuckDB in place; writes never happen in API request handlers.
 
-## Current state (verified 2026-08-10)
+## Current state (verified 2026-08-11)
 
 Built and tested:
 
@@ -122,9 +122,23 @@ Completed 2026-08-11: `/radar/providers` now requires exactly one geographic sco
 `zip5` values or `city` plus two-letter `state`. City/state matching trims and uppercases both
 request and current NPPES primary-practice values; ZIP filtering and every other filter retain
 their existing semantics. Invalid partial or combined scopes fail with 422, and the response model
-is unchanged. Implementation is committed at `fa4bcdd`; production still serves T2 code commit
-`3c3e761`, so a separate approval-gated code-only promotion is required before provider-search may
-send city/state requests. That approval is the only T3 blocker.
+is unchanged. Implementation is committed at `fa4bcdd` and production now serves full commit
+`fa4bcdd78ffc3ac3c60b2d63f7187035258a7417` through verified deployment
+`deployment-20260811T031052Z-73cea84b1b`. The code-only promotion reused immutable warehouse
+`warehouse-20260811T021837Z-f44c147e30` and runtime `runtime-candidate-8985e8a-c26024b3`; the
+warehouse SHA-256 remained
+`91e2ee4e22fd7b7f612765635e19601ce081730c8b0ddc634dc54d891a345ef2`.
+
+The candidate passed the complete 15-check loopback smoke suite before selection. After the
+approval-gated one-shot cutover, manager status reported the candidate verified with zero blocking
+transactions and no transition sentinel; the live process resolved to the approved code artifact
+and held the expected warehouse inode open. Production city/state smoke returned 170 Denver events
+for the promoted source window, preserved the ZIP-mode response shape, and rejected combined scopes
+with 422. Smoke evidence is recorded at
+`/srv/cms-data-platform/production/evidence/deployment-20260811T031052Z-73cea84b1b/smoke.json`
+(SHA-256 `b3e46234169d1619c03d5dd9c899df1cf0db208ef8f6f57e5698d0d9eeb707cd`). The immediate
+predecessor `deployment-20260811T023712Z-b68e0ca9c3` remains intact for rollback. No T3 blockers
+remain; provider-search may adopt the additive city/state mode.
 
 ### T4 — Precision spike (R1 in the product plan)
 
@@ -160,14 +174,13 @@ cache, Type 2 organization events. Also deferred: any ZCTA/metro crosswalk (see 
 
 ## Coordination with provider-search
 
-**App-side status (2026-08-10):** R2 is BUILT — draft PR
+**App-side status (2026-08-11):** R2 is BUILT — draft PR
 [provider-search#201](https://github.com/blakethom8/provider-search/pull/201) ships the
 `/md-watch` page ("MD Watch", Search rail), the proxy router, and the workspace state tables
 (migration `20260810070000`, applied to the hosted dev project). The app shipped against the
-ZIP-mode contract; T1 + T2 now provide its production data. **T3's additive city/state API mode
-is built but must not be adopted until its pending code-only production promotion completes. T4 is
-complete; its precision report recommends keeping the digest disabled pending required taxonomy
-targeting and a second sampled market.**
+ZIP-mode contract; T1 + T2 now provide its production data. **T3's additive city/state API mode is
+now promoted and available for adoption. T4 is complete; its precision report recommends keeping
+the digest disabled pending required taxonomy targeting and a second sampled market.**
 
 - `event_id` is a durable foreign key for workspace state in the application — treat its
   determinism rule (release, provider, event type, effective date, before/after values) as a
