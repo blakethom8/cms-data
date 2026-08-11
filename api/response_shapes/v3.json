@@ -1,0 +1,5613 @@
+{
+  "/clinical-trials/studies": {
+    "get": {
+      "200": {
+        "title": "Response Studies Clinical Trials Studies Get",
+        "type": "object"
+      },
+      "422": {
+        "properties": {
+          "detail": {
+            "items": {
+              "properties": {
+                "loc": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "title": "Location",
+                  "type": "array"
+                },
+                "msg": {
+                  "title": "Message",
+                  "type": "string"
+                },
+                "type": {
+                  "title": "Error Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "loc",
+                "msg",
+                "type"
+              ],
+              "title": "ValidationError",
+              "type": "object"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "/clinical-trials/version": {
+    "get": {
+      "200": {
+        "title": "Response Version Clinical Trials Version Get",
+        "type": "object"
+      }
+    }
+  },
+  "/explorer/catalog": {
+    "get": {
+      "200": {
+        "items": {
+          "properties": {
+            "column_count": {
+              "title": "Column Count",
+              "type": "integer"
+            },
+            "description": {
+              "title": "Description",
+              "type": "string"
+            },
+            "domain": {
+              "title": "Domain",
+              "type": "string"
+            },
+            "grain": {
+              "title": "Grain",
+              "type": "string"
+            },
+            "join_keys": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Join Keys",
+              "type": "array"
+            },
+            "key": {
+              "title": "Key",
+              "type": "string"
+            },
+            "row_count": {
+              "title": "Row Count",
+              "type": "integer"
+            },
+            "table": {
+              "title": "Table",
+              "type": "string"
+            },
+            "title": {
+              "title": "Title",
+              "type": "string"
+            }
+          },
+          "required": [
+            "key",
+            "table",
+            "title",
+            "domain",
+            "grain",
+            "description",
+            "join_keys",
+            "row_count",
+            "column_count"
+          ],
+          "title": "CatalogEntry",
+          "type": "object"
+        },
+        "title": "Response Catalog Explorer Catalog Get",
+        "type": "array"
+      }
+    }
+  },
+  "/explorer/columns/{key}": {
+    "get": {
+      "200": {
+        "properties": {
+          "columns": {
+            "items": {
+              "properties": {
+                "name": {
+                  "title": "Name",
+                  "type": "string"
+                },
+                "type": {
+                  "title": "Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "type"
+              ],
+              "title": "ColumnInfo",
+              "type": "object"
+            },
+            "title": "Columns",
+            "type": "array"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "table": {
+            "title": "Table",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "table",
+          "columns"
+        ],
+        "title": "ColumnsResponse",
+        "type": "object"
+      },
+      "422": {
+        "properties": {
+          "detail": {
+            "items": {
+              "properties": {
+                "loc": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "title": "Location",
+                  "type": "array"
+                },
+                "msg": {
+                  "title": "Message",
+                  "type": "string"
+                },
+                "type": {
+                  "title": "Error Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "loc",
+                "msg",
+                "type"
+              ],
+              "title": "ValidationError",
+              "type": "object"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "/explorer/provider-evidence": {
+    "get": {
+      "200": {
+        "properties": {
+          "npis": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Npis",
+            "type": "array"
+          },
+          "sources": {
+            "items": {
+              "properties": {
+                "availability": {
+                  "title": "Availability",
+                  "type": "string"
+                },
+                "does_not_prove": {
+                  "title": "Does Not Prove",
+                  "type": "string"
+                },
+                "evidence_kind": {
+                  "title": "Evidence Kind",
+                  "type": "string"
+                },
+                "grain": {
+                  "title": "Grain",
+                  "type": "string"
+                },
+                "key": {
+                  "title": "Key",
+                  "type": "string"
+                },
+                "layer": {
+                  "title": "Layer",
+                  "type": "string"
+                },
+                "missing_tables": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Missing Tables",
+                  "type": "array"
+                },
+                "proves": {
+                  "title": "Proves",
+                  "type": "string"
+                },
+                "providers": {
+                  "additionalProperties": {
+                    "properties": {
+                      "columns": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "title": "Columns",
+                        "type": "array"
+                      },
+                      "rows": {
+                        "items": {
+                          "items": {},
+                          "type": "array"
+                        },
+                        "title": "Rows",
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "columns",
+                      "rows"
+                    ],
+                    "title": "TableData",
+                    "type": "object"
+                  },
+                  "title": "Providers",
+                  "type": "object"
+                },
+                "relationship": {
+                  "title": "Relationship",
+                  "type": "string"
+                },
+                "table": {
+                  "title": "Table",
+                  "type": "string"
+                },
+                "title": {
+                  "title": "Title",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "table",
+                "title",
+                "grain",
+                "relationship",
+                "proves",
+                "does_not_prove",
+                "layer",
+                "evidence_kind",
+                "availability",
+                "missing_tables",
+                "providers"
+              ],
+              "title": "ProviderEvidenceSource",
+              "type": "object"
+            },
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "npis",
+          "sources"
+        ],
+        "title": "ProviderEvidenceResponse",
+        "type": "object"
+      },
+      "422": {
+        "properties": {
+          "detail": {
+            "items": {
+              "properties": {
+                "loc": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "title": "Location",
+                  "type": "array"
+                },
+                "msg": {
+                  "title": "Message",
+                  "type": "string"
+                },
+                "type": {
+                  "title": "Error Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "loc",
+                "msg",
+                "type"
+              ],
+              "title": "ValidationError",
+              "type": "object"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "/explorer/sample-all/{key}": {
+    "get": {
+      "200": {
+        "properties": {
+          "columns": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Columns",
+            "type": "array"
+          },
+          "rows": {
+            "items": {
+              "items": {},
+              "type": "array"
+            },
+            "title": "Rows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "columns",
+          "rows"
+        ],
+        "title": "TableData",
+        "type": "object"
+      },
+      "422": {
+        "properties": {
+          "detail": {
+            "items": {
+              "properties": {
+                "loc": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "title": "Location",
+                  "type": "array"
+                },
+                "msg": {
+                  "title": "Message",
+                  "type": "string"
+                },
+                "type": {
+                  "title": "Error Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "loc",
+                "msg",
+                "type"
+              ],
+              "title": "ValidationError",
+              "type": "object"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "/explorer/sample/{key}": {
+    "get": {
+      "200": {
+        "properties": {
+          "columns": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Columns",
+            "type": "array"
+          },
+          "rows": {
+            "items": {
+              "items": {},
+              "type": "array"
+            },
+            "title": "Rows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "columns",
+          "rows"
+        ],
+        "title": "TableData",
+        "type": "object"
+      },
+      "422": {
+        "properties": {
+          "detail": {
+            "items": {
+              "properties": {
+                "loc": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "title": "Location",
+                  "type": "array"
+                },
+                "msg": {
+                  "title": "Message",
+                  "type": "string"
+                },
+                "type": {
+                  "title": "Error Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "loc",
+                "msg",
+                "type"
+              ],
+              "title": "ValidationError",
+              "type": "object"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "/explorer/showcase/{key}": {
+    "get": {
+      "200": {
+        "properties": {
+          "city": {
+            "title": "City",
+            "type": "string"
+          },
+          "data": {
+            "properties": {
+              "columns": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Columns",
+                "type": "array"
+              },
+              "rows": {
+                "items": {
+                  "items": {},
+                  "type": "array"
+                },
+                "title": "Rows",
+                "type": "array"
+              }
+            },
+            "required": [
+              "columns",
+              "rows"
+            ],
+            "title": "TableData",
+            "type": "object"
+          },
+          "dataset": {
+            "title": "Dataset",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "question": {
+            "title": "Question",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "title",
+          "question",
+          "dataset",
+          "city",
+          "state",
+          "data"
+        ],
+        "title": "ShowcaseResult",
+        "type": "object"
+      },
+      "422": {
+        "properties": {
+          "detail": {
+            "items": {
+              "properties": {
+                "loc": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "title": "Location",
+                  "type": "array"
+                },
+                "msg": {
+                  "title": "Message",
+                  "type": "string"
+                },
+                "type": {
+                  "title": "Error Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "loc",
+                "msg",
+                "type"
+              ],
+              "title": "ValidationError",
+              "type": "object"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "/explorer/showcases": {
+    "get": {
+      "200": {}
+    }
+  },
+  "/health": {
+    "get": {
+      "200": {}
+    }
+  },
+  "/industry/options": {
+    "get": {
+      "200": {
+        "properties": {
+          "options": {
+            "items": {
+              "properties": {
+                "payment_count": {
+                  "title": "Payment Count",
+                  "type": "integer"
+                },
+                "physician_count": {
+                  "title": "Physician Count",
+                  "type": "integer"
+                },
+                "total_usd": {
+                  "title": "Total Usd",
+                  "type": "number"
+                },
+                "value": {
+                  "title": "Value",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "value",
+                "physician_count",
+                "payment_count",
+                "total_usd"
+              ],
+              "title": "IndustryOption",
+              "type": "object"
+            },
+            "title": "Options",
+            "type": "array"
+          },
+          "total_values": {
+            "title": "Total Values",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_values",
+          "options"
+        ],
+        "title": "IndustryOptionsResponse",
+        "type": "object"
+      },
+      "422": {
+        "properties": {
+          "detail": {
+            "items": {
+              "properties": {
+                "loc": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "title": "Location",
+                  "type": "array"
+                },
+                "msg": {
+                  "title": "Message",
+                  "type": "string"
+                },
+                "type": {
+                  "title": "Error Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "loc",
+                "msg",
+                "type"
+              ],
+              "title": "ValidationError",
+              "type": "object"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "/industry/search": {
+    "get": {
+      "200": {
+        "properties": {
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "results": {
+            "items": {
+              "properties": {
+                "city": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "City"
+                },
+                "consulting_speaking_usd": {
+                  "title": "Consulting Speaking Usd",
+                  "type": "number"
+                },
+                "credentials": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Credentials"
+                },
+                "lat": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Lat"
+                },
+                "lng": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Lng"
+                },
+                "matched_consulting_speaking_usd": {
+                  "title": "Matched Consulting Speaking Usd",
+                  "type": "number"
+                },
+                "matched_nonfood_usd": {
+                  "title": "Matched Nonfood Usd",
+                  "type": "number"
+                },
+                "matched_payment_count": {
+                  "title": "Matched Payment Count",
+                  "type": "integer"
+                },
+                "matched_total_usd": {
+                  "title": "Matched Total Usd",
+                  "type": "number"
+                },
+                "n_manufacturers": {
+                  "title": "N Manufacturers",
+                  "type": "integer"
+                },
+                "name": {
+                  "title": "Name",
+                  "type": "string"
+                },
+                "nonfood_usd": {
+                  "title": "Nonfood Usd",
+                  "type": "number"
+                },
+                "npi": {
+                  "title": "Npi",
+                  "type": "string"
+                },
+                "payment_count": {
+                  "title": "Payment Count",
+                  "type": "integer"
+                },
+                "practice_name": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Practice Name"
+                },
+                "specialty": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Specialty"
+                },
+                "state": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "State"
+                },
+                "tier": {
+                  "title": "Tier",
+                  "type": "integer"
+                },
+                "tier_label": {
+                  "title": "Tier Label",
+                  "type": "string"
+                },
+                "top_manufacturer": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Top Manufacturer"
+                },
+                "top_product": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Top Product"
+                },
+                "total_usd": {
+                  "title": "Total Usd",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "npi",
+                "name",
+                "payment_count",
+                "total_usd",
+                "nonfood_usd",
+                "consulting_speaking_usd",
+                "matched_payment_count",
+                "matched_total_usd",
+                "matched_nonfood_usd",
+                "matched_consulting_speaking_usd",
+                "n_manufacturers",
+                "tier",
+                "tier_label"
+              ],
+              "title": "IndustrySearchResult",
+              "type": "object"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "offset",
+          "limit",
+          "results"
+        ],
+        "title": "IndustrySearchResponse",
+        "type": "object"
+      },
+      "422": {
+        "properties": {
+          "detail": {
+            "items": {
+              "properties": {
+                "loc": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "title": "Location",
+                  "type": "array"
+                },
+                "msg": {
+                  "title": "Message",
+                  "type": "string"
+                },
+                "type": {
+                  "title": "Error Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "loc",
+                "msg",
+                "type"
+              ],
+              "title": "ValidationError",
+              "type": "object"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "/industry/{npi}/detail": {
+    "get": {
+      "200": {
+        "properties": {
+          "by_nature": {
+            "items": {
+              "properties": {
+                "label": {
+                  "title": "Label",
+                  "type": "string"
+                },
+                "payment_count": {
+                  "title": "Payment Count",
+                  "type": "integer"
+                },
+                "total_usd": {
+                  "title": "Total Usd",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "label",
+                "payment_count",
+                "total_usd"
+              ],
+              "title": "IndustryBreakdownRow",
+              "type": "object"
+            },
+            "title": "By Nature",
+            "type": "array"
+          },
+          "consulting_speaking_usd": {
+            "title": "Consulting Speaking Usd",
+            "type": "number"
+          },
+          "manufacturers": {
+            "items": {
+              "properties": {
+                "manufacturer": {
+                  "title": "Manufacturer",
+                  "type": "string"
+                },
+                "payment_count": {
+                  "title": "Payment Count",
+                  "type": "integer"
+                },
+                "products": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Products",
+                  "type": "array"
+                },
+                "total_usd": {
+                  "title": "Total Usd",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "manufacturer",
+                "payment_count",
+                "total_usd",
+                "products"
+              ],
+              "title": "IndustryManufacturerDetail",
+              "type": "object"
+            },
+            "title": "Manufacturers",
+            "type": "array"
+          },
+          "nonfood_usd": {
+            "title": "Nonfood Usd",
+            "type": "number"
+          },
+          "npi": {
+            "title": "Npi",
+            "type": "string"
+          },
+          "payment_count": {
+            "title": "Payment Count",
+            "type": "integer"
+          },
+          "products": {
+            "items": {
+              "properties": {
+                "label": {
+                  "title": "Label",
+                  "type": "string"
+                },
+                "payment_count": {
+                  "title": "Payment Count",
+                  "type": "integer"
+                },
+                "total_usd": {
+                  "title": "Total Usd",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "label",
+                "payment_count",
+                "total_usd"
+              ],
+              "title": "IndustryBreakdownRow",
+              "type": "object"
+            },
+            "title": "Products",
+            "type": "array"
+          },
+          "total_usd": {
+            "title": "Total Usd",
+            "type": "number"
+          }
+        },
+        "required": [
+          "npi",
+          "payment_count",
+          "total_usd",
+          "nonfood_usd",
+          "consulting_speaking_usd",
+          "by_nature",
+          "manufacturers",
+          "products"
+        ],
+        "title": "IndustryRelationshipDetailResponse",
+        "type": "object"
+      },
+      "422": {
+        "properties": {
+          "detail": {
+            "items": {
+              "properties": {
+                "loc": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "title": "Location",
+                  "type": "array"
+                },
+                "msg": {
+                  "title": "Message",
+                  "type": "string"
+                },
+                "type": {
+                  "title": "Error Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "loc",
+                "msg",
+                "type"
+              ],
+              "title": "ValidationError",
+              "type": "object"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "/match/batch": {
+    "post": {
+      "200": {
+        "properties": {
+          "results": {
+            "items": {
+              "properties": {
+                "input_name": {
+                  "title": "Input Name",
+                  "type": "string"
+                },
+                "match_count": {
+                  "title": "Match Count",
+                  "type": "integer"
+                },
+                "matches": {
+                  "items": {
+                    "properties": {
+                      "city": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "City"
+                      },
+                      "confidence": {
+                        "title": "Confidence",
+                        "type": "number"
+                      },
+                      "first_name": {
+                        "title": "First Name",
+                        "type": "string"
+                      },
+                      "last_name": {
+                        "title": "Last Name",
+                        "type": "string"
+                      },
+                      "match_method": {
+                        "title": "Match Method",
+                        "type": "string"
+                      },
+                      "mips_score": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Mips Score"
+                      },
+                      "npi": {
+                        "title": "Npi",
+                        "type": "string"
+                      },
+                      "num_hospital_affiliations": {
+                        "anyOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Num Hospital Affiliations"
+                      },
+                      "open_payments_count": {
+                        "anyOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Open Payments Count"
+                      },
+                      "open_payments_total": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Open Payments Total"
+                      },
+                      "provider_type": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Provider Type"
+                      },
+                      "state": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "State"
+                      },
+                      "top_services": {
+                        "anyOf": [
+                          {
+                            "items": {
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Top Services"
+                      },
+                      "total_beneficiaries": {
+                        "anyOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Total Beneficiaries"
+                      },
+                      "total_medicare_payment": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Total Medicare Payment"
+                      },
+                      "total_services": {
+                        "anyOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Total Services"
+                      },
+                      "zip5": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Zip5"
+                      }
+                    },
+                    "required": [
+                      "npi",
+                      "first_name",
+                      "last_name",
+                      "confidence",
+                      "match_method"
+                    ],
+                    "title": "MatchResult",
+                    "type": "object"
+                  },
+                  "title": "Matches",
+                  "type": "array"
+                }
+              },
+              "required": [
+                "input_name",
+                "matches",
+                "match_count"
+              ],
+              "title": "MatchResponse",
+              "type": "object"
+            },
+            "title": "Results",
+            "type": "array"
+          }
+        },
+        "required": [
+          "results"
+        ],
+        "title": "BatchMatchResponse",
+        "type": "object"
+      },
+      "422": {
+        "properties": {
+          "detail": {
+            "items": {
+              "properties": {
+                "loc": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "title": "Location",
+                  "type": "array"
+                },
+                "msg": {
+                  "title": "Message",
+                  "type": "string"
+                },
+                "type": {
+                  "title": "Error Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "loc",
+                "msg",
+                "type"
+              ],
+              "title": "ValidationError",
+              "type": "object"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "/match/search": {
+    "get": {
+      "200": {},
+      "422": {
+        "properties": {
+          "detail": {
+            "items": {
+              "properties": {
+                "loc": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "title": "Location",
+                  "type": "array"
+                },
+                "msg": {
+                  "title": "Message",
+                  "type": "string"
+                },
+                "type": {
+                  "title": "Error Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "loc",
+                "msg",
+                "type"
+              ],
+              "title": "ValidationError",
+              "type": "object"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "/match/single": {
+    "post": {
+      "200": {
+        "properties": {
+          "input_name": {
+            "title": "Input Name",
+            "type": "string"
+          },
+          "match_count": {
+            "title": "Match Count",
+            "type": "integer"
+          },
+          "matches": {
+            "items": {
+              "properties": {
+                "city": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "City"
+                },
+                "confidence": {
+                  "title": "Confidence",
+                  "type": "number"
+                },
+                "first_name": {
+                  "title": "First Name",
+                  "type": "string"
+                },
+                "last_name": {
+                  "title": "Last Name",
+                  "type": "string"
+                },
+                "match_method": {
+                  "title": "Match Method",
+                  "type": "string"
+                },
+                "mips_score": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Mips Score"
+                },
+                "npi": {
+                  "title": "Npi",
+                  "type": "string"
+                },
+                "num_hospital_affiliations": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Num Hospital Affiliations"
+                },
+                "open_payments_count": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Open Payments Count"
+                },
+                "open_payments_total": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Open Payments Total"
+                },
+                "provider_type": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Provider Type"
+                },
+                "state": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "State"
+                },
+                "top_services": {
+                  "anyOf": [
+                    {
+                      "items": {
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Top Services"
+                },
+                "total_beneficiaries": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Total Beneficiaries"
+                },
+                "total_medicare_payment": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Total Medicare Payment"
+                },
+                "total_services": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Total Services"
+                },
+                "zip5": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Zip5"
+                }
+              },
+              "required": [
+                "npi",
+                "first_name",
+                "last_name",
+                "confidence",
+                "match_method"
+              ],
+              "title": "MatchResult",
+              "type": "object"
+            },
+            "title": "Matches",
+            "type": "array"
+          }
+        },
+        "required": [
+          "input_name",
+          "matches",
+          "match_count"
+        ],
+        "title": "MatchResponse",
+        "type": "object"
+      },
+      "422": {
+        "properties": {
+          "detail": {
+            "items": {
+              "properties": {
+                "loc": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "title": "Location",
+                  "type": "array"
+                },
+                "msg": {
+                  "title": "Message",
+                  "type": "string"
+                },
+                "type": {
+                  "title": "Error Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "loc",
+                "msg",
+                "type"
+              ],
+              "title": "ValidationError",
+              "type": "object"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "/operations/lineage": {
+    "get": {
+      "200": {}
+    }
+  },
+  "/operations/overview": {
+    "get": {
+      "200": {}
+    }
+  },
+  "/operations/runs": {
+    "get": {
+      "200": {},
+      "422": {
+        "properties": {
+          "detail": {
+            "items": {
+              "properties": {
+                "loc": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "title": "Location",
+                  "type": "array"
+                },
+                "msg": {
+                  "title": "Message",
+                  "type": "string"
+                },
+                "type": {
+                  "title": "Error Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "loc",
+                "msg",
+                "type"
+              ],
+              "title": "ValidationError",
+              "type": "object"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "/operations/sources": {
+    "get": {
+      "200": {}
+    }
+  },
+  "/practices/capabilities": {
+    "get": {
+      "200": {}
+    }
+  },
+  "/practices/market-snapshot": {
+    "get": {
+      "200": {
+        "properties": {
+          "anchor_org_pac_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor Org Pac Id"
+          },
+          "contract_version": {
+            "default": 1,
+            "title": "Contract Version",
+            "type": "integer"
+          },
+          "independent": {
+            "anyOf": [
+              {
+                "description": "Rollup of matched clinicians with no org_pac_id (independent/solo).",
+                "properties": {
+                  "open_payments_total": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "title": "Open Payments Total"
+                  },
+                  "partb_payments": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "title": "Partb Payments"
+                  },
+                  "partd_drug_cost": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "title": "Partd Drug Cost"
+                  },
+                  "provider_count": {
+                    "title": "Provider Count",
+                    "type": "integer"
+                  },
+                  "site_count": {
+                    "title": "Site Count",
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "provider_count",
+                  "site_count"
+                ],
+                "title": "SnapshotIndependent",
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "location": {
+            "title": "Location",
+            "type": "string"
+          },
+          "location_basis": {
+            "const": "cms_enrollment",
+            "default": "cms_enrollment",
+            "title": "Location Basis",
+            "type": "string"
+          },
+          "matched_patterns": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Matched Patterns",
+            "type": "array"
+          },
+          "metric_scope": {
+            "const": "national_npi_totals",
+            "default": "national_npi_totals",
+            "title": "Metric Scope",
+            "type": "string"
+          },
+          "organizations": {
+            "items": {
+              "properties": {
+                "group_size_national": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Group Size National"
+                },
+                "name": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Name"
+                },
+                "open_payments_total": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Open Payments Total"
+                },
+                "org_pac_id": {
+                  "title": "Org Pac Id",
+                  "type": "string"
+                },
+                "partb_payments": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Partb Payments"
+                },
+                "partd_drug_cost": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Partd Drug Cost"
+                },
+                "provider_count": {
+                  "title": "Provider Count",
+                  "type": "integer"
+                },
+                "site_count": {
+                  "title": "Site Count",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "org_pac_id",
+                "provider_count",
+                "site_count"
+              ],
+              "title": "SnapshotOrganization",
+              "type": "object"
+            },
+            "title": "Organizations",
+            "type": "array"
+          },
+          "population_scope": {
+            "const": "selected_specialties",
+            "default": "selected_specialties",
+            "title": "Population Scope",
+            "type": "string"
+          },
+          "providers": {
+            "items": {
+              "properties": {
+                "credentials": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Credentials"
+                },
+                "door_count": {
+                  "default": 0,
+                  "title": "Door Count",
+                  "type": "integer"
+                },
+                "first_name": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "First Name"
+                },
+                "has_nppes_primary_door": {
+                  "default": false,
+                  "title": "Has Nppes Primary Door",
+                  "type": "boolean"
+                },
+                "last_name": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Last Name"
+                },
+                "npi": {
+                  "title": "Npi",
+                  "type": "string"
+                },
+                "open_payments_total": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Open Payments Total"
+                },
+                "org_pac_ids": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Org Pac Ids",
+                  "type": "array"
+                },
+                "partb_beneficiaries": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Partb Beneficiaries"
+                },
+                "partb_payments": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Partb Payments"
+                },
+                "partb_services": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Partb Services"
+                },
+                "partd_drug_cost": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Partd Drug Cost"
+                },
+                "site_ids": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Site Ids",
+                  "type": "array"
+                },
+                "specialty": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Specialty"
+                }
+              },
+              "required": [
+                "npi"
+              ],
+              "title": "SnapshotProvider",
+              "type": "object"
+            },
+            "title": "Providers",
+            "type": "array"
+          },
+          "requested_specialties": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Requested Specialties",
+            "type": "array"
+          },
+          "sites": {
+            "items": {
+              "properties": {
+                "address": {
+                  "title": "Address",
+                  "type": "string"
+                },
+                "billing_artifact": {
+                  "default": false,
+                  "title": "Billing Artifact",
+                  "type": "boolean"
+                },
+                "city": {
+                  "title": "City",
+                  "type": "string"
+                },
+                "distance_miles": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Distance Miles"
+                },
+                "group_size_national": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Group Size National"
+                },
+                "lat": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Lat"
+                },
+                "lng": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Lng"
+                },
+                "org_pac_id": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Org Pac Id"
+                },
+                "partb_payments": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Partb Payments"
+                },
+                "partd_drug_cost": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Partd Drug Cost"
+                },
+                "phone": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Phone"
+                },
+                "practice_name": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Practice Name"
+                },
+                "providers_here": {
+                  "title": "Providers Here",
+                  "type": "integer"
+                },
+                "site_classification": {
+                  "enum": [
+                    "solo",
+                    "shared_unaffiliated",
+                    "organization_context"
+                  ],
+                  "title": "Site Classification",
+                  "type": "string"
+                },
+                "site_id": {
+                  "title": "Site Id",
+                  "type": "string"
+                },
+                "solo_provider_name": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Solo Provider Name"
+                },
+                "state": {
+                  "title": "State",
+                  "type": "string"
+                },
+                "zip5": {
+                  "title": "Zip5",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "site_id",
+                "address",
+                "city",
+                "state",
+                "zip5",
+                "providers_here",
+                "site_classification"
+              ],
+              "title": "SnapshotSite",
+              "type": "object"
+            },
+            "title": "Sites",
+            "type": "array"
+          },
+          "totals": {
+            "properties": {
+              "organizations": {
+                "title": "Organizations",
+                "type": "integer"
+              },
+              "partb_payments": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Partb Payments"
+              },
+              "partd_drug_cost": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Partd Drug Cost"
+              },
+              "providers": {
+                "title": "Providers",
+                "type": "integer"
+              },
+              "sites": {
+                "title": "Sites",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "organizations",
+              "sites",
+              "providers"
+            ],
+            "title": "SnapshotTotals",
+            "type": "object"
+          }
+        },
+        "required": [
+          "requested_specialties",
+          "matched_patterns",
+          "location",
+          "totals",
+          "organizations",
+          "sites",
+          "providers"
+        ],
+        "title": "MarketSnapshotResponse",
+        "type": "object"
+      },
+      "422": {
+        "properties": {
+          "detail": {
+            "items": {
+              "properties": {
+                "loc": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "title": "Location",
+                  "type": "array"
+                },
+                "msg": {
+                  "title": "Message",
+                  "type": "string"
+                },
+                "type": {
+                  "title": "Error Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "loc",
+                "msg",
+                "type"
+              ],
+              "title": "ValidationError",
+              "type": "object"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "/practices/organizations": {
+    "get": {
+      "200": {
+        "properties": {
+          "query": {
+            "title": "Query",
+            "type": "string"
+          },
+          "results": {
+            "items": {
+              "properties": {
+                "group_size_national": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Group Size National"
+                },
+                "name": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Name"
+                },
+                "org_pac_id": {
+                  "title": "Org Pac Id",
+                  "type": "string"
+                },
+                "provider_count": {
+                  "title": "Provider Count",
+                  "type": "integer"
+                },
+                "site_count": {
+                  "title": "Site Count",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "org_pac_id",
+                "provider_count",
+                "site_count"
+              ],
+              "title": "OrganizationSearchResult",
+              "type": "object"
+            },
+            "title": "Results",
+            "type": "array"
+          }
+        },
+        "required": [
+          "query",
+          "results"
+        ],
+        "title": "OrganizationSearchResponse",
+        "type": "object"
+      },
+      "422": {
+        "properties": {
+          "detail": {
+            "items": {
+              "properties": {
+                "loc": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "title": "Location",
+                  "type": "array"
+                },
+                "msg": {
+                  "title": "Message",
+                  "type": "string"
+                },
+                "type": {
+                  "title": "Error Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "loc",
+                "msg",
+                "type"
+              ],
+              "title": "ValidationError",
+              "type": "object"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "/practices/providers": {
+    "get": {
+      "200": {
+        "properties": {
+          "contract_version": {
+            "default": 2,
+            "title": "Contract Version",
+            "type": "integer"
+          },
+          "location_basis": {
+            "default": "cms_enrollment",
+            "enum": [
+              "cms_enrollment",
+              "nppes_primary"
+            ],
+            "title": "Location Basis",
+            "type": "string"
+          },
+          "metric_scope": {
+            "const": "national_npi_totals",
+            "default": "national_npi_totals",
+            "title": "Metric Scope",
+            "type": "string"
+          },
+          "org_pac_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Org Pac Id"
+          },
+          "population_scope": {
+            "enum": [
+              "selected_specialties",
+              "all_specialties"
+            ],
+            "title": "Population Scope",
+            "type": "string"
+          },
+          "practice_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Practice Name"
+          },
+          "providers": {
+            "items": {
+              "properties": {
+                "credentials": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Credentials"
+                },
+                "first_name": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "First Name"
+                },
+                "last_name": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Last Name"
+                },
+                "medicare_beneficiaries": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Medicare Beneficiaries"
+                },
+                "medicare_payments": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Medicare Payments"
+                },
+                "medicare_services": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Medicare Services"
+                },
+                "npi": {
+                  "title": "Npi",
+                  "type": "string"
+                },
+                "open_payments_total": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Open Payments Total"
+                },
+                "organization_contexts": {
+                  "items": {
+                    "description": "A non-additive CMS enrollment context attached to an NPPES site.",
+                    "properties": {
+                      "affiliated_provider_count": {
+                        "title": "Affiliated Provider Count",
+                        "type": "integer"
+                      },
+                      "group_size_national": {
+                        "anyOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Group Size National"
+                      },
+                      "org_pac_id": {
+                        "title": "Org Pac Id",
+                        "type": "string"
+                      },
+                      "practice_name": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Practice Name"
+                      },
+                      "primary_address_match_count": {
+                        "title": "Primary Address Match Count",
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "org_pac_id",
+                      "affiliated_provider_count",
+                      "primary_address_match_count"
+                    ],
+                    "title": "OrganizationContext",
+                    "type": "object"
+                  },
+                  "title": "Organization Contexts",
+                  "type": "array"
+                },
+                "phone": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Phone"
+                },
+                "specialty": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Specialty"
+                }
+              },
+              "required": [
+                "npi"
+              ],
+              "title": "ProviderResult",
+              "type": "object"
+            },
+            "title": "Providers",
+            "type": "array"
+          },
+          "requested_specialties": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Requested Specialties",
+            "type": "array"
+          },
+          "returned_count": {
+            "title": "Returned Count",
+            "type": "integer"
+          },
+          "roster_npi_count": {
+            "title": "Roster Npi Count",
+            "type": "integer"
+          },
+          "site_id": {
+            "title": "Site Id",
+            "type": "string"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "site_id",
+          "population_scope",
+          "total",
+          "roster_npi_count",
+          "returned_count",
+          "truncated",
+          "providers"
+        ],
+        "title": "ProviderRosterResponse",
+        "type": "object"
+      },
+      "422": {
+        "properties": {
+          "detail": {
+            "items": {
+              "properties": {
+                "loc": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "title": "Location",
+                  "type": "array"
+                },
+                "msg": {
+                  "title": "Message",
+                  "type": "string"
+                },
+                "type": {
+                  "title": "Error Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "loc",
+                "msg",
+                "type"
+              ],
+              "title": "ValidationError",
+              "type": "object"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "/practices/search": {
+    "get": {
+      "200": {
+        "properties": {
+          "contract_version": {
+            "default": 2,
+            "title": "Contract Version",
+            "type": "integer"
+          },
+          "location": {
+            "title": "Location",
+            "type": "string"
+          },
+          "location_basis": {
+            "default": "cms_enrollment",
+            "enum": [
+              "cms_enrollment",
+              "nppes_primary"
+            ],
+            "title": "Location Basis",
+            "type": "string"
+          },
+          "matched_patterns": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Matched Patterns",
+            "type": "array"
+          },
+          "metric_scope": {
+            "const": "national_npi_totals",
+            "default": "national_npi_totals",
+            "title": "Metric Scope",
+            "type": "string"
+          },
+          "population_scope": {
+            "const": "selected_specialties",
+            "default": "selected_specialties",
+            "title": "Population Scope",
+            "type": "string"
+          },
+          "requested_specialties": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Requested Specialties",
+            "type": "array"
+          },
+          "results": {
+            "items": {
+              "properties": {
+                "address": {
+                  "title": "Address",
+                  "type": "string"
+                },
+                "billing_artifact": {
+                  "default": false,
+                  "title": "Billing Artifact",
+                  "type": "boolean"
+                },
+                "city": {
+                  "title": "City",
+                  "type": "string"
+                },
+                "contract_version": {
+                  "default": 2,
+                  "title": "Contract Version",
+                  "type": "integer"
+                },
+                "distance_miles": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Distance Miles"
+                },
+                "group_size_national": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Group Size National"
+                },
+                "lat": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Lat"
+                },
+                "lng": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Lng"
+                },
+                "location_basis": {
+                  "default": "cms_enrollment",
+                  "enum": [
+                    "cms_enrollment",
+                    "nppes_primary"
+                  ],
+                  "title": "Location Basis",
+                  "type": "string"
+                },
+                "metric_scope": {
+                  "const": "national_npi_totals",
+                  "default": "national_npi_totals",
+                  "title": "Metric Scope",
+                  "type": "string"
+                },
+                "org_pac_id": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Org Pac Id"
+                },
+                "organization_contexts": {
+                  "items": {
+                    "description": "A non-additive CMS enrollment context attached to an NPPES site.",
+                    "properties": {
+                      "affiliated_provider_count": {
+                        "title": "Affiliated Provider Count",
+                        "type": "integer"
+                      },
+                      "group_size_national": {
+                        "anyOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Group Size National"
+                      },
+                      "org_pac_id": {
+                        "title": "Org Pac Id",
+                        "type": "string"
+                      },
+                      "practice_name": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Practice Name"
+                      },
+                      "primary_address_match_count": {
+                        "title": "Primary Address Match Count",
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "org_pac_id",
+                      "affiliated_provider_count",
+                      "primary_address_match_count"
+                    ],
+                    "title": "OrganizationContext",
+                    "type": "object"
+                  },
+                  "title": "Organization Contexts",
+                  "type": "array"
+                },
+                "organization_scope": {
+                  "enum": [
+                    "cms_address_pac",
+                    "nppes_primary_address"
+                  ],
+                  "title": "Organization Scope",
+                  "type": "string"
+                },
+                "partb_payments": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Partb Payments"
+                },
+                "partd_drug_cost": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Partd Drug Cost"
+                },
+                "phone": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Phone"
+                },
+                "population_scope": {
+                  "default": "selected_specialties",
+                  "enum": [
+                    "selected_specialties",
+                    "all_specialties"
+                  ],
+                  "title": "Population Scope",
+                  "type": "string"
+                },
+                "practice_name": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Practice Name"
+                },
+                "providers_here": {
+                  "title": "Providers Here",
+                  "type": "integer"
+                },
+                "requested_specialties": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Requested Specialties",
+                  "type": "array"
+                },
+                "roster_npi_count": {
+                  "title": "Roster Npi Count",
+                  "type": "integer"
+                },
+                "site_classification": {
+                  "enum": [
+                    "solo",
+                    "shared_unaffiliated",
+                    "organization_context"
+                  ],
+                  "title": "Site Classification",
+                  "type": "string"
+                },
+                "site_id": {
+                  "title": "Site Id",
+                  "type": "string"
+                },
+                "solo_provider_name": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Solo Provider Name"
+                },
+                "specialties": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Specialties",
+                  "type": "array"
+                },
+                "state": {
+                  "title": "State",
+                  "type": "string"
+                },
+                "unaffiliated_provider_count": {
+                  "default": 0,
+                  "title": "Unaffiliated Provider Count",
+                  "type": "integer"
+                },
+                "zip5": {
+                  "title": "Zip5",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "site_id",
+                "organization_scope",
+                "site_classification",
+                "roster_npi_count",
+                "address",
+                "city",
+                "state",
+                "zip5",
+                "providers_here"
+              ],
+              "title": "PracticeResult",
+              "type": "object"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "returned_count": {
+            "title": "Returned Count",
+            "type": "integer"
+          },
+          "specialty": {
+            "title": "Specialty",
+            "type": "string"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "specialty",
+          "requested_specialties",
+          "matched_patterns",
+          "location",
+          "total",
+          "returned_count",
+          "truncated",
+          "results"
+        ],
+        "title": "PracticeSearchResponse",
+        "type": "object"
+      },
+      "422": {
+        "properties": {
+          "detail": {
+            "items": {
+              "properties": {
+                "loc": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "title": "Location",
+                  "type": "array"
+                },
+                "msg": {
+                  "title": "Message",
+                  "type": "string"
+                },
+                "type": {
+                  "title": "Error Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "loc",
+                "msg",
+                "type"
+              ],
+              "title": "ValidationError",
+              "type": "object"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "/practices/site-profile": {
+    "get": {
+      "200": {
+        "description": "Medicare deep-dive rollup for one practice site (address \u00d7 group).\n\nAll figures are national per-NPI CMS totals summed over the site's roster \u2014\nroster billing power, not door-level billing (CMS publishes no site grain).\nPart D by-drug rows under 11 claims are suppressed upstream, so top-drug\nfigures are a floor.",
+        "properties": {
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
+          "contract_version": {
+            "default": 2,
+            "title": "Contract Version",
+            "type": "integer"
+          },
+          "location_basis": {
+            "default": "cms_enrollment",
+            "enum": [
+              "cms_enrollment",
+              "nppes_primary"
+            ],
+            "title": "Location Basis",
+            "type": "string"
+          },
+          "metric_scope": {
+            "const": "national_npi_totals",
+            "default": "national_npi_totals",
+            "title": "Metric Scope",
+            "type": "string"
+          },
+          "open_payments_count": {
+            "default": 0,
+            "title": "Open Payments Count",
+            "type": "integer"
+          },
+          "open_payments_recipients": {
+            "default": 0,
+            "title": "Open Payments Recipients",
+            "type": "integer"
+          },
+          "open_payments_total": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Open Payments Total"
+          },
+          "org_pac_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Org Pac Id"
+          },
+          "organization_contexts": {
+            "items": {
+              "description": "A non-additive CMS enrollment context attached to an NPPES site.",
+              "properties": {
+                "affiliated_provider_count": {
+                  "title": "Affiliated Provider Count",
+                  "type": "integer"
+                },
+                "group_size_national": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Group Size National"
+                },
+                "org_pac_id": {
+                  "title": "Org Pac Id",
+                  "type": "string"
+                },
+                "practice_name": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Practice Name"
+                },
+                "primary_address_match_count": {
+                  "title": "Primary Address Match Count",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "org_pac_id",
+                "affiliated_provider_count",
+                "primary_address_match_count"
+              ],
+              "title": "OrganizationContext",
+              "type": "object"
+            },
+            "title": "Organization Contexts",
+            "type": "array"
+          },
+          "organization_scope": {
+            "enum": [
+              "cms_address_pac",
+              "nppes_primary_address"
+            ],
+            "title": "Organization Scope",
+            "type": "string"
+          },
+          "partb_beneficiaries": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partb Beneficiaries"
+          },
+          "partb_payments": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partb Payments"
+          },
+          "partb_services": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partb Services"
+          },
+          "partd_claims": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partd Claims"
+          },
+          "partd_drug_cost": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partd Drug Cost"
+          },
+          "population_scope": {
+            "enum": [
+              "selected_specialties",
+              "all_specialties"
+            ],
+            "title": "Population Scope",
+            "type": "string"
+          },
+          "practice_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Practice Name"
+          },
+          "requested_specialties": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Requested Specialties",
+            "type": "array"
+          },
+          "roster_npi_count": {
+            "default": 0,
+            "title": "Roster Npi Count",
+            "type": "integer"
+          },
+          "roster_size": {
+            "default": 0,
+            "title": "Roster Size",
+            "type": "integer"
+          },
+          "site_classification": {
+            "enum": [
+              "solo",
+              "shared_unaffiliated",
+              "organization_context"
+            ],
+            "title": "Site Classification",
+            "type": "string"
+          },
+          "site_id": {
+            "title": "Site Id",
+            "type": "string"
+          },
+          "top_drugs": {
+            "items": {
+              "properties": {
+                "brand": {
+                  "title": "Brand",
+                  "type": "string"
+                },
+                "claims": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Claims"
+                },
+                "drug_cost": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Drug Cost"
+                },
+                "generic": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Generic"
+                }
+              },
+              "required": [
+                "brand"
+              ],
+              "title": "DrugRollup",
+              "type": "object"
+            },
+            "title": "Top Drugs",
+            "type": "array"
+          },
+          "top_manufacturers": {
+            "items": {
+              "properties": {
+                "name": {
+                  "title": "Name",
+                  "type": "string"
+                },
+                "total": {
+                  "title": "Total",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "name",
+                "total"
+              ],
+              "title": "ManufacturerRollup",
+              "type": "object"
+            },
+            "title": "Top Manufacturers",
+            "type": "array"
+          },
+          "top_procedures": {
+            "items": {
+              "properties": {
+                "beneficiaries": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Beneficiaries"
+                },
+                "description": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Description"
+                },
+                "est_payments": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Est Payments"
+                },
+                "hcpcs": {
+                  "title": "Hcpcs",
+                  "type": "string"
+                },
+                "services": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Services"
+                }
+              },
+              "required": [
+                "hcpcs"
+              ],
+              "title": "ProcedureRollup",
+              "type": "object"
+            },
+            "title": "Top Procedures",
+            "type": "array"
+          },
+          "unaffiliated_provider_count": {
+            "default": 0,
+            "title": "Unaffiliated Provider Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "site_id",
+          "population_scope",
+          "organization_scope",
+          "site_classification"
+        ],
+        "title": "SiteProfileResponse",
+        "type": "object"
+      },
+      "422": {
+        "properties": {
+          "detail": {
+            "items": {
+              "properties": {
+                "loc": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "title": "Location",
+                  "type": "array"
+                },
+                "msg": {
+                  "title": "Message",
+                  "type": "string"
+                },
+                "type": {
+                  "title": "Error Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "loc",
+                "msg",
+                "type"
+              ],
+              "title": "ValidationError",
+              "type": "object"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "/practices/specialties": {
+    "get": {
+      "200": {
+        "properties": {
+          "specialties": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Specialties",
+            "type": "array"
+          }
+        },
+        "required": [
+          "specialties"
+        ],
+        "title": "SpecialtyListResponse",
+        "type": "object"
+      }
+    }
+  },
+  "/profiles/exemplars": {
+    "get": {
+      "200": {}
+    }
+  },
+  "/profiles/search": {
+    "get": {
+      "200": {
+        "items": {
+          "properties": {
+            "city": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "City"
+            },
+            "credentials": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Credentials"
+            },
+            "group_name": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Group Name"
+            },
+            "match_score": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Match Score"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "npi": {
+              "title": "Npi",
+              "type": "string"
+            },
+            "source": {
+              "default": "nppes",
+              "title": "Source",
+              "type": "string"
+            },
+            "specialty": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Specialty"
+            },
+            "state": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          },
+          "required": [
+            "npi",
+            "name"
+          ],
+          "title": "SearchHit",
+          "type": "object"
+        },
+        "title": "Response Search Profiles Search Get",
+        "type": "array"
+      },
+      "422": {
+        "properties": {
+          "detail": {
+            "items": {
+              "properties": {
+                "loc": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "title": "Location",
+                  "type": "array"
+                },
+                "msg": {
+                  "title": "Message",
+                  "type": "string"
+                },
+                "type": {
+                  "title": "Error Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "loc",
+                "msg",
+                "type"
+              ],
+              "title": "ValidationError",
+              "type": "object"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "/profiles/{npi}": {
+    "get": {
+      "200": {},
+      "422": {
+        "properties": {
+          "detail": {
+            "items": {
+              "properties": {
+                "loc": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "title": "Location",
+                  "type": "array"
+                },
+                "msg": {
+                  "title": "Message",
+                  "type": "string"
+                },
+                "type": {
+                  "title": "Error Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "loc",
+                "msg",
+                "type"
+              ],
+              "title": "ValidationError",
+              "type": "object"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "/query": {
+    "post": {
+      "200": {
+        "properties": {
+          "columns": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Columns",
+            "type": "array"
+          },
+          "elapsed_ms": {
+            "title": "Elapsed Ms",
+            "type": "number"
+          },
+          "row_count": {
+            "title": "Row Count",
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "items": {},
+              "type": "array"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "columns",
+          "rows",
+          "row_count",
+          "truncated",
+          "elapsed_ms"
+        ],
+        "title": "QueryResponse",
+        "type": "object"
+      },
+      "422": {
+        "properties": {
+          "detail": {
+            "items": {
+              "properties": {
+                "loc": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "title": "Location",
+                  "type": "array"
+                },
+                "msg": {
+                  "title": "Message",
+                  "type": "string"
+                },
+                "type": {
+                  "title": "Error Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "loc",
+                "msg",
+                "type"
+              ],
+              "title": "ValidationError",
+              "type": "object"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "/radar/providers": {
+    "get": {
+      "200": {
+        "properties": {
+          "events": {
+            "items": {
+              "properties": {
+                "credentials": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Credentials"
+                },
+                "deactivation_date": {
+                  "anyOf": [
+                    {
+                      "format": "date",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Deactivation Date"
+                },
+                "detected_at": {
+                  "title": "Detected At",
+                  "type": "string"
+                },
+                "effective_date": {
+                  "format": "date",
+                  "title": "Effective Date",
+                  "type": "string"
+                },
+                "enumeration_date": {
+                  "anyOf": [
+                    {
+                      "format": "date",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Enumeration Date"
+                },
+                "event_id": {
+                  "title": "Event Id",
+                  "type": "string"
+                },
+                "event_type": {
+                  "enum": [
+                    "newly_enumerated",
+                    "practice_location_changed",
+                    "primary_taxonomy_changed",
+                    "reactivated",
+                    "deactivated"
+                  ],
+                  "title": "Event Type",
+                  "type": "string"
+                },
+                "first_name": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "First Name"
+                },
+                "last_name": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Last Name"
+                },
+                "new_primary_taxonomy_code": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "New Primary Taxonomy Code"
+                },
+                "new_zip5": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "New Zip5"
+                },
+                "npi": {
+                  "title": "Npi",
+                  "type": "string"
+                },
+                "old_primary_taxonomy_code": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Old Primary Taxonomy Code"
+                },
+                "old_zip5": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Old Zip5"
+                },
+                "practice_address_1": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Practice Address 1"
+                },
+                "practice_address_2": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Practice Address 2"
+                },
+                "practice_city": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Practice City"
+                },
+                "practice_phone": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Practice Phone"
+                },
+                "practice_state": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Practice State"
+                },
+                "practice_zip5": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Practice Zip5"
+                },
+                "primary_taxonomy_code": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Primary Taxonomy Code"
+                },
+                "reactivation_date": {
+                  "anyOf": [
+                    {
+                      "format": "date",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Reactivation Date"
+                },
+                "reason": {
+                  "title": "Reason",
+                  "type": "string"
+                },
+                "source_data_period": {
+                  "title": "Source Data Period",
+                  "type": "string"
+                },
+                "source_last_updated_date": {
+                  "anyOf": [
+                    {
+                      "format": "date",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Source Last Updated Date"
+                },
+                "source_release_id": {
+                  "title": "Source Release Id",
+                  "type": "string"
+                },
+                "taxonomy_codes": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Taxonomy Codes",
+                  "type": "array"
+                }
+              },
+              "required": [
+                "event_id",
+                "event_type",
+                "effective_date",
+                "detected_at",
+                "source_release_id",
+                "source_data_period",
+                "npi",
+                "reason"
+              ],
+              "title": "RadarProviderEvent",
+              "type": "object"
+            },
+            "title": "Events",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "source_fresh_through": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Fresh Through"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "offset",
+          "limit",
+          "events"
+        ],
+        "title": "RadarProviderEventResponse",
+        "type": "object"
+      },
+      "422": {
+        "properties": {
+          "detail": {
+            "items": {
+              "properties": {
+                "loc": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "title": "Location",
+                  "type": "array"
+                },
+                "msg": {
+                  "title": "Message",
+                  "type": "string"
+                },
+                "type": {
+                  "title": "Error Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "loc",
+                "msg",
+                "type"
+              ],
+              "title": "ValidationError",
+              "type": "object"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "/release": {
+    "get": {
+      "200": {
+        "description": "The `GET /release` payload.\n\nDeclared as a model so the response shape is published in the OpenAPI\ndocument and covered by the `representation_version` snapshot; a payload\nchange here is then a test failure rather than a silent cache hazard.",
+        "properties": {
+          "build": {
+            "description": "Provenance of the warehouse this process serves.",
+            "properties": {
+              "checksum": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Checksum"
+              },
+              "pipeline_ref": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Pipeline Ref"
+              },
+              "warehouse_release_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Warehouse Release Id"
+              }
+            },
+            "title": "ReleaseBuild",
+            "type": "object"
+          },
+          "compatibility": {
+            "title": "Compatibility",
+            "type": "string"
+          },
+          "promoted_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Promoted At"
+          },
+          "release_id": {
+            "title": "Release Id",
+            "type": "string"
+          },
+          "representation_version": {
+            "title": "Representation Version",
+            "type": "integer"
+          },
+          "source_vintages": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Source Vintages",
+            "type": "object"
+          },
+          "verified_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified At"
+          }
+        },
+        "required": [
+          "release_id",
+          "representation_version",
+          "build",
+          "compatibility"
+        ],
+        "title": "ReleaseManifest",
+        "type": "object"
+      }
+    }
+  },
+  "/research/investigators": {
+    "post": {
+      "200": {},
+      "422": {
+        "properties": {
+          "detail": {
+            "items": {
+              "properties": {
+                "loc": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "title": "Location",
+                  "type": "array"
+                },
+                "msg": {
+                  "title": "Message",
+                  "type": "string"
+                },
+                "type": {
+                  "title": "Error Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "loc",
+                "msg",
+                "type"
+              ],
+              "title": "ValidationError",
+              "type": "object"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "/search/places": {
+    "get": {
+      "200": {
+        "properties": {
+          "location": {
+            "title": "Location",
+            "type": "string"
+          },
+          "matched_count": {
+            "title": "Matched Count",
+            "type": "integer"
+          },
+          "query": {
+            "title": "Query",
+            "type": "string"
+          },
+          "results": {
+            "items": {
+              "description": "A Places result enriched with CMS data.",
+              "properties": {
+                "cms_match": {
+                  "anyOf": [
+                    {
+                      "description": "CMS match for a place result.",
+                      "properties": {
+                        "confidence": {
+                          "title": "Confidence",
+                          "type": "number"
+                        },
+                        "first_name": {
+                          "title": "First Name",
+                          "type": "string"
+                        },
+                        "last_name": {
+                          "title": "Last Name",
+                          "type": "string"
+                        },
+                        "llm_reasoning": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "title": "Llm Reasoning"
+                        },
+                        "match_method": {
+                          "title": "Match Method",
+                          "type": "string"
+                        },
+                        "mips_score": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "title": "Mips Score"
+                        },
+                        "npi": {
+                          "title": "Npi",
+                          "type": "string"
+                        },
+                        "num_hospital_affiliations": {
+                          "anyOf": [
+                            {
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "title": "Num Hospital Affiliations"
+                        },
+                        "open_payments_count": {
+                          "anyOf": [
+                            {
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "title": "Open Payments Count"
+                        },
+                        "open_payments_total": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "title": "Open Payments Total"
+                        },
+                        "provider_type": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "title": "Provider Type"
+                        },
+                        "top_services": {
+                          "anyOf": [
+                            {
+                              "items": {
+                                "type": "object"
+                              },
+                              "type": "array"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "title": "Top Services"
+                        },
+                        "total_beneficiaries": {
+                          "anyOf": [
+                            {
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "title": "Total Beneficiaries"
+                        },
+                        "total_medicare_payment": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "title": "Total Medicare Payment"
+                        },
+                        "total_services": {
+                          "anyOf": [
+                            {
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "title": "Total Services"
+                        }
+                      },
+                      "required": [
+                        "npi",
+                        "first_name",
+                        "last_name",
+                        "confidence",
+                        "match_method"
+                      ],
+                      "title": "CMSMatch",
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "match_type": {
+                  "title": "Match Type",
+                  "type": "string"
+                },
+                "place": {
+                  "description": "A single Google Places result.",
+                  "properties": {
+                    "address": {
+                      "title": "Address",
+                      "type": "string"
+                    },
+                    "lat": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Lat"
+                    },
+                    "lng": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Lng"
+                    },
+                    "name": {
+                      "title": "Name",
+                      "type": "string"
+                    },
+                    "place_id": {
+                      "title": "Place Id",
+                      "type": "string"
+                    },
+                    "rating": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Rating"
+                    },
+                    "reviews_count": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "title": "Reviews Count"
+                    },
+                    "types": {
+                      "default": [],
+                      "items": {
+                        "type": "string"
+                      },
+                      "title": "Types",
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "place_id",
+                    "name",
+                    "address"
+                  ],
+                  "title": "PlaceResult",
+                  "type": "object"
+                },
+                "provider_roster": {
+                  "anyOf": [
+                    {
+                      "items": {
+                        "description": "CMS match for a place result.",
+                        "properties": {
+                          "confidence": {
+                            "title": "Confidence",
+                            "type": "number"
+                          },
+                          "first_name": {
+                            "title": "First Name",
+                            "type": "string"
+                          },
+                          "last_name": {
+                            "title": "Last Name",
+                            "type": "string"
+                          },
+                          "llm_reasoning": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "title": "Llm Reasoning"
+                          },
+                          "match_method": {
+                            "title": "Match Method",
+                            "type": "string"
+                          },
+                          "mips_score": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "title": "Mips Score"
+                          },
+                          "npi": {
+                            "title": "Npi",
+                            "type": "string"
+                          },
+                          "num_hospital_affiliations": {
+                            "anyOf": [
+                              {
+                                "type": "integer"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "title": "Num Hospital Affiliations"
+                          },
+                          "open_payments_count": {
+                            "anyOf": [
+                              {
+                                "type": "integer"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "title": "Open Payments Count"
+                          },
+                          "open_payments_total": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "title": "Open Payments Total"
+                          },
+                          "provider_type": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "title": "Provider Type"
+                          },
+                          "top_services": {
+                            "anyOf": [
+                              {
+                                "items": {
+                                  "type": "object"
+                                },
+                                "type": "array"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "title": "Top Services"
+                          },
+                          "total_beneficiaries": {
+                            "anyOf": [
+                              {
+                                "type": "integer"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "title": "Total Beneficiaries"
+                          },
+                          "total_medicare_payment": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "title": "Total Medicare Payment"
+                          },
+                          "total_services": {
+                            "anyOf": [
+                              {
+                                "type": "integer"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "title": "Total Services"
+                          }
+                        },
+                        "required": [
+                          "npi",
+                          "first_name",
+                          "last_name",
+                          "confidence",
+                          "match_method"
+                        ],
+                        "title": "CMSMatch",
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Provider Roster"
+                }
+              },
+              "required": [
+                "place",
+                "match_type"
+              ],
+              "title": "EnrichedResult",
+              "type": "object"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "total_places": {
+            "title": "Total Places",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "query",
+          "location",
+          "total_places",
+          "matched_count",
+          "results"
+        ],
+        "title": "SearchResponse",
+        "type": "object"
+      },
+      "422": {
+        "properties": {
+          "detail": {
+            "items": {
+              "properties": {
+                "loc": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "title": "Location",
+                  "type": "array"
+                },
+                "msg": {
+                  "title": "Message",
+                  "type": "string"
+                },
+                "type": {
+                  "title": "Error Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "loc",
+                "msg",
+                "type"
+              ],
+              "title": "ValidationError",
+              "type": "object"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "/tables": {
+    "get": {
+      "200": {}
+    }
+  },
+  "/tables/{table_name}/schema": {
+    "get": {
+      "200": {},
+      "422": {
+        "properties": {
+          "detail": {
+            "items": {
+              "properties": {
+                "loc": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "title": "Location",
+                  "type": "array"
+                },
+                "msg": {
+                  "title": "Message",
+                  "type": "string"
+                },
+                "type": {
+                  "title": "Error Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "loc",
+                "msg",
+                "type"
+              ],
+              "title": "ValidationError",
+              "type": "object"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "/unified/search": {
+    "get": {
+      "200": {
+        "properties": {
+          "cms_provider_count": {
+            "title": "Cms Provider Count",
+            "type": "integer"
+          },
+          "elapsed_ms": {
+            "title": "Elapsed Ms",
+            "type": "number"
+          },
+          "location": {
+            "title": "Location",
+            "type": "string"
+          },
+          "places_result_count": {
+            "title": "Places Result Count",
+            "type": "integer"
+          },
+          "places_source": {
+            "default": "none",
+            "title": "Places Source",
+            "type": "string"
+          },
+          "practice_groups": {
+            "items": {
+              "properties": {
+                "address": {
+                  "title": "Address",
+                  "type": "string"
+                },
+                "hours": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Hours"
+                },
+                "name": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Name"
+                },
+                "phone": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Phone"
+                },
+                "place_id": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Place Id"
+                },
+                "provider_count": {
+                  "default": 0,
+                  "title": "Provider Count",
+                  "type": "integer"
+                },
+                "providers": {
+                  "default": [],
+                  "items": {
+                    "properties": {
+                      "address": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Address"
+                      },
+                      "city": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "City"
+                      },
+                      "first_name": {
+                        "title": "First Name",
+                        "type": "string"
+                      },
+                      "last_name": {
+                        "title": "Last Name",
+                        "type": "string"
+                      },
+                      "mips_score": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Mips Score"
+                      },
+                      "npi": {
+                        "title": "Npi",
+                        "type": "string"
+                      },
+                      "num_hospital_affiliations": {
+                        "anyOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Num Hospital Affiliations"
+                      },
+                      "open_payments_count": {
+                        "anyOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Open Payments Count"
+                      },
+                      "open_payments_total": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Open Payments Total"
+                      },
+                      "practice_address": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Practice Address"
+                      },
+                      "practice_group_key": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Practice Group Key"
+                      },
+                      "practice_name": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Practice Name"
+                      },
+                      "practice_place_id": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Practice Place Id"
+                      },
+                      "practice_rating": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Practice Rating"
+                      },
+                      "practice_reviews": {
+                        "anyOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Practice Reviews"
+                      },
+                      "provider_type": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Provider Type"
+                      },
+                      "sources": {
+                        "default": [],
+                        "items": {
+                          "type": "string"
+                        },
+                        "title": "Sources",
+                        "type": "array"
+                      },
+                      "state": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "State"
+                      },
+                      "total_beneficiaries": {
+                        "anyOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Total Beneficiaries"
+                      },
+                      "total_medicare_payment": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Total Medicare Payment"
+                      },
+                      "total_services": {
+                        "anyOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Total Services"
+                      },
+                      "zip5": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Zip5"
+                      }
+                    },
+                    "required": [
+                      "npi",
+                      "first_name",
+                      "last_name"
+                    ],
+                    "title": "ProviderResult",
+                    "type": "object"
+                  },
+                  "title": "Providers",
+                  "type": "array"
+                },
+                "rating": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Rating"
+                },
+                "reviews": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Reviews"
+                },
+                "total_medicare_payment": {
+                  "default": 0,
+                  "title": "Total Medicare Payment",
+                  "type": "number"
+                },
+                "website": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Website"
+                }
+              },
+              "required": [
+                "address"
+              ],
+              "title": "PracticeGroup",
+              "type": "object"
+            },
+            "title": "Practice Groups",
+            "type": "array"
+          },
+          "query": {
+            "title": "Query",
+            "type": "string"
+          },
+          "total_practice_groups": {
+            "title": "Total Practice Groups",
+            "type": "integer"
+          },
+          "total_providers": {
+            "title": "Total Providers",
+            "type": "integer"
+          },
+          "total_with_places": {
+            "title": "Total With Places",
+            "type": "integer"
+          },
+          "ungrouped_providers": {
+            "items": {
+              "properties": {
+                "address": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Address"
+                },
+                "city": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "City"
+                },
+                "first_name": {
+                  "title": "First Name",
+                  "type": "string"
+                },
+                "last_name": {
+                  "title": "Last Name",
+                  "type": "string"
+                },
+                "mips_score": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Mips Score"
+                },
+                "npi": {
+                  "title": "Npi",
+                  "type": "string"
+                },
+                "num_hospital_affiliations": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Num Hospital Affiliations"
+                },
+                "open_payments_count": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Open Payments Count"
+                },
+                "open_payments_total": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Open Payments Total"
+                },
+                "practice_address": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Practice Address"
+                },
+                "practice_group_key": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Practice Group Key"
+                },
+                "practice_name": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Practice Name"
+                },
+                "practice_place_id": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Practice Place Id"
+                },
+                "practice_rating": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Practice Rating"
+                },
+                "practice_reviews": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Practice Reviews"
+                },
+                "provider_type": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Provider Type"
+                },
+                "sources": {
+                  "default": [],
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Sources",
+                  "type": "array"
+                },
+                "state": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "State"
+                },
+                "total_beneficiaries": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Total Beneficiaries"
+                },
+                "total_medicare_payment": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Total Medicare Payment"
+                },
+                "total_services": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Total Services"
+                },
+                "zip5": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Zip5"
+                }
+              },
+              "required": [
+                "npi",
+                "first_name",
+                "last_name"
+              ],
+              "title": "ProviderResult",
+              "type": "object"
+            },
+            "title": "Ungrouped Providers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "query",
+          "location",
+          "total_providers",
+          "total_with_places",
+          "total_practice_groups",
+          "cms_provider_count",
+          "places_result_count",
+          "elapsed_ms",
+          "practice_groups",
+          "ungrouped_providers"
+        ],
+        "title": "UnifiedSearchResponse",
+        "type": "object"
+      },
+      "422": {
+        "properties": {
+          "detail": {
+            "items": {
+              "properties": {
+                "loc": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "title": "Location",
+                  "type": "array"
+                },
+                "msg": {
+                  "title": "Message",
+                  "type": "string"
+                },
+                "type": {
+                  "title": "Error Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "loc",
+                "msg",
+                "type"
+              ],
+              "title": "ValidationError",
+              "type": "object"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      }
+    }
+  }
+}

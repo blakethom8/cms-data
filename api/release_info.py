@@ -40,7 +40,13 @@ logger = logging.getLogger(__name__)
 # `hospital_affiliations` list. The endpoint is untyped in OpenAPI, so the
 # snapshot comparison cannot see this change; the bump follows the operating
 # doctrine ("any response-shape change must bump") rather than the snapshot.
-REPRESENTATION_VERSION = 2
+#
+# v3 — NPPES-first provider discovery and profiles. `/profiles/search` now
+# discovers through NPPES and uses DAC as enrichment; source values are
+# `nppes`, `nppes + medicare`, or the rare DAC-only fallback `medicare`.
+# `/profiles/{npi}` accepts NPPES-only clinicians, and each locations[] row
+# gains `sources` (`dac` / `nppes` / `dac + nppes`) via a DAC ⟕ NPPES join.
+REPRESENTATION_VERSION = 3
 
 # Matches pipeline/production_manager.py DEPLOYMENT_ID_PATTERN.
 DEPLOYMENT_ID_PATTERN = re.compile(r"^[a-z]+-[0-9]{8}T[0-9]{6}Z-[a-f0-9]{10}$")

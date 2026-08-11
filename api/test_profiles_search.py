@@ -6,7 +6,7 @@ names that happen to sit inside the metro city proper.
 """
 import duckdb
 
-from profiles import CRED, _search_dac, _search_npi, _search_registry
+from profiles import CRED, _search_npi, _search_nppes
 
 
 def _connection() -> duckdb.DuckDBPyConnection:
@@ -45,44 +45,7 @@ def _connection() -> duckdb.DuckDBPyConnection:
     return connection
 
 
-def test_dac_city_mismatch_does_not_hide_exact_name_match() -> None:
-    connection = _connection()
-    connection.execute(
-        "insert into raw_dac_national values "
-        "('1710390513', 'LAUREN', 'DESTEFANO', 'MD', 'SURGICAL ONCOLOGY', "
-        "'TARZANA', 'CA', 'CEDARS-SINAI MEDICAL CARE FOUNDATION')"
-    )
-
-    rows = _search_dac(connection, ["LAUREN", "DESTEFANO"], "Los Angeles", "CA", 15)
-
-    assert [row["npi"] for row in rows] == ["1710390513"]
-    assert rows[0]["city"] == "TARZANA"
-
-
-def test_dac_city_match_ranks_first_among_equal_names() -> None:
-    connection = _connection()
-    connection.execute(
-        "insert into raw_dac_national values "
-        "('1000000001', 'JANE', 'SMITH', 'MD', 'CARDIOLOGY', 'TARZANA', 'CA', null), "
-        "('1000000002', 'JANE', 'SMITH', 'MD', 'CARDIOLOGY', 'LOS ANGELES', 'CA', null)"
-    )
-
-    rows = _search_dac(connection, ["JANE", "SMITH"], "Los Angeles", "CA", 15)
-
-    assert [row["npi"] for row in rows] == ["1000000002", "1000000001"]
-
-
-def test_dac_state_remains_a_hard_filter() -> None:
-    connection = _connection()
-    connection.execute(
-        "insert into raw_dac_national values "
-        "('1000000003', 'JANE', 'SMITH', 'MD', 'CARDIOLOGY', 'PHOENIX', 'AZ', null)"
-    )
-
-    assert _search_dac(connection, ["JANE", "SMITH"], None, "CA", 15) == []
-
-
-def test_registry_city_boosts_but_exact_name_still_wins_elsewhere() -> None:
+def test_nppes_city_boosts_but_exact_name_still_wins_elsewhere() -> None:
     connection = _connection()
     connection.execute(
         "insert into raw_nppes values "
@@ -90,13 +53,13 @@ def test_registry_city_boosts_but_exact_name_still_wins_elsewhere() -> None:
         "('1154889061', 1, 'MARTINIANA', 'LAURETA', null, 'LOS ANGELES', 'CA', null)"
     )
 
-    rows = _search_registry(connection, ["LAUREN", "DESTEFANO"], "Los Angeles", "CA", 15)
+    rows = _search_nppes(connection, ["LAUREN", "DESTEFANO"], "Los Angeles", "CA", 15)
 
     assert rows, "exact name match outside the queried city must not be filtered out"
     assert rows[0]["npi"] == "1710390513"
 
 
-def test_registry_city_match_breaks_score_ties() -> None:
+def test_nppes_city_match_breaks_score_ties() -> None:
     connection = _connection()
     connection.execute(
         "insert into raw_nppes values "
@@ -104,36 +67,32 @@ def test_registry_city_match_breaks_score_ties() -> None:
         "('1000000005', 1, 'JANE', 'SMITH', 'MD', 'LOS ANGELES', 'CA', null)"
     )
 
-    rows = _search_registry(connection, ["JANE", "SMITH"], "Los Angeles", "CA", 15)
+    rows = _search_nppes(connection, ["JANE", "SMITH"], "Los Angeles", "CA", 15)
 
     assert [row["npi"] for row in rows] == ["1000000005", "1000000004"]
 
 
-def test_exact_npi_search_returns_dac_source() -> None:
+def test_nppes_name_search_is_enriched_by_medicare() -> None:
     connection = _connection()
     connection.execute(
+        "insert into raw_nppes values "
+        "('1396877080', 1, 'ALICIA', 'TERANDO', 'M.D.', 'PASADENA', 'CA', '2086X0206X')"
+    )
+    connection.execute(
         "insert into raw_dac_national values "
-        "('1154580017', 'TREVAN', 'FISCHER', 'MD', 'GENERAL SURGERY', "
-        "'LOS ANGELES', 'CA', 'CEDARS-SINAI MEDICAL CARE FOUNDATION')"
+        "('1396877080', 'ALICIA', 'TERANDO', 'MD', 'SURGICAL ONCOLOGY', "
+        "'PASADENA', 'CA', 'CEDARS-SINAI MEDICAL CARE FOUNDATION')"
     )
 
-    rows = _search_npi(connection, "1154580017", "CA")
+    rows = _search_nppes(connection, ["ALICIA", "TERANDO"], "Los Angeles", "CA", 15)
 
-    assert rows == [
-        {
-            "npi": "1154580017",
-            "name": "TREVAN FISCHER",
-            "credentials": "MD",
-            "specialty": "GENERAL SURGERY",
-            "city": "LOS ANGELES",
-            "state": "CA",
-            "group_name": "CEDARS-SINAI MEDICAL CARE FOUNDATION",
-            "source": "medicare",
-        }
-    ]
+    assert rows[0]["npi"] == "1396877080"
+    assert rows[0]["specialty"] == "SURGICAL ONCOLOGY"
+    assert rows[0]["group_name"] == "CEDARS-SINAI MEDICAL CARE FOUNDATION"
+    assert rows[0]["source"] == "nppes + medicare"
 
 
-def test_exact_npi_search_falls_back_to_registry_source() -> None:
+def test_exact_npi_search_uses_nppes_source() -> None:
     connection = _connection()
     connection.execute(
         "insert into raw_nppes values "
@@ -151,6 +110,47 @@ def test_exact_npi_search_falls_back_to_registry_source() -> None:
             "city": "LOS ANGELES",
             "state": "CA",
             "group_name": None,
-            "source": "registry",
+            "source": "nppes",
         }
     ]
+
+
+def test_exact_npi_search_uses_nppes_identity_and_medicare_enrichment() -> None:
+    connection = _connection()
+    connection.execute(
+        "insert into raw_nppes values "
+        "('1154580017', 1, 'TREVAN', 'FISCHER', 'M.D.', 'SANTA MONICA', 'CA', null)"
+    )
+    connection.execute(
+        "insert into raw_dac_national values "
+        "('1154580017', 'TREVAN', 'FISCHER', 'MD', 'GENERAL SURGERY', "
+        "'LOS ANGELES', 'CA', 'CEDARS-SINAI MEDICAL CARE FOUNDATION')"
+    )
+
+    rows = _search_npi(connection, "1154580017", "CA")
+
+    assert rows == [
+        {
+            "npi": "1154580017",
+            "name": "TREVAN FISCHER",
+            "credentials": "M.D.",
+            "specialty": "GENERAL SURGERY",
+            "city": "SANTA MONICA",
+            "state": "CA",
+            "group_name": "CEDARS-SINAI MEDICAL CARE FOUNDATION",
+            "source": "nppes + medicare",
+        }
+    ]
+
+
+def test_exact_npi_search_falls_back_to_dac_when_nppes_is_absent() -> None:
+    connection = _connection()
+    connection.execute(
+        "insert into raw_dac_national values "
+        "('1154580017', 'TREVAN', 'FISCHER', 'MD', 'GENERAL SURGERY', "
+        "'LOS ANGELES', 'CA', 'CEDARS-SINAI MEDICAL CARE FOUNDATION')"
+    )
+
+    rows = _search_npi(connection, "1154580017", "CA")
+
+    assert rows[0]["source"] == "medicare"

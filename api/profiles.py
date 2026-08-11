@@ -67,6 +67,55 @@ def _row(conn, sql: str, params: list) -> Optional[dict]:
     return out[0] if out else None
 
 
+def _profile_header(conn, npi: str) -> dict | None:
+    """NPPES-first provider identity enriched with Medicare attributes.
+
+    NPPES defines who can have a profile; DAC is optional evidence that adds
+    Medicare specialty, education, and telehealth fields. This keeps an
+    NPPES-only clinician discoverable and profileable without pretending that
+    missing Medicare rows mean the NPI does not exist.
+    """
+    return _row(conn, f"""
+        with nppes as (
+          select CAST(npi as varchar) npi,
+                 trim(coalesce(first_name || ' ', '') || coalesce(last_name, '')) "name",
+                 nullif(trim(credentials), '') credentials,
+                 practice_city city, practice_state state, taxonomy_1
+          from raw_nppes
+          where CAST(npi as varchar) = ?),
+        dac as (
+          select CAST("NPI" as varchar) npi,
+                 any_value("Provider First Name") || ' '
+                   || any_value("Provider Last Name") "name",
+                 nullif(trim(any_value({CRED})), '') credentials,
+                 any_value(pri_spec) specialty,
+                 any_value(sec_spec_all) secondary_specialties,
+                 any_value("City/Town") city, any_value("State") state,
+                 any_value(Med_sch) med_school, any_value(Grd_yr) grad_year,
+                 max(case when {TELE} = 'Y' then 1 else 0 end) = 1 telehealth
+          from raw_dac_national
+          where CAST("NPI" as varchar) = ?
+          group by "NPI")
+        select coalesce(n.npi, d.npi) npi,
+               coalesce(n."name", d."name") "name",
+               coalesce(n.credentials, d.credentials) credentials,
+               coalesce(
+                 d.specialty,
+                 t.classification
+                   || coalesce(' (' || nullif(t.specialization, '') || ')', '')
+               ) specialty,
+               d.secondary_specialties,
+               coalesce(n.city, d.city) city,
+               coalesce(n.state, d.state) state,
+               d.med_school, d.grad_year,
+               year(current_date) - d.grad_year years_in_practice,
+               d.telehealth
+        from nppes n
+        full outer join dac d on d.npi = n.npi
+        left join nucc_taxonomy t on t.taxonomy_code = n.taxonomy_1
+    """, [npi, npi])
+
+
 def _affiliation_groups(conn, npi: str) -> list[dict]:
     """DAC billing groups merged with PECOS reassignment relationships.
 
@@ -105,6 +154,70 @@ def _affiliation_groups(conn, npi: str) -> list[dict]:
     """, [npi, npi])
 
 
+def _profile_locations(conn, npi: str) -> list[dict]:
+    """Practice doors from DAC enrollment merged with the NPPES practice address.
+
+    DAC remains the roster/org grain; NPPES contributes the registry practice
+    address when it differs (or confirms the same door). ``sources`` is
+    ``dac``, ``nppes``, or ``dac + nppes`` so Access can label provenance the
+    same way group affiliations already do.
+    """
+    return _rows(conn, """
+        with dac as (
+          select upper(trim(adr_ln_1)) || '|' || left(CAST("ZIP Code" as varchar),5) addr_key,
+                 any_value(trim(adr_ln_1)) street,
+                 list(distinct trim(adr_ln_2))
+                   filter (where nullif(trim(adr_ln_2), '') is not null) suites,
+                 any_value("City/Town") city, any_value("State") state,
+                 left(any_value(CAST("ZIP Code" as varchar)),5) zip5,
+                 any_value(CAST("Telephone Number" as varchar)) phone,
+                 any_value(org_pac_id) org_pac_id
+          from raw_dac_national
+          where CAST("NPI" as varchar) = ?
+            and nullif(trim(adr_ln_1), '') is not null
+          group by 1),
+        nppes as (
+          select upper(trim(practice_address_1)) || '|' || left(CAST(practice_zip as varchar),5) addr_key,
+                 any_value(trim(practice_address_1)) street,
+                 list(distinct trim(practice_address_2))
+                   filter (where nullif(trim(practice_address_2), '') is not null) suites,
+                 any_value(practice_city) city, any_value(practice_state) state,
+                 left(any_value(CAST(practice_zip as varchar)),5) zip5,
+                 any_value(CAST(practice_phone as varchar)) phone
+          from raw_nppes
+          where CAST(npi as varchar) = ?
+            and nullif(trim(practice_address_1), '') is not null
+          group by 1),
+        doc as (
+          select coalesce(d.addr_key, n.addr_key) addr_key,
+                 coalesce(d.street, n.street) street,
+                 coalesce(d.suites, n.suites) suites,
+                 coalesce(d.city, n.city) city,
+                 coalesce(d.state, n.state) state,
+                 coalesce(d.zip5, n.zip5) zip5,
+                 coalesce(d.phone, n.phone) phone,
+                 d.org_pac_id,
+                 case when d.addr_key is not null and n.addr_key is not null then 'dac + nppes'
+                      when d.addr_key is not null then 'dac'
+                      else 'nppes' end sources
+          from dac d full outer join nppes n on n.addr_key = d.addr_key),
+        roster as (
+          select org_pac_id, upper(trim(adr_ln_1)) || '|' || left(CAST("ZIP Code" as varchar),5) addr_key,
+                 count(distinct "NPI") roster_size
+          from raw_dac_national
+          where org_pac_id in (select distinct org_pac_id from doc where org_pac_id is not null)
+          group by 1, 2)
+        select doc.street, doc.suites, doc.city, doc.state, doc.zip5, doc.phone,
+               r.roster_size, g.lat, g.lng,
+               (r.roster_size = max(r.roster_size) over () and r.roster_size > 50) likely_flagship,
+               doc.sources
+        from doc
+        left join roster r on r.org_pac_id = doc.org_pac_id and r.addr_key = doc.addr_key
+        left join address_geocode g on g.addr_key = doc.addr_key
+        order by coalesce(r.roster_size, 0) asc
+    """, [npi, npi])
+
+
 def _hospital_affiliations(conn, npi: str) -> list[dict]:
     """DAC facility affiliations resolved to hospital names where possible.
 
@@ -135,8 +248,8 @@ class SearchHit(BaseModel):
     city: str | None = None
     state: str | None = None
     group_name: str | None = None
-    source: str = "medicare"          # "medicare" (DAC) | "registry" (NPPES-only)
-    match_score: float | None = None  # fuzzy similarity for registry-tier hits
+    source: str = "nppes"  # "nppes" | "nppes + medicare" | rare DAC-only "medicare"
+    match_score: float | None = None  # fuzzy similarity for NPPES name hits
 
 
 # Registry-tier fuzzy thresholds (jaro-winkler); validated on misspelled
@@ -145,52 +258,15 @@ _FUZZY_THRESHOLD_FULL = 0.85   # first + last name provided
 _FUZZY_THRESHOLD_LAST = 0.88   # last name only
 
 
-def _search_dac(conn, parts: list[str], city: Optional[str], state: Optional[str],
-                limit: int) -> list[dict]:
-    """Tier 1: strict prefix match against Medicare Doctors & Clinicians.
+def _search_nppes(conn, parts: list[str], city: Optional[str], state: Optional[str],
+                  limit: int) -> list[dict]:
+    """Primary discovery against the full NPPES registry (everyone with an NPI).
 
-    City ranks but never filters: the CMS mailing city is often a suburb or
-    billing address (e.g. Tarzana for an "LA" clinician), so an exact name
-    match one town over must still surface — city matches just sort first.
-    State remains a hard filter (clean two-letter values, rarely ambiguous).
-    """
-    preds = []
-    params: list = []
-    if len(parts) >= 2:
-        preds.append('(upper("Provider First Name") like ? and upper("Provider Last Name") like ?)')
-        params += [parts[0] + "%", parts[-1] + "%"]
-    else:
-        preds.append('upper("Provider Last Name") like ?')
-        params.append(parts[0] + "%" if parts else "%")
-    if state:
-        preds.append('"State" = ?')
-        params.append(state.upper())
-    order_sql = ""
-    if city:
-        order_sql = 'order by (any_value(upper("City/Town")) = ?) desc'
-        # bound after the where-clause params (positional binding follows SQL order)
-    sql = f"""
-        select CAST("NPI" as varchar) npi,
-               any_value("Provider First Name") || ' ' || any_value("Provider Last Name") as "name",
-               any_value({CRED}) credentials, any_value(pri_spec) specialty,
-               any_value("City/Town") city, any_value("State") state,
-               any_value("Facility Name") group_name
-        from raw_dac_national
-        where {' and '.join(preds)}
-        group by "NPI" {order_sql} limit {limit}"""
-    if city:
-        params.append(city.upper())
-    return _rows(conn, sql, params)
-
-
-def _search_registry(conn, parts: list[str], city: Optional[str], state: Optional[str],
-                     limit: int) -> list[dict]:
-    """Tier 2: fuzzy match against the full NPPES registry (everyone with an NPI).
-
-    Catches misspellings and providers who don't bill Medicare. Last name is
+    Medicare DAC is enrichment, never the discovery universe. Last name is
     weighted 0.7 vs first 0.3; stored last names are also compared with
     spaces/hyphens stripped so "EL ATTRACHE" / "EL-ATTRACHE" / "ELATTRACHE"
-    all behave the same. Hits also present in DAC keep source="medicare".
+    all behave the same. Source provenance records whether a hit also has DAC
+    evidence without changing its NPPES-first identity.
 
     City ranks but never filters (same doctrine as the DAC tier): practice
     city is a mailing-address value, so a better name match in a neighboring
@@ -200,7 +276,7 @@ def _search_registry(conn, parts: list[str], city: Optional[str], state: Optiona
     first = parts[0] if len(parts) >= 2 else None
     last = "".join(parts[1:]) if len(parts) >= 2 else parts[0]
 
-    scope_preds = ["n.entity_type = 1", "n.last_name is not null"]
+    scope_preds = ["CAST(n.entity_type AS VARCHAR) = '1'", "n.last_name is not null"]
     scope_params: list = []
     if state:
         scope_preds.append("n.practice_state = ?")
@@ -259,32 +335,47 @@ def _search_registry(conn, parts: list[str], city: Optional[str], state: Optiona
         order by s.score desc, s.city_match desc"""
     rows = _rows(conn, sql, score_params + city_params + scope_params)
     for row in rows:
-        row["source"] = "medicare" if row.pop("in_dac", False) else "registry"
+        row["source"] = "nppes + medicare" if row.pop("in_dac", False) else "nppes"
     return rows
 
 
 def _search_npi(conn, npi: str, state: Optional[str]) -> list[dict]:
-    """Resolve an exact NPI without treating it as a provider-name token."""
-    state_predicate = ' AND "State" = ?' if state else ""
+    """Resolve exact identity through NPPES, with DAC as enrichment/fallback."""
+    state_predicate = " AND n.practice_state = ?" if state else ""
     rows = _rows(conn, f"""
+        select CAST(n.npi as varchar) npi,
+               trim(coalesce(n.first_name || ' ', '') || coalesce(n.last_name, '')) "name",
+               nullif(trim(n.credentials), '') credentials,
+               coalesce(
+                 any_value(d.pri_spec),
+                 any_value(t.classification
+                   || coalesce(' (' || nullif(t.specialization, '') || ')', ''))
+               ) specialty,
+               n.practice_city city, n.practice_state state,
+               any_value(d."Facility Name") group_name,
+               case when count(d."NPI") > 0 then 'nppes + medicare'
+                    else 'nppes' end AS "source"
+        from raw_nppes n
+        left join nucc_taxonomy t on t.taxonomy_code = n.taxonomy_1
+        left join raw_dac_national d on CAST(d."NPI" as varchar) = CAST(n.npi as varchar)
+        where CAST(n.npi as varchar) = ? {state_predicate}
+        group by n.npi, n.first_name, n.last_name, n.credentials,
+                 n.practice_city, n.practice_state
+    """, [npi, state.upper()] if state else [npi])
+    if rows:
+        return rows
+    state_predicate = ' AND "State" = ?' if state else ""
+    return _rows(conn, f"""
         select CAST("NPI" as varchar) npi,
-               any_value("Provider First Name") || ' ' || any_value("Provider Last Name") as "name",
-               trim(coalesce(any_value({CRED}), '')) credentials,
+               any_value("Provider First Name") || ' '
+                 || any_value("Provider Last Name") as "name",
+               nullif(trim(any_value({CRED})), '') credentials,
                any_value(pri_spec) specialty, any_value("City/Town") city,
                any_value("State") state, any_value("Facility Name") group_name,
                'medicare' AS "source"
         from raw_dac_national
         where CAST("NPI" as varchar) = ? {state_predicate}
         group by "NPI"
-    """, [npi, state.upper()] if state else [npi])
-    if rows:
-        return rows
-    state_predicate = " AND practice_state = ?" if state else ""
-    return _rows(conn, f"""
-        select CAST(npi as varchar) npi, coalesce(first_name || ' ', '') || last_name as "name",
-               credentials, null specialty, practice_city city, practice_state state,
-               null group_name, 'registry' AS "source"
-        from raw_nppes where CAST(npi as varchar) = ? {state_predicate}
     """, [npi, state.upper()] if state else [npi])
 
 
@@ -298,9 +389,9 @@ def get_profiles_router(get_conn):
                      limit: int = 15):
         """Find doctors by name (last or 'first last'), optional city/state.
 
-        Tiered: exact-prefix Medicare (DAC) match first; when it comes up
-        empty, fuzzy NPPES-registry fallback (typo-tolerant, includes
-        providers who never bill Medicare).
+        NPPES is the discovery universe, including providers who never bill
+        Medicare. DAC enriches matching NPIs with Medicare specialty and group
+        context but never gates whether the provider can be found.
 
         State is a hard scope; city only boosts ranking. CMS/NPPES city is a
         mailing-address value, so metro queries ("Los Angeles") must not hide
@@ -315,9 +406,7 @@ def get_profiles_router(get_conn):
         if re.fullmatch(r"\d{10}", exact_npi):
             rows = _search_npi(conn, exact_npi, state)
         else:
-            rows = _search_dac(conn, parts, city, state, limit)
-            if not rows:
-                rows = _search_registry(conn, parts, city, state, limit)
+            rows = _search_nppes(conn, parts, city, state, limit)
         return [SearchHit(**{**r, "credentials": (r.get("credentials") or "").strip() or None})
                 for r in rows]
 
@@ -328,18 +417,9 @@ def get_profiles_router(get_conn):
         out: dict = {"npi": npi}
 
         # ------ header / background (DAC + NPPES) ------
-        out["header"] = _row(conn, f"""
-            select any_value(d."Provider First Name") || ' ' || any_value(d."Provider Last Name") as "name",
-                   trim(coalesce(any_value(d.{CRED}), '')) credentials,
-                   any_value(d.pri_spec) specialty, any_value(d.sec_spec_all) secondary_specialties,
-                   any_value(d."City/Town") city, any_value(d."State") state,
-                   any_value(d.Med_sch) med_school, any_value(d.Grd_yr) grad_year,
-                   year(current_date) - any_value(d.Grd_yr) years_in_practice,
-                   max(case when d.{TELE} = 'Y' then 1 else 0 end) = 1 telehealth
-            from raw_dac_national d where CAST(d."NPI" as varchar) = ?
-            group by d."NPI" """, [npi])
+        out["header"] = _profile_header(conn, npi)
         if not out["header"]:
-            raise HTTPException(status_code=404, detail="NPI not found in Doctors & Clinicians")
+            raise HTTPException(status_code=404, detail="NPI not found in NPPES or Doctors & Clinicians")
 
         # ------ 1. patient panel ------
         out["panel"] = _row(conn, """
@@ -472,30 +552,7 @@ def get_profiles_router(get_conn):
         """, [npi])
 
         # ------ 5. access & affiliation ------
-        out["locations"] = _rows(conn, """
-            with doc as (
-              select upper(trim(adr_ln_1)) || '|' || left(CAST("ZIP Code" as varchar),5) addr_key,
-                     any_value(trim(adr_ln_1)) street,
-                     list(distinct trim(adr_ln_2)) filter (where adr_ln_2 is not null) suites,
-                     any_value("City/Town") city, any_value("State") state,
-                     left(any_value(CAST("ZIP Code" as varchar)),5) zip5,
-                     any_value(CAST("Telephone Number" as varchar)) phone,
-                     any_value(org_pac_id) org_pac_id
-              from raw_dac_national where CAST("NPI" as varchar) = ? group by 1),
-            roster as (
-              select org_pac_id, upper(trim(adr_ln_1)) || '|' || left(CAST("ZIP Code" as varchar),5) addr_key,
-                     count(distinct "NPI") roster_size
-              from raw_dac_national
-              where org_pac_id in (select distinct org_pac_id from doc where org_pac_id is not null)
-              group by 1, 2)
-            select d.street, d.suites, d.city, d.state, d.zip5, d.phone,
-                   r.roster_size, g.lat, g.lng,
-                   (r.roster_size = max(r.roster_size) over () and r.roster_size > 50) likely_flagship
-            from doc d
-            left join roster r on r.org_pac_id = d.org_pac_id and r.addr_key = d.addr_key
-            left join address_geocode g on g.addr_key = d.addr_key
-            order by coalesce(r.roster_size, 0) asc
-        """, [npi])
+        out["locations"] = _profile_locations(conn, npi)
         home_state = (out["header"] or {}).get("state")
         out["locations"].sort(key=lambda l: (
             0 if l.get("state") == home_state else 1,
