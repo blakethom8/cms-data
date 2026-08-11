@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="light">
   <meta name="theme-color" content="#101b25">
   <title>CMS Data Command Center</title>
-  <link rel="stylesheet" href="styles.css?v=20260723-lineage-upstream-schema">
+  <link rel="stylesheet" href="styles.css?v=20260811-source-observability">
 </head>
 <body>
   <a class="skip-link" href="#workspace">Skip to workspace</a>
@@ -262,6 +262,11 @@
             <article><span>Bridge tables</span><strong>—</strong></article>
             <article><span>Curated models</span><strong>—</strong></article>
           </section>
+          <section class="lineage-evidence-strip" aria-label="Observed lineage evidence" aria-live="polite">
+            <div><span>Source landings proven</span><strong id="lineage-observed-landings">—</strong><small>Active manifest + raw table</small></div>
+            <div><span>Warehouse tables observed</span><strong id="lineage-observed-tables">—</strong><small>Read-only live inventory</small></div>
+            <div><span>Dependencies declared</span><strong id="lineage-declared-edges">—</strong><small>Pipeline implementation map</small></div>
+          </section>
           <div class="lineage-instruments">
             <div class="lineage-filter" role="group" aria-label="Filter lineage evidence">
               <span class="instrument-label">SHOW</span>
@@ -302,8 +307,14 @@
               <span class="eyebrow">Trust before promotion</span>
               <h1 id="contracts-title">Source contracts</h1>
             </div>
-            <p>Publisher versions, periods, fingerprints, counts, and validation evidence in one inspectable registry.</p>
+            <p>See what each publisher promises, when its pipeline last ran, which data period landed, and whether the selected warehouse is proven.</p>
           </div>
+          <section class="contract-summary-strip" aria-label="Source contract summary" aria-live="polite">
+            <article><span>Registered sources</span><strong id="contracts-registered">—</strong><small>Typed source contracts</small></article>
+            <article><span>Proven active</span><strong id="contracts-active">—</strong><small>Selected-release evidence</small></article>
+            <article><span>Run evidence</span><strong id="contracts-recorded">—</strong><small>Sources with a manifest</small></article>
+            <article><span>Latest pipeline event</span><strong id="contracts-latest-run">—</strong><small>Not publisher data vintage</small></article>
+          </section>
           <div class="catalog-toolbar contract-toolbar" role="search">
             <label class="search-field">
               <span class="sr-only">Search contracts</span><span aria-hidden="true">⌕</span>
@@ -318,7 +329,7 @@
           </div>
           <div class="table-frame">
             <table class="data-table contracts-table">
-              <thead><tr><th>Source</th><th>Status</th><th>Source period</th><th>Publisher version</th><th>Rows</th><th>Schema fingerprint</th><th>Promotion evidence</th></tr></thead>
+              <thead><tr><th>Source / cadence</th><th>Status</th><th>Last ran</th><th>Source period</th><th>Publisher version</th><th>Rows</th><th>Schema fingerprint</th><th>Selected-release evidence</th></tr></thead>
               <tbody id="contracts-body"></tbody>
             </table>
             <div id="contracts-empty" class="table-empty"></div>
@@ -380,6 +391,6 @@
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-  <script src="app.js?v=20260723-lineage-upstream-schema" defer></script>
+  <script src="app.js?v=20260811-source-observability" defer></script>
 </body>
 </html>

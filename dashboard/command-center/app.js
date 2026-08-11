@@ -122,6 +122,28 @@
     return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }).format(date);
   }
 
+  function formatDateOnly(value) {
+    if (!value) return "Not recorded";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(date);
+  }
+
+  function manifestEvent(manifest) {
+    const events = [
+      ["promotion_timestamp", "promotion recorded"],
+      ["validation_timestamp", "validation completed"],
+      ["retrieval_timestamp", "retrieval completed"],
+      ["discovery_timestamp", "discovery started"]
+    ].map(([field, label], priority) => ({ field, label, priority, value: manifest?.[field] }))
+      .filter(event => event.value);
+    if (!events.length) return null;
+    return events.sort((left, right) => {
+      const timestampOrder = String(right.value).localeCompare(String(left.value));
+      return timestampOrder || left.priority - right.priority;
+    })[0];
+  }
+
   function formatCell(value) {
     if (value === null || value === undefined || value === "") return '<span class="cell-null">null</span>';
     if (typeof value === "object") return escapeHtml(JSON.stringify(value));
@@ -690,6 +712,9 @@
   function renderLineageSummary(summary = {}) {
     const values = [summary.source, summary.raw, summary.transform, summary.bridge, (Number(summary.mart) || 0) + (Number(summary.summary) || 0)];
     $$("#lineage-summary strong").forEach((element, index) => { element.textContent = Number.isFinite(Number(values[index])) ? fullNumber(values[index]) : "—"; });
+    $("#lineage-observed-landings").textContent = Number.isFinite(Number(summary.observed_source_landings)) ? fullNumber(summary.observed_source_landings) : "—";
+    $("#lineage-observed-tables").textContent = Number.isFinite(Number(summary.observed_tables)) ? fullNumber(summary.observed_tables) : "—";
+    $("#lineage-declared-edges").textContent = Number.isFinite(Number(summary.declared_edges)) ? fullNumber(summary.declared_edges) : "—";
   }
 
   function renderLineage() {
@@ -714,7 +739,12 @@
 
     const generatedAt = payload?.generated_at ? `Generated ${formatDate(payload.generated_at)}.` : "";
     const evidenceNote = payload?.evidence_error ? ` Operational evidence note: ${payload.evidence_error}` : "";
-    banner.textContent = `Edges marked declared describe pipeline intent; only observed edges have supporting active-warehouse evidence.${generatedAt ? ` ${generatedAt}` : ""}${evidenceNote}`;
+    const provenLandings = Number(payload?.summary?.observed_source_landings);
+    const registeredSources = Number(payload?.summary?.source);
+    const coverage = Number.isFinite(provenLandings) && Number.isFinite(registeredSources)
+      ? `${provenLandings} of ${registeredSources} source landings have both selected-release manifest evidence and a live raw table. `
+      : "";
+    banner.textContent = `${coverage}Solid edges are observed; dashed edges describe declared pipeline intent.${generatedAt ? ` ${generatedAt}` : ""}${evidenceNote}`;
 
     const visibleIds = lineageFilterNodeIds(nodes, edges);
     if (state.selectedLineageNode && !visibleIds.has(state.selectedLineageNode)) state.selectedLineageNode = null;
@@ -722,8 +752,7 @@
     const visibleEdges = edges.filter(edge => visibleIds.has(edge.source) && visibleIds.has(edge.target));
     const relatedIds = lineageRelatedNodeIds(state.selectedLineageNode, visibleEdges);
     const stages = lineageLayers
-      .map(layer => ({ ...layer, nodes: visibleNodes.filter(node => lineageLayerForNode(node) === layer.id).sort((a, b) => String(a.label).localeCompare(String(b.label))) }))
-      .filter(layer => layer.nodes.length);
+      .map(layer => ({ ...layer, nodes: visibleNodes.filter(node => lineageLayerForNode(node) === layer.id).sort((a, b) => String(a.label).localeCompare(String(b.label))) }));
     const stageCount = stages.length;
     const stageRows = Math.max(1, ...stages.map(stage => stage.nodes.length));
     const graphHeight = Math.max(560, 98 + stageRows * 98);
@@ -749,8 +778,7 @@
       return `<path class="lineage-edge ${evidence}${isIntraLayer ? " intra-layer" : ""}${related ? " is-related" : " is-dimmed"}" d="M ${startX} ${startY} C ${startX + curve} ${startY}, ${endX + (isIntraLayer ? curve : -curve)} ${endY}, ${endX} ${endY}" data-edge-id="${escapeHtml(edge.id || "")}" />`;
     }).join("");
 
-    const nodeMarkup = visibleNodes.map(node => {
-      const position = positions.get(node.id);
+    const nodeMarkup = node => {
       const evidence = lineageNodeEvidence(node);
       const isSelected = node.id === state.selectedLineageNode;
       const related = !state.selectedLineageNode || relatedIds.has(node.id);
@@ -758,17 +786,16 @@
       const subtitle = node.kind === "source"
         ? pick(node, ["source_id"], lineageKindLabel(node.kind))
         : node.table || node.transform_id || lineageKindLabel(node.kind);
-      return `<button type="button" class="lineage-node ${escapeHtml(node.kind || "unknown")} evidence-${evidence}${isSelected ? " selected" : ""}${related ? " is-related" : " is-dimmed"}" data-lineage-node="${escapeHtml(node.id)}" style="--node-x:${position.x}px;--node-y:${position.y}px" aria-pressed="${isSelected}">
+      return `<button type="button" class="lineage-node ${escapeHtml(node.kind || "unknown")} evidence-${evidence}${isSelected ? " selected" : ""}${related ? " is-related" : " is-dimmed"}" data-lineage-node="${escapeHtml(node.id)}" aria-pressed="${isSelected}">
         <span class="lineage-node-top"><span class="lineage-node-kind">${escapeHtml(lineageKindLabel(node.kind))}</span><i class="lineage-evidence ${evidence}" aria-label="${escapeHtml(lineageStatusLabel(evidence))}"></i></span>
         <strong title="${escapeHtml(node.label || node.id)}">${escapeHtml(node.label || node.id)}</strong>
         <small title="${escapeHtml(subtitle)}">${escapeHtml(subtitle)}</small>
         ${observedRows !== null && observedRows !== undefined ? `<em>${escapeHtml(compactNumber(observedRows))} rows</em>` : ""}
       </button>`;
-    }).join("");
+    };
+    const stageMarkup = stages.map(stage => `<div class="lineage-stage-column" data-lineage-stage="${escapeHtml(stage.id)}">${stage.nodes.map(nodeMarkup).join("")}</div>`).join("");
 
-    container.style.minWidth = `${graphWidth}px`;
-    container.style.height = `${graphHeight}px`;
-    container.innerHTML = `<div class="lineage-stage-headings" style="grid-template-columns:repeat(${stageCount}, ${stageWidth}px);width:${graphWidth}px" aria-hidden="true">${stages.map(stage => `<span>${escapeHtml(stage.heading)} <b>${stage.nodes.length}</b></span>`).join("")}</div><svg class="lineage-connectors" viewBox="0 0 ${graphWidth} ${graphHeight}" width="${graphWidth}" height="${graphHeight}" aria-hidden="true"><defs><marker id="lineage-arrowhead" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 8 4 L 0 8 z" /></marker></defs>${connectorMarkup}</svg>${nodeMarkup}`;
+    container.innerHTML = `<div class="lineage-stage-headings" aria-hidden="true">${stages.map(stage => `<span>${escapeHtml(stage.heading)} <b>${stage.nodes.length}</b></span>`).join("")}</div><svg class="lineage-connectors" viewBox="0 0 ${graphWidth} ${graphHeight}" width="${graphWidth}" height="${graphHeight}" aria-hidden="true"><defs><marker id="lineage-arrowhead" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 8 4 L 0 8 z" /></marker></defs>${connectorMarkup}</svg><div class="lineage-stage-columns">${stageMarkup}</div>`;
     renderLineageInspector(nodes, edges);
   }
 
@@ -776,6 +803,7 @@
     const details = node?.details && typeof node.details === "object" ? node.details : {};
     const observed = node?.observed && typeof node.observed === "object" ? node.observed : {};
     const manifest = node?.latest_manifest && typeof node.latest_manifest === "object" ? node.latest_manifest : {};
+    const lastEvent = manifestEvent(manifest);
     const facts = [
       ["Node kind", lineageKindLabel(node?.kind)],
       ["Evidence", lineageStatusLabel(lineageNodeEvidence(node))],
@@ -784,6 +812,9 @@
       ["Transform ID", node?.transform_id],
       ["Warehouse inventory", observed.table_present === true ? "Observed in active inventory" : observed.table_present === false ? "Not observed in active inventory" : null],
       ["Approx. rows", observed.approx_rows !== null && observed.approx_rows !== undefined ? fullNumber(observed.approx_rows) : null],
+      ["Last ran", lastEvent ? formatDate(lastEvent.value) : null],
+      ["Latest pipeline stage", lastEvent?.label],
+      ["Run ID", manifest.run_id],
       ["Source period", pick(manifest, ["source_data_period", "source_period"], null)],
       ...Object.entries(details).map(([key, value]) => [key.replaceAll("_", " "), typeof value === "object" ? JSON.stringify(value) : value])
     ];
@@ -959,7 +990,19 @@
   }
 
   function renderContracts() {
+    renderContractSummary();
     filterContracts();
+  }
+
+  function renderContractSummary() {
+    const manifests = state.sources.map(manifestOf).filter(Boolean);
+    const active = state.sources.filter(source => evidenceStatus(source) === "current").length;
+    const latest = manifests.map(manifestEvent).filter(Boolean)
+      .sort((left, right) => String(right.value).localeCompare(String(left.value)))[0];
+    $("#contracts-registered").textContent = state.operations.sources?.ok ? fullNumber(state.sources.length) : "—";
+    $("#contracts-active").textContent = state.operations.sources?.ok ? fullNumber(active) : "—";
+    $("#contracts-recorded").textContent = state.operations.sources?.ok ? `${manifests.length}/${state.sources.length}` : "—";
+    $("#contracts-latest-run").textContent = latest ? formatDateOnly(latest.value) : "Not recorded";
   }
 
   function filterContracts() {
@@ -993,14 +1036,17 @@
       const fingerprint = pick(manifest, ["schema_fingerprint"], null);
       const reason = pick(source, ["evidence_reason"], "No evidence reason returned");
       const promotion = pick(manifest, ["promotion_state"], null);
+      const lastEvent = manifestEvent(manifest);
+      const cadence = String(pick(source, ["cadence"], "cadence unknown")).replaceAll("_", " ");
       return `<tr>
-        <td><span class="cell-title">${escapeHtml(pick(source, ["title", "source_id"], "Unknown source"))}</span><span class="cell-subtitle">${escapeHtml(pick(source, ["publisher", "source_id"], "publisher unknown"))}</span></td>
+        <td><span class="cell-title">${escapeHtml(pick(source, ["title", "source_id"], "Unknown source"))}</span><span class="cell-subtitle">${escapeHtml(pick(source, ["publisher", "source_id"], "publisher unknown"))} · ${escapeHtml(cadence)}</span></td>
         <td>${statusChip(status, status)}</td>
+        <td><span class="cell-title">${escapeHtml(lastEvent ? formatDateOnly(lastEvent.value) : "Not recorded")}</span><span class="cell-subtitle" title="Latest recorded pipeline lifecycle event">${escapeHtml(lastEvent?.label || "No manifest evidence")}</span></td>
         <td><code>${escapeHtml(pick(manifest, ["source_data_period"], "not observed"))}</code></td>
         <td><code>${escapeHtml(pick(manifest, ["publisher_version"], "not observed"))}</code></td>
         <td><code>${rowCountFrom(source) === null ? "—" : fullNumber(rowCountFrom(source))}</code></td>
         <td><code title="${escapeHtml(fingerprint || "Not observed")}">${escapeHtml(fingerprint ? String(fingerprint).slice(0, 16) + "…" : "not observed")}</code></td>
-        <td><span class="cell-title">${escapeHtml(promotion || "Not proven")}</span><span class="cell-subtitle" title="${escapeHtml(reason)}">${escapeHtml(reason)}</span></td>
+        <td><span class="cell-title">${escapeHtml(promotion || "Not proven")}</span><span class="cell-subtitle" title="${escapeHtml(reason)}">${escapeHtml(reason)}</span><span class="cell-subtitle">${escapeHtml(manifest.run_id ? `run ${manifest.run_id}` : "No run ID")}</span></td>
       </tr>`;
     }).join("");
   }
