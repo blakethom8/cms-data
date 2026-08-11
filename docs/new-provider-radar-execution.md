@@ -28,6 +28,51 @@ Built and tested:
 All four tracks are complete. Product follow-ups from the precision spike are recorded in
 [new-provider-radar-precision-2026-08-11.md](new-provider-radar-precision-2026-08-11.md).
 
+## Production handoff snapshot
+
+This is the authoritative post-cutover identity for operations and downstream integration:
+
+- selected deployment: `deployment-20260811T031052Z-73cea84b1b`;
+- serving code: `fa4bcdd78ffc3ac3c60b2d63f7187035258a7417`;
+- warehouse release: `warehouse-20260811T021837Z-f44c147e30`;
+- warehouse pipeline commit: `3c3e761afcfb6aa8c5190e53985adfd50f8e0a51`;
+- warehouse SHA-256: `91e2ee4e22fd7b7f612765635e19601ce081730c8b0ddc634dc54d891a345ef2`;
+- runtime: `runtime-candidate-8985e8a-c26024b3`;
+- immediate rollback deployment: `deployment-20260811T023712Z-b68e0ca9c3`;
+- production smoke evidence:
+  `/srv/cms-data-platform/production/evidence/deployment-20260811T031052Z-73cea84b1b/smoke.json`
+  (SHA-256 `b3e46234169d1619c03d5dd9c899df1cf0db208ef8f6f57e5698d0d9eeb707cd`);
+- cutover configuration audit:
+  `/srv/cms-data-platform/audits/radar-t3-code-cutover-20260811T0314Z/`.
+
+The serving-code commit and warehouse-pipeline commit intentionally differ: T3 was a read-only API
+addition promoted against the already validated T2 warehouse. The release endpoint therefore
+reports the warehouse pipeline commit, while production-manager status reports the serving-code
+commit. Do not treat that expected split as drift. The warehouse file was not replaced or modified
+during the T3 code-only cutover.
+
+## Remaining cross-repo work
+
+There are no remaining cms-data acceptance items in T1–T4. The next work belongs primarily in
+provider-search and must preserve the API and event contracts in
+[new-provider-radar.md](new-provider-radar.md):
+
+- [ ] Opt the ad-hoc MD Watch search UI and proxy into the promoted `city` + `state` request mode;
+      retain ZIP mode for saved-market boundaries and keep response validation fail-closed.
+- [ ] Require at least one explicit taxonomy selection before notifications can be enabled; an
+      unset taxonomy may power the interactive feed but must not mean an all-taxonomy digest.
+- [ ] Keep email/digest delivery disabled while sampling a second real market that has configured
+      target taxonomies; record the same volume, fit, duplicate, boundary, and location-quality
+      measures used in the first precision report.
+- [ ] Design same-address burst grouping or capping for a future digest without deleting or
+      deduplicating durable feed events.
+- [ ] Re-evaluate digest defaults only after the second-market evidence exists. Do not infer a
+      universal volume threshold from the two-ZIP Denver QA sample.
+
+No cms-data change is needed for those product tasks unless provider-search uncovers a concrete
+contract or data-quality defect. Any future warehouse refresh or code promotion remains subject to
+the staging, validation, rollback, and explicit approval gates in the production runbook.
+
 ## Tracks
 
 Each track is independently shippable, in order. Conventional commits scoped by subsystem
