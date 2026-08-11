@@ -1248,7 +1248,7 @@
     const provider = evidence.provider;
     const activeSource = publisherSources.find(source => source.key === evidence.selectedSourceKey) || publisherSources[0];
     const activeTable = providerTable(activeSource);
-    content.innerHTML = `<section class="provider-identity" aria-label="Selected provider"><div><span class="eyebrow">Selected provider</span><h2>${escapeHtml(provider.name || `NPI ${provider.npi}`)}</h2><p><code>${escapeHtml(provider.npi)}</code>${provider.credentials ? ` · ${escapeHtml(provider.credentials)}` : ""}${provider.specialty ? ` · ${escapeHtml(provider.specialty)}` : ""}</p></div><button type="button" class="change-provider" data-provider-change>Change provider</button></section>
+    content.innerHTML = `<section class="provider-identity" aria-label="Selected provider"><div><span class="eyebrow">Selected provider</span><h2>${escapeHtml(provider.name || `NPI ${provider.npi}`)}</h2><p><code>${escapeHtml(provider.npi)}</code>${provider.credentials ? ` · ${escapeHtml(provider.credentials)}` : ""}${provider.specialty ? ` · ${escapeHtml(provider.specialty)}` : ""}</p><small class="discovery-provenance">${escapeHtml(discoverySourceLabel(provider.source))}</small></div><button type="button" class="change-provider" data-provider-change>Change provider</button></section>
       <section class="evidence-shelf" aria-labelledby="evidence-shelf-title"><div class="evidence-shelf-heading"><div><span class="eyebrow">Evidence shelf</span><h2 id="evidence-shelf-title">Publisher-source records <b>${publisherSources.length} sources</b></h2></div><p>Each tab is a separate raw publisher-source result for this NPI.</p></div><div class="evidence-tabs-frame"><button type="button" class="evidence-tab-scroll back" data-evidence-tab-scroll="back" aria-label="Show earlier evidence sources">←</button><div class="evidence-tabs" id="evidence-tabs" role="tablist" aria-label="Publisher evidence sources">${publisherSources.map(source => { const table = providerTable(source); const availability = evidenceAvailability(source); const selected = source.key === activeSource.key; const count = source.availability === "available" ? table.rows.length : availability.label; return `<button type="button" role="tab" aria-selected="${selected}" class="evidence-source-tab ${selected ? "selected" : ""}" data-evidence-source-tab="${escapeHtml(source.key)}"><span>${escapeHtml(source.title)}</span><b class="status-${availability.status}">${escapeHtml(String(count))}</b></button>`; }).join("")}</div><button type="button" class="evidence-tab-scroll forward" data-evidence-tab-scroll="forward" aria-label="Show later evidence sources">→</button></div>${renderEvidenceInspector(activeSource, provider, activeTable)}</section>
       ${derivedSources.length ? `<aside class="derived-relationships"><strong>Derived relationships · not publisher-source evidence</strong><p>${derivedSources.map(source => `<code>${escapeHtml(source.title)}</code>`).join(" · ")}</p><small>These warehouse bridges and inferences are intentionally kept outside the raw evidence shelf.</small></aside>` : ""}
       <aside class="evidence-caveat"><strong>Source rows stay separate.</strong><p>Records are never joined together in this workspace. A zero count means no matching source row was returned; an unavailable tab means the source cannot be retrieved in this warehouse.</p></aside>`;
@@ -1310,6 +1310,14 @@
     return String(value);
   }
 
+  function discoverySourceLabel(source) {
+    return ({
+      nppes: "NPPES identity",
+      "nppes + medicare": "NPPES identity · Medicare enriched",
+      medicare: "Medicare fallback"
+    })[String(source || "").toLowerCase()] || "Discovery source not reported";
+  }
+
   function renderEvidenceRecordLedger(source, table, rowIndex) {
     if (!table.rows.length) return "";
     const sourceName = escapeHtml(source.title);
@@ -1364,7 +1372,7 @@
     if (evidence.searching) { results.innerHTML = '<p class="search-status">Searching California provider records…</p>'; return; }
     if (evidence.searchError) { results.innerHTML = `<p class="search-status error">${escapeHtml(evidence.searchError)}</p>`; return; }
     if (!evidence.searchResults.length) { results.innerHTML = ""; return; }
-    results.innerHTML = `<p class="search-status">${evidence.searchResults.length} matching provider${evidence.searchResults.length === 1 ? "" : "s"}</p><ul>${evidence.searchResults.map(provider => `<li><button type="button" data-provider-select="${escapeHtml(provider.npi)}"><strong>${escapeHtml(provider.name)}</strong><span><code>${escapeHtml(provider.npi)}</code>${provider.credentials ? ` · ${escapeHtml(provider.credentials)}` : ""}${provider.specialty ? ` · ${escapeHtml(provider.specialty)}` : ""}</span><small>${escapeHtml([provider.city, provider.state, provider.group_name].filter(Boolean).join(" · ") || "Location not published")}</small></button></li>`).join("")}</ul>`;
+    results.innerHTML = `<p class="search-status">${evidence.searchResults.length} matching provider${evidence.searchResults.length === 1 ? "" : "s"}</p><ul>${evidence.searchResults.map(provider => `<li><button type="button" data-provider-select="${escapeHtml(provider.npi)}"><strong>${escapeHtml(provider.name)}</strong><span><code>${escapeHtml(provider.npi)}</code>${provider.credentials ? ` · ${escapeHtml(provider.credentials)}` : ""}${provider.specialty ? ` · ${escapeHtml(provider.specialty)}` : ""}</span><small>${escapeHtml([provider.city, provider.state, provider.group_name].filter(Boolean).join(" · ") || "Location not published")}</small><em class="discovery-provenance">${escapeHtml(discoverySourceLabel(provider.source))}</em></button></li>`).join("")}</ul>`;
   }
 
   async function searchProviders(query) {

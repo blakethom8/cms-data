@@ -707,6 +707,8 @@ body.sample-inspector-open { overflow: hidden; }
 .provider-search-results strong { font: 600 15px var(--display); }
 .provider-search-results span, .provider-search-results small { overflow: hidden; color: var(--muted); font: 8px var(--mono); line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
 .provider-search-results small { color: #788180; }
+.discovery-provenance { width: fit-content; padding: 3px 6px; color: #236268; background: #e1efed; border: 1px solid #bdd8d5; font: 700 7px var(--mono); font-style: normal; letter-spacing: .045em; text-transform: uppercase; }
+.provider-identity .discovery-provenance { display: inline-block; margin-top: 8px; }
 .provider-evidence-content { min-width: 0; }
 .provider-evidence-empty, .provider-evidence-loading, .provider-evidence-error { min-height: 330px; display: grid; place-content: center; justify-items: center; padding: 38px; text-align: center; background: var(--paper-strong); border: 1px solid var(--rule); box-shadow: var(--shadow); }
 .provider-evidence-empty h2, .provider-evidence-loading strong, .provider-evidence-error strong { margin: 8px 0 0; color: var(--ink-850); font: 600 25px var(--display); }
