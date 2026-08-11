@@ -1,0 +1,22 @@
+[Unit]
+Description=Build and compare the latest NPPES Radar staging candidate
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=dataops
+Group=dataops
+WorkingDirectory=/srv/cms-data-platform/staging/code-current
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/etc/cms-data/nppes-radar-reconciliation.env
+ExecStartPre=/srv/cms-data-platform/production/release-current/runtime/bin/python -m pipeline.data_platform acquire nppes_monthly_v2 --data-root /srv/cms-data-platform/data --json
+ExecStartPre=/srv/cms-data-platform/production/release-current/runtime/bin/python -m pipeline.data_platform acquire nppes_weekly_incremental_v2 --data-root /srv/cms-data-platform/data --json
+ExecStart=/srv/cms-data-platform/production/release-current/runtime/bin/python -m pipeline.radar_reconciliation --data-root /srv/cms-data-platform/data --backup-manifest ${CMS_RADAR_BACKUP_MANIFEST} --json
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/srv/cms-data-platform/data

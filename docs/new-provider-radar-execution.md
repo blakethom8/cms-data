@@ -84,6 +84,20 @@ Acceptance:
       with no manual file handling.
 - [ ] A rehearsed rollback leaves the prior promoted database serving.
 
+Implementation status (2026-08-10): the versioned full-platform builder now accepts one monthly
+baseline plus all consecutive weekly runs selected after it, applies them in source-period order,
+and records staging gates for baseline/event counts, release-ledger consistency, orphan release
+references, ordering, and duplicate logical events. `pipeline.radar_reconciliation` selects only
+validated publisher runs, builds and compares a fresh staging candidate, and records a no-op when
+the identical source/run/commit evidence was already reconciled. The checked-in
+`cms-nppes-radar-reconciliation.timer` polls publisher metadata and invokes that staging-only flow;
+it contains no promotion or production-cutover command.
+
+Blockers: the three acceptance items above require real monthly and two consecutive weekly
+artifacts on the data server, a prepared/compared production candidate, authenticated production
+smoke evidence, and a rollback rehearsal. Production selection/restart is the runbook's explicit
+approval gate, so none is checked and no cutover has been attempted. T3 and T4 remain gated on T2.
+
 ### T3 — Contract addition: city/state scope
 
 Product requirement from provider-search (ad-hoc "search a city" mode when a rep has no saved
