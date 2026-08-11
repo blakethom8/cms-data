@@ -26,6 +26,7 @@ The application reads these authenticated endpoints:
 | Endpoint | Purpose |
 | --- | --- |
 | `GET /health` | API and core-provider readiness |
+| `GET /profiles/search` | NPPES-first provider discovery with Medicare enrichment provenance |
 | `GET /tables` | Live DuckDB table inventory and estimated row counts |
 | `GET /explorer/catalog` | Curated dataset names, grain, join keys, and descriptions |
 | `GET /explorer/columns/{key}` | Full column names and DuckDB types |
@@ -80,10 +81,10 @@ does not perform live publisher discovery.
 ## Provider Evidence Workspace
 
 The Provider Evidence workspace is designed to make source semantics visible rather than to invent
-a single canonical employer field. It starts with four Cedars-Sinai examples and shows a
-source-by-provider matrix. Selecting a cell opens the physical fields from each native row so that
-addresses, organization names, enrollment identifiers, source periods, and duplicate rows can be
-compared directly.
+a single canonical employer field. Provider selection uses the NPPES-first `/profiles/search`
+discovery contract. Search results label whether an NPPES identity also has Medicare enrichment;
+that label explains available evidence and does not limit discovery to Medicare. The selected NPI
+then drives one `/explorer/provider-evidence` call whose source rows remain separate.
 
 The provider-first dossier shows every bounded source row in a horizontally scrollable raw-result
 ledger before the selected row's complete field/value view. Click a row or use
@@ -110,6 +111,11 @@ The sources intentionally remain separate because they make different claims:
 The browser cannot supply table names or SQL. `GET /explorer/provider-evidence` uses a static source
 allowlist and bound NPI parameters, returns at most 25 rows per source/provider combination, and
 reports optional missing tables instead of fabricating empty source coverage.
+
+The three provider endpoints remain separate by design. `/profiles/search` discovers an NPI,
+`/profiles/{npi}` builds the curated product dossier, and `/explorer/provider-evidence` exposes
+bounded source-native records for audit. See
+[provider-serving-contract.md](provider-serving-contract.md) for the complete contract.
 
 ## Control Boundary
 

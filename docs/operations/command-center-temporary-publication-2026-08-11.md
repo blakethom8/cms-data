@@ -1,7 +1,7 @@
 # Command Center temporary publication — 2026-08-11
 
-> **Status: BLOCKED at approval gate for exact-NPI search fix candidate
-> `deployment-20260811T141921Z-b26c3f3d25`; dashboard and public listeners are not running.**
+> **Status: BLOCKED at approval gate for combined NPPES-first v3 candidate
+> `deployment-20260811T145509Z-187674a921`; dashboard and public listeners are not running.**
 
 ## Decision and boundary
 
@@ -132,6 +132,112 @@ Pre-cutover evidence:
 This candidate has its own approval-gated selection. Do not run the one-shot cutover or resume the
 gateway/nginx checks until Blake explicitly approves production cutover to
 `deployment-20260811T141921Z-b26c3f3d25`.
+
+## Combined NPPES-first v3 candidate — 2026-08-11 14:55–15:00 UTC
+
+The search-only candidate `deployment-20260811T141921Z-b26c3f3d25` is superseded for deployment
+planning and must not be selected. It fixed exact-NPI SQL but still used DAC-first name discovery.
+The combined code now uses NPPES as the discovery and profile-identity backbone, treats DAC as
+optional Medicare enrichment, merges DAC and NPPES profile locations with per-row provenance, and
+shows discovery provenance in the Command Center. The durable API separation is documented in
+`docs/provider-serving-contract.md`.
+
+Code commits were pushed to `origin/main` before preparation:
+
+- `feb0c84` — `feat(api): make provider discovery NPPES-first`;
+- `18bfc9f` — `feat(command-center): show discovery provenance`.
+
+Before each commit, the full API suite returned respectively:
+
+```text
+371 passed, 1 skipped, 135 warnings in 10.46s
+371 passed, 1 skipped, 135 warnings in 10.84s
+```
+
+The first sealed checkout path was rejected during prepare dry-run because a post-seal Git status
+refresh recreated `.git/index` as writable. It was never prepared or referenced by a deployment.
+The retained replacement artifact
+`18bfc9f88c168af4a48cd1271761f1e589972d8b-provider-v3-1` is a clean detached checkout, has no
+writable or cache paths, and has fingerprint
+`sha256:b3389fa458dffdf0f0b9189a2db61cbdd9e3d1d428e9bd37f0188dd062ce21fa`.
+Dependency diff against the selected serving commit was empty, so the existing runtime was reused.
+
+Prepare dry-run and real prepare passed. The resulting immutable candidate is
+`deployment-20260811T145509Z-187674a921`, reusing runtime
+`runtime-candidate-8985e8a-c26024b3` and unchanged warehouse
+`warehouse-20260811T021837Z-f44c147e30` (20,569,665,536 bytes, SHA-256
+`91e2ee4e22fd7b7f612765635e19601ce081730c8b0ddc634dc54d891a345ef2`). Its sealed provenance
+snapshot is `root:dataops` mode `0440`, 32,909 bytes, SHA-256
+`fd426f571eaf700fd0d70567b128c7195b80a780e3f6d73cdc1e77003df80244`.
+
+The first rehearsal start attempt failed before process launch because a root shell could not open a
+temporary log after ownership changed under Linux protected-file rules. The second rehearsal ran
+the full smoke suite successfully, then the follow-on ETag script stopped because it mistakenly
+used HTTP `HEAD` on a GET-only route. Both attempts touched nothing live and their cleanup traps
+released the loopback port. The corrected GET-header contract and feature rehearsal passed.
+
+Canonical smoke verdict:
+
+```text
+Production smoke: passed
+Evidence: /srv/cms-data-platform/production/evidence/deployment-20260811T145509Z-187674a921/smoke.json
+- health: passed
+- process_identity: passed
+- authentication_required: passed
+- practice_capabilities: passed
+- practice_search: passed
+- provider_profile: passed
+- industry_search: passed
+- industry_options: passed
+- industry_exact_option_round_trip: passed
+- industry_detail: passed
+- research: passed
+- clinical_trials: passed
+- explorer_catalog: passed
+- required_tables: passed
+- warehouse_counts: passed
+```
+
+The smoke evidence is `root:root` mode `0440`, 3,511 bytes, SHA-256
+`9e8c183c2c26021dc7c343c63fda0391cb6c65d55bfeebdbefd8e82b0259126c`.
+
+Contract and feature evidence:
+
+```text
+release_id: deployment-20260811T145509Z-187674a921
+representation_version: 3
+source_vintages: 18
+warehouse_release_id: warehouse-20260811T021837Z-f44c147e30
+etag: "deployment-20260811T145509Z-187674a921:3"
+conditional_status: 304
+
+Alicia name search: 1396877080, ALICIA TERANDO, nppes + medicare, PASADENA,
+  SURGICAL ONCOLOGY
+Alicia exact NPI search: 1396877080, nppes + medicare, ALICIA TERANDO
+NPPES-only search: 1003000100, nppes, GERARDO GOMEZ
+Alicia locations: 625 S FAIR OAKS AVE / SUITE 100 / dac;
+  625 S FAIR OAKS AVE STE 270 / nppes
+NPPES-only profile: 1003000100, GERARDO GOMEZ, Case Manager/Care Coordinator,
+  108 W VICTORIA ST / nppes
+Fischer: 3 groups, 2 hospitals
+Do: 2 groups, 4 hospitals
+Provider evidence: NPPES available, 1 Alicia row
+```
+
+The temporary dashboard gateway returned 200 for the static app, JavaScript, health, Alicia search,
+and Alicia provider evidence. It returned 404 for `/api/query`, `/api/release`, Radar, and `.env`.
+Ports 4198 and 18080 were released, the sealed code artifact retained zero bytecode/cache paths,
+and the production Command Center service remains inactive. Public ports 80/443 and loopback 4199
+remain closed.
+
+Activate and rollback dry-runs both returned exit code 0 with `error_summary: null`. Final manager
+status is healthy with artifact integrity passed, zero blocking transactions, pointer matching the
+ledger, and no transition sentinel. Live selection remains the verified predecessor
+`deployment-20260811T135930Z-2c3fb4878d`.
+
+Stop here. Production cutover to `deployment-20260811T145509Z-187674a921` requires Blake's explicit
+approval naming this candidate. Only after successful cutover may the gateway and nginx publication
+checks resume; DNS remains an owner action after local HTTPS validation.
 
 ## Rollback
 
