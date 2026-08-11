@@ -1,10 +1,8 @@
 # Profile affiliations code-only deployment — 2026-08-11
 
-> **Status: RECOVERY READY, CUTOVER APPROVAL REQUIRED — the intact predecessor
-> `deployment-20260811T031052Z-73cea84b1b` is selected and verified after the
-> 2026-08-11 rollback described below. Clean replacement
-> `deployment-20260811T135930Z-2c3fb4878d` passed R1–R6; do not select it without a new
-> explicit approval.**
+> **Status: COMPLETE — recovery deployment `deployment-20260811T135930Z-2c3fb4878d`
+> was selected and verified on 2026-08-11 after Blake's explicit approval. The intact
+> predecessor `deployment-20260811T031052Z-73cea84b1b` remains available for rollback.**
 
 ## Background — what this ships and why
 
@@ -577,6 +575,42 @@ This is a new deployment ID, so the earlier approval does not authorize its sele
 and obtain Blake's explicit approval before running a one-shot cutover targeting
 `deployment-20260811T135930Z-2c3fb4878d`. Dashboard publication remains paused until the affiliation
 API is restored and verified.
+
+### Recovery R7–R8 completion evidence — 2026-08-11 14:11 UTC
+
+Blake explicitly approved production cutover to
+`deployment-20260811T135930Z-2c3fb4878d`. The first invocation stopped before mutation because
+`CMS_API_KEY` was not loaded; it returned
+`API key environment variable is empty: CMS_API_KEY`. After loading the protected CMS API and AACT
+reader environments without displaying them, the one-shot cutover returned exit code 0:
+
+```json
+{
+  "rollback_available": true,
+  "selected_deployment_id": "deployment-20260811T135930Z-2c3fb4878d",
+  "smoke_evidence": "/srv/cms-data-platform/production/evidence/deployment-20260811T135930Z-2c3fb4878d/smoke.json",
+  "state": "promoted"
+}
+```
+
+R8 returned the expected release ID, representation version 2, 18 source-vintage entries, unchanged
+warehouse checksum, ETag `"deployment-20260811T135930Z-2c3fb4878d:2"`, and a `304` conditional
+round trip. The live feature checks again returned Fischer's 3 groups / 2 hospitals and Do's
+2 groups / 4 hospitals.
+
+Final recovery state:
+
+- manager healthy and control plane healthy; selected state `verified` at
+  `2026-08-11T14:10:55+00:00`; artifact integrity passed, zero blocking transactions, pointer
+  matches ledger, and no transition sentinel;
+- service PID `3213811`, active/running;
+- selected code commit `7285b4bab8969bcbd3cd4b00415149f15756bc8d`;
+- warehouse remains `warehouse-20260811T021837Z-f44c147e30` with checksum
+  `91e2ee4e22fd7b7f612765635e19601ce081730c8b0ddc634dc54d891a345ef2`;
+- verified smoke evidence is `root:root` mode `0440`, 3,511 bytes, SHA-256
+  `1f9c1b51569ff8af6fadd62ed09d0ebf87683fa426bf055ae5067d17c40b5828`;
+- no warning-level `cms-api` journal entries during cutover;
+- predecessor bundle `deployment-20260811T031052Z-73cea84b1b` remains intact for rollback.
 
 ## Stop conditions (from the runbook, instantiated)
 
