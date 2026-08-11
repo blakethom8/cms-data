@@ -1,0 +1,27 @@
+[Unit]
+Description=CMS Data Command Center read-only gateway
+After=network-online.target cms-api.service cms-api-loopback.socket
+Wants=network-online.target cms-api-loopback.socket
+
+[Service]
+Type=simple
+User=dataops
+Group=dataops
+WorkingDirectory=/srv/cms-data-platform/command-center/current/code
+EnvironmentFile=/etc/cms-data/cms-command-center.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/srv/cms-data-platform/command-center/current/runtime/bin/python -B /srv/cms-data-platform/command-center/current/code/dashboard/command-center/dev_server.py --host 127.0.0.1 --port 4199 --api-base-url http://127.0.0.1:8080
+Restart=on-failure
+RestartSec=3
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target
