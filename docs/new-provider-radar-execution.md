@@ -50,13 +50,19 @@ without hands. Reuse the manifest/acquisition machinery (`pipeline/acquire.py`,
 
 Acceptance:
 
-- [ ] A single command (cron-able) discovers, acquires, and extracts a not-yet-seen weekly
+- [x] A single command (cron-able) discovers, acquires, and extracts a not-yet-seen weekly
       release; a re-run on the same publisher version is a recorded no-op.
-- [ ] A calendar date with no new publisher version produces no acquisition (never assume a
+- [x] A calendar date with no new publisher version produces no acquisition (never assume a
       date proves a release exists).
-- [ ] Manifest rows record source id, publisher version, checksums, and run id for each
+- [x] Manifest rows record source id, publisher version, checksums, and run id for each
       acquisition.
-- [ ] Fixture-based tests for the discovery→acquire handoff of both source ids.
+- [x] Fixture-based tests for the discovery→acquire handoff of both source ids.
+
+Completed 2026-08-10: `pipeline.data_platform acquire nppes_weekly_incremental_v2` now uses the
+discovered publisher version as its idempotency key, writes the validated archive and extracted
+`npidata_pfile.csv` under one immutable run directory, and records SHA-256/byte-size evidence for
+both artifacts. Monthly and weekly fixture handoffs cover the successful acquisition and
+same-version no-op paths. No T1 blockers remain.
 
 ### T2 — Production install and promotion integration
 

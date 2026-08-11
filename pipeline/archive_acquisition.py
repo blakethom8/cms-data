@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import zipfile
 from dataclasses import dataclass
@@ -71,6 +72,12 @@ ARCHIVE_PROFILES = {
     ),
 }
 SUPPORTED_ARCHIVE_ACQUISITION_SOURCES = frozenset(ARCHIVE_PROFILES)
+NPPES_SOURCE_IDS = frozenset(
+    {"nppes_monthly_v2", "nppes_weekly_incremental_v2"}
+)
+NPPES_PROVIDER_MEMBER_PATTERN = re.compile(
+    r"(^|/)npidata_pfile_\d{8}-\d{8}\.csv$", re.I
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +87,43 @@ class ArchiveInspection:
     schema_fingerprint: str
     member_count: int
     uncompressed_bytes: int
+
+
+def _extract_nppes_provider_csv(archive_path: Path, destination: Path) -> tuple[int, str]:
+    """Extract exactly one validated NPPES provider CSV into its immutable run."""
+    partial = destination.with_name(destination.name + ".partial")
+    digest = hashlib.sha256()
+    size = 0
+    try:
+        with zipfile.ZipFile(archive_path) as archive:
+            matches = [
+                member
+                for member in archive.infolist()
+                if not member.is_dir()
+                and NPPES_PROVIDER_MEMBER_PATTERN.search(member.filename)
+            ]
+            if len(matches) != 1:
+                raise AcquisitionError(
+                    f"Expected one NPPES provider CSV; found {len(matches)}"
+                )
+            member = matches[0]
+            if member.flag_bits & 0x1:
+                raise AcquisitionError("NPPES provider CSV is encrypted")
+            with archive.open(member) as source, partial.open("xb") as target:
+                while chunk := source.read(8 * 1024 * 1024):
+                    target.write(chunk)
+                    digest.update(chunk)
+                    size += len(chunk)
+                target.flush()
+                os.fsync(target.fileno())
+            if size != member.file_size:
+                raise AcquisitionError("Extracted NPPES provider CSV size changed")
+        os.replace(partial, destination)
+        return size, digest.hexdigest()
+    except (OSError, zipfile.BadZipFile) as error:
+        raise AcquisitionError(f"Could not extract NPPES provider CSV: {error}") from error
+    finally:
+        partial.unlink(missing_ok=True)
 
 
 def inspect_archive(path: Path, profile: ArchiveProfile) -> ArchiveInspection:
@@ -176,6 +220,14 @@ def acquire_archive_release(
             "archive_members": inspection.member_count,
             "uncompressed_bytes": inspection.uncompressed_bytes,
         }
+        manifest.artifact_checksums = {"source.zip": digest}
+        manifest.artifact_byte_sizes = {"source.zip": size}
+        if release.source_id in NPPES_SOURCE_IDS:
+            csv_size, csv_digest = _extract_nppes_provider_csv(
+                artifact, run_directory / "npidata_pfile.csv"
+            )
+            manifest.artifact_checksums["npidata_pfile.csv"] = csv_digest
+            manifest.artifact_byte_sizes["npidata_pfile.csv"] = csv_size
         manifest.validation_state = ValidationState.PASSED
         manifest.validation_timestamp = utc_now()
     except (AcquisitionError, OSError, ValueError) as error:

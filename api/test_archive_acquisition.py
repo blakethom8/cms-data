@@ -1,3 +1,6 @@
+import hashlib
+import json
+import shutil
 import sys
 import zipfile
 from pathlib import Path
@@ -8,8 +11,11 @@ REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from pipeline.acquisition import AcquisitionError
+from pipeline import archive_acquisition, data_platform
 from pipeline.archive_acquisition import ARCHIVE_PROFILES, inspect_archive
 from pipeline.data_platform import EXIT_HEALTHY, main
+from pipeline.discovery import discover_all
+from pipeline.manifests import ManifestStore
 
 FIXTURES = REPOSITORY_ROOT / "pipeline" / "fixtures" / "publisher_metadata"
 
@@ -99,3 +105,67 @@ def test_archive_acquisition_dry_run_uses_discovery_fixtures_without_writes(
     assert code == EXIT_HEALTHY
     assert not root.exists()
     assert f'"source_id": "{source_id}"' in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("source_id", "member"),
+    [
+        ("nppes_monthly_v2", "npidata_pfile_20050523-20670712.csv"),
+        (
+            "nppes_weekly_incremental_v2",
+            "npidata_pfile_20670713-20670719.csv",
+        ),
+    ],
+)
+def test_nppes_discovery_acquires_extracts_and_records_same_version_noop(
+    source_id: str,
+    member: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source_archive = tmp_path / "publisher.zip"
+    provider_csv = b"NPI,Entity Type Code\n1234567890,1\n"
+    _zip(source_archive, {member: provider_csv})
+    discovery = discover_all(fixture_dir=FIXTURES)[source_id]
+    assert discovery.release is not None
+
+    monkeypatch.setattr(
+        data_platform,
+        "_discover_for_acquisition",
+        lambda *_args, **_kwargs: discovery,
+    )
+
+    download_calls = 0
+
+    def fake_download(_release, destination, **_kwargs):
+        nonlocal download_calls
+        download_calls += 1
+        shutil.copyfile(source_archive, destination)
+        payload = destination.read_bytes()
+        return len(payload), hashlib.sha256(payload).hexdigest()
+
+    monkeypatch.setattr(archive_acquisition, "download_artifact", fake_download)
+    data_root = tmp_path / "data"
+    command = ["acquire", source_id, "--data-root", str(data_root), "--json"]
+
+    assert main(command) == EXIT_HEALTHY
+    first_payload = json.loads(capsys.readouterr().out)
+    manifest = first_payload["manifest"]
+    run_directory = Path(first_payload["run_directory"])
+    assert (run_directory / "npidata_pfile.csv").read_bytes() == provider_csv
+    assert manifest["source_id"] == source_id
+    assert manifest["publisher_version"] == discovery.release.publisher_version
+    assert manifest["run_id"] == run_directory.name
+    assert manifest["artifact_checksums"] == {
+        "npidata_pfile.csv": hashlib.sha256(provider_csv).hexdigest(),
+        "source.zip": manifest["sha256"],
+    }
+
+    assert main(command) == EXIT_HEALTHY
+    second_payload = json.loads(capsys.readouterr().out)
+    assert second_payload["status"] == "no_op"
+    assert second_payload["reason"] == "publisher_version_already_acquired"
+    assert second_payload["manifest"]["run_id"] == manifest["run_id"]
+    assert download_calls == 1
+    assert len(ManifestStore(data_root / "manifests.json").load().manifests) == 1

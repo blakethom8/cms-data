@@ -29,12 +29,13 @@ from .aact_staging import stage_aact_database, write_stage_evidence
 from .discovery import (
     DiscoveryResult,
     DiscoveryState,
+    ReleaseMetadata,
     discover_all,
     discover_source,
     safe_error,
     utc_now,
 )
-from .manifests import ManifestDocument, ManifestStore
+from .manifests import ManifestDocument, ManifestStore, RunManifest, ValidationState
 from .releases import (
     STAGING_ENVIRONMENT,
     ReleaseError,
@@ -474,6 +475,16 @@ def _render_acquisition(payload: dict, *, dry_run: bool) -> str:
             ]
         )
     manifest = payload["manifest"]
+    if payload.get("status") == "no_op":
+        return "\n".join(
+            [
+                "Immutable acquisition no-op",
+                f"Source: {manifest['source_id']}",
+                f"Publisher version: {manifest['publisher_version']}",
+                f"Existing run: {manifest['run_id']}",
+                "No files were downloaded or written.",
+            ]
+        )
     return "\n".join(
         [
             "Immutable acquisition completed",
@@ -486,6 +497,37 @@ def _render_acquisition(payload: dict, *, dry_run: bool) -> str:
             f"Run directory: {payload['run_directory']}",
             "Promotion state: not_promoted",
         ]
+    )
+
+
+def _completed_nppes_acquisition(
+    manifest_path: Path, data_root: Path, release: ReleaseMetadata
+) -> RunManifest | None:
+    source_id = release.source_id
+    publisher_version = release.publisher_version
+    if source_id not in {"nppes_monthly_v2", "nppes_weekly_incremental_v2"}:
+        return None
+    matches = [
+        manifest
+        for manifest in ManifestStore(manifest_path).load().manifests
+        if manifest.source_id == source_id
+        and manifest.publisher_version == publisher_version
+        and manifest.validation_state == ValidationState.PASSED
+        and manifest.sha256
+        and manifest.artifact_checksums.get("npidata_pfile.csv")
+        and (
+            data_root
+            / "runs"
+            / source_id
+            / manifest.run_id
+            / "npidata_pfile.csv"
+        ).is_file()
+    ]
+    if not matches:
+        return None
+    return max(
+        matches,
+        key=lambda manifest: (manifest.retrieval_timestamp or "", manifest.run_id),
     )
 
 
@@ -642,6 +684,30 @@ def main(argv: list[str] | None = None) -> int:
                 print(json.dumps(payload, indent=2, sort_keys=True))
             else:
                 print(_render_acquisition(payload, dry_run=True))
+            return EXIT_HEALTHY
+
+        try:
+            completed = _completed_nppes_acquisition(
+                manifest_path, args.data_root, release
+            )
+        except (OSError, ValueError) as error:
+            payload = {"source_id": args.source_id, "error": safe_error(error)}
+            if args.json:
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                print(f"Acquisition failed: {payload['error']}", file=sys.stderr)
+            return EXIT_ACQUISITION_FAILURE
+        if completed is not None:
+            payload = {
+                "status": "no_op",
+                "reason": "publisher_version_already_acquired",
+                "manifest": completed.to_dict(),
+                "wrote_files": False,
+            }
+            if args.json:
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                print(_render_acquisition(payload, dry_run=False))
             return EXIT_HEALTHY
 
         try:

@@ -43,6 +43,8 @@ class RunManifest:
     source_url: str | None = None
     byte_size: int | None = None
     sha256: str | None = None
+    artifact_checksums: dict[str, str] = field(default_factory=dict)
+    artifact_byte_sizes: dict[str, int] = field(default_factory=dict)
     schema_fingerprint: str | None = None
     source_encoding: str | None = None
     row_counts: dict[str, int] = field(default_factory=dict)
@@ -68,6 +70,18 @@ class RunManifest:
             raise ValueError("byte_size cannot be negative")
         if self.sha256 is not None and not _is_sha256(self.sha256):
             raise ValueError("sha256 must be 64 lowercase hexadecimal characters")
+        if any(
+            not name or not _is_sha256(value)
+            for name, value in self.artifact_checksums.items()
+        ):
+            raise ValueError("artifact_checksums must map non-empty names to SHA-256 values")
+        if any(
+            not name or not isinstance(value, int) or value < 0
+            for name, value in self.artifact_byte_sizes.items()
+        ):
+            raise ValueError(
+                "artifact_byte_sizes must map non-empty names to non-negative integers"
+            )
         if any(not isinstance(value, int) or value < 0 for value in self.row_counts.values()):
             raise ValueError("row_counts values must be non-negative integers")
         if self.error_summary is not None:
@@ -100,6 +114,8 @@ class RunManifest:
             "source_url": self.source_url,
             "byte_size": self.byte_size,
             "sha256": self.sha256,
+            "artifact_checksums": dict(sorted(self.artifact_checksums.items())),
+            "artifact_byte_sizes": dict(sorted(self.artifact_byte_sizes.items())),
             "schema_fingerprint": self.schema_fingerprint,
             "source_encoding": self.source_encoding,
             "row_counts": dict(sorted(self.row_counts.items())),
@@ -133,6 +149,8 @@ class RunManifest:
                 source_url=value.get("source_url"),
                 byte_size=value.get("byte_size"),
                 sha256=value.get("sha256"),
+                artifact_checksums=value.get("artifact_checksums") or {},
+                artifact_byte_sizes=value.get("artifact_byte_sizes") or {},
                 schema_fingerprint=value.get("schema_fingerprint"),
                 source_encoding=value.get("source_encoding"),
                 row_counts=value.get("row_counts") or {},
