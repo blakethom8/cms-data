@@ -34,7 +34,13 @@ logger = logging.getLogger(__name__)
 # endpoint's response shape changes; consumers cache responses keyed on
 # (release_id, representation_version), so a shape change without a bump would
 # serve wrong data from a correct cache.
-REPRESENTATION_VERSION = 1
+#
+# v2 — /profiles/{npi} affiliation breadth (81fcf37): group rows gained
+# `reassignment_size` and `sources`, and the payload gained a top-level
+# `hospital_affiliations` list. The endpoint is untyped in OpenAPI, so the
+# snapshot comparison cannot see this change; the bump follows the operating
+# doctrine ("any response-shape change must bump") rather than the snapshot.
+REPRESENTATION_VERSION = 2
 
 # Matches pipeline/production_manager.py DEPLOYMENT_ID_PATTERN.
 DEPLOYMENT_ID_PATTERN = re.compile(r"^[a-z]+-[0-9]{8}T[0-9]{6}Z-[a-f0-9]{10}$")

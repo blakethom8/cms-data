@@ -20,7 +20,9 @@ from request_context import (
 )
 
 RELEASE = ReleaseMetadata(release_id="deployment-20260804T163418Z-2ad954a774")
-ETAG = '"deployment-20260804T163418Z-2ad954a774:1"'
+# The trailing integer is REPRESENTATION_VERSION; keep this pin in sync
+# with release_info so the 304 short-circuit under test actually fires.
+ETAG = '"deployment-20260804T163418Z-2ad954a774:2"'
 SHARED = "shared-secret"
 SCOPED = "ps-prod:prod-value"
 
