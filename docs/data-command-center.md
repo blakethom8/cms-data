@@ -41,9 +41,12 @@ The temporary hosted publication is documented in
 Its gateway exposes only the reviewed GET/HEAD routes used by this application; the browser never
 receives the scoped CMS API credential, and arbitrary `/api/*` forwarding is prohibited.
 
-The `/operations/*` routes only read DuckDB metadata, the typed source registry, and the configured
-manifest store. Set `CMS_MANIFEST_PATH` when the production manifest is not located at the repository
-default `data/manifests.json`. The API does not return the manifest's filesystem path.
+The `/operations/*` routes only read DuckDB metadata, the typed source registry, and a manifest
+snapshot. On a production bundle, the API derives that snapshot from the selected immutable
+deployment (`production/evidence/<deployment-id>/source-manifests.json`), using the same bundle
+identity as `/release`. This keeps run evidence aligned across cutovers without rewriting service
+configuration. `CMS_MANIFEST_PATH` remains the explicit override for non-bundle installations; the
+repository default is `data/manifests.json`. The API never returns the manifest's filesystem path.
 
 ### Local live-data preview
 
@@ -75,6 +78,9 @@ The Command Center distinguishes facts from missing evidence:
 - a manifest is shown as `validated_active` only when validation passed, promotion is active,
   retrieval is recorded, and the active release ID matches the release ID;
 - a missing manifest is reported as missing evidence, never as a successful or current refresh;
+- “last ran” means the latest recorded pipeline lifecycle timestamp for that source (promotion,
+  validation, retrieval, then discovery in descending evidentiary order); it is not the publisher's
+  source period or the API deployment time;
 - publisher freshness still requires the separate discovery/status workflow. The request-serving API
 does not perform live publisher discovery.
 

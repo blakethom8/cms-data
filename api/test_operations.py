@@ -108,6 +108,44 @@ def test_sources_join_registry_contracts_to_latest_manifest_evidence(tmp_path: P
     assert nppes["latest_manifest"]["run_id"] == "active"
 
 
+def test_sources_follow_selected_deployment_manifest_evidence(
+    tmp_path: Path, monkeypatch
+) -> None:
+    deployment_id = "deployment-20260811T160000Z-0123456789"
+    production = tmp_path / "production"
+    bundle = production / "releases" / deployment_id
+    evidence = production / "evidence" / deployment_id
+    bundle.mkdir(parents=True)
+    evidence.mkdir(parents=True)
+    (production / "release-current").symlink_to(bundle)
+    ManifestStore(evidence / "source-manifests.json").save(
+        ManifestDocument(
+            manifests=[
+                _manifest(
+                    run_id="selected",
+                    release_id="release-selected",
+                    validation=ValidationState.PASSED,
+                    promotion=PromotionState.ACTIVE,
+                    timestamp="2026-08-11T16:00:00+00:00",
+                )
+            ]
+        )
+    )
+    monkeypatch.delenv("CMS_MANIFEST_PATH", raising=False)
+    monkeypatch.setenv("DUCKDB_PATH", str(production / "release-current" / "warehouse"))
+
+    connection = duckdb.connect(":memory:")
+    app = FastAPI()
+    app.include_router(get_operations_router(lambda: connection))
+    payload = TestClient(app).get("/operations/sources").json()
+    nppes = next(
+        source for source in payload["sources"] if source["source_id"] == "nppes_monthly_v2"
+    )
+
+    assert nppes["evidence_status"] == "validated_active"
+    assert nppes["latest_manifest"]["run_id"] == "selected"
+
+
 def test_lineage_reports_declared_dependencies_and_observed_inventory(tmp_path: Path) -> None:
     payload = _client(tmp_path).get("/operations/lineage").json()
     nodes = {node["id"]: node for node in payload["nodes"]}

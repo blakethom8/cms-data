@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable
@@ -25,6 +26,8 @@ logger = logging.getLogger(__name__)
 
 
 DEFAULT_MANIFEST_PATH = REPOSITORY_ROOT / "data" / "manifests.json"
+DEPLOYMENT_ID_PATTERN = re.compile(r"^[a-z]+-[0-9]{8}T[0-9]{6}Z-[a-f0-9]{10}$")
+SOURCE_MANIFEST_EVIDENCE = "source-manifests.json"
 
 
 def _utc_now() -> str:
@@ -32,7 +35,28 @@ def _utc_now() -> str:
 
 
 def _configured_manifest_path() -> Path:
-    return Path(os.getenv("CMS_MANIFEST_PATH", str(DEFAULT_MANIFEST_PATH)))
+    override = os.getenv("CMS_MANIFEST_PATH", "").strip()
+    if override:
+        return Path(override)
+
+    # Production serves `<root>/release-current/warehouse`. Resolve only the
+    # bundle directory, then bind operations evidence to that immutable
+    # deployment's sealed snapshot. This follows the selected release without
+    # a mutable environment-file edit at every cutover.
+    duckdb_path = os.getenv("DUCKDB_PATH", "").strip()
+    if duckdb_path:
+        try:
+            bundle = Path(duckdb_path).parent.resolve(strict=True)
+        except OSError:
+            bundle = None
+        if (
+            bundle is not None
+            and DEPLOYMENT_ID_PATTERN.fullmatch(bundle.name)
+            and bundle.parent.name == "releases"
+        ):
+            return bundle.parent.parent / "evidence" / bundle.name / SOURCE_MANIFEST_EVIDENCE
+
+    return DEFAULT_MANIFEST_PATH
 
 
 def _load_manifests(path: Path) -> tuple[ManifestDocument, str | None]:
