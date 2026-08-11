@@ -57,6 +57,22 @@ HOP_BY_HOP_HEADERS = {
     "upgrade",
 }
 LOCAL_ENVIRONMENT_KEYS = {"CMS_API_BASE_URL", "CMS_API_KEY"}
+ALLOWED_API_PATHS = {
+    "/api/health",
+    "/api/tables",
+    "/api/explorer/catalog",
+    "/api/explorer/provider-evidence",
+    "/api/operations/overview",
+    "/api/operations/sources",
+    "/api/operations/runs",
+    "/api/operations/lineage",
+    "/api/profiles/search",
+}
+ALLOWED_API_PATH_PATTERNS = (
+    re.compile(r"/api/tables/[A-Za-z0-9_]+/schema"),
+    re.compile(r"/api/explorer/columns/[A-Za-z0-9_-]+"),
+    re.compile(r"/api/explorer/sample(?:-all)?/[A-Za-z0-9_-]+"),
+)
 
 
 def load_local_environment(path: Path) -> None:
@@ -89,9 +105,17 @@ def load_local_environment(path: Path) -> None:
 class CommandCenterHandler(SimpleHTTPRequestHandler):
     api_base_url: str
     api_key: str
+    server_version = "CMS-Command-Center"
+    sys_version = ""
 
     def end_headers(self) -> None:
         """Keep local dashboard assets fresh while preserving proxied API headers."""
+        self.send_header("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; "
+                         "object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
+        self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
         if not (self.path == "/api" or self.path.startswith("/api/")):
             self.send_header(
                 "Cache-Control", "no-store, no-cache, max-age=0, must-revalidate"
@@ -102,6 +126,9 @@ class CommandCenterHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802 - stdlib handler contract
         if self.path == "/api" or self.path.startswith("/api/"):
+            if not self._api_path_allowed():
+                self.send_error(404)
+                return
             self._proxy_read_request(include_body=True)
             return
         if self._hidden_static_path_requested():
@@ -111,6 +138,9 @@ class CommandCenterHandler(SimpleHTTPRequestHandler):
 
     def do_HEAD(self) -> None:  # noqa: N802 - stdlib handler contract
         if self.path == "/api" or self.path.startswith("/api/"):
+            if not self._api_path_allowed():
+                self.send_error(404)
+                return
             self._proxy_read_request(include_body=False)
             return
         if self._hidden_static_path_requested():
@@ -124,6 +154,16 @@ class CommandCenterHandler(SimpleHTTPRequestHandler):
             segment.startswith(".")
             for segment in unquote(urlparse(self.path).path).split("/")
             if segment
+        )
+
+    def _api_path_allowed(self) -> bool:
+        """Expose only the bounded read-only routes used by the Command Center."""
+        raw_path = urlparse(self.path).path
+        decoded_path = unquote(raw_path)
+        if decoded_path != raw_path:
+            return False
+        return decoded_path in ALLOWED_API_PATHS or any(
+            pattern.fullmatch(decoded_path) for pattern in ALLOWED_API_PATH_PATTERNS
         )
 
     def _proxy_read_request(self, *, include_body: bool) -> None:

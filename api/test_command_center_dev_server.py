@@ -110,3 +110,35 @@ def test_hidden_static_paths_are_not_served() -> None:
     assert _handler("/assets/.private/key")._hidden_static_path_requested() is True
     assert _handler("/%2Eenv")._hidden_static_path_requested() is True
     assert _handler("/styles.css")._hidden_static_path_requested() is False
+
+
+def test_dashboard_gateway_allows_only_reviewed_read_routes() -> None:
+    allowed = (
+        "/api/health",
+        "/api/tables",
+        "/api/tables/raw_nppes/schema",
+        "/api/explorer/catalog",
+        "/api/explorer/columns/nppes",
+        "/api/explorer/sample/nppes?city=Denver&state=CO",
+        "/api/explorer/sample-all/nppes?limit=25",
+        "/api/explorer/provider-evidence?npis=1710390513",
+        "/api/operations/overview",
+        "/api/operations/sources",
+        "/api/operations/runs?limit=50",
+        "/api/operations/lineage",
+        "/api/profiles/search?q=Fischer&state=CA&limit=12",
+    )
+    blocked = (
+        "/api",
+        "/api/query",
+        "/api/docs",
+        "/api/openapi.json",
+        "/api/release",
+        "/api/radar/providers",
+        "/api/operations/unknown",
+        "/api/explorer/sample/../../release",
+        "/api/explorer/sample/%2E%2E%2Frelease",
+    )
+
+    assert all(_handler(path)._api_path_allowed() for path in allowed)
+    assert not any(_handler(path)._api_path_allowed() for path in blocked)
