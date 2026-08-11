@@ -331,6 +331,26 @@ container was running with restart count 0, and the private CMS API `/health` en
 healthy. This gate reduces casual exposure but remains a shared-secret control: it does not replace
 per-user identity, MFA, access policy, or attributable audit logs.
 
+The first authenticated browser request exposed a permission defect: the bind-mounted file was
+`root:root` mode `0640`, so nginx could start as root and issue a `401` challenge, but its unprivileged
+worker could not reopen the password file after credentials were supplied. Nginx logged `permission
+denied` and returned `500`; the credential itself was not rejected. The file is now `root:<nginx
+worker gid>` mode `0640` (shown as `root:nginx` inside the pinned container). Worker-readable access,
+`nginx -t`, and the unauthenticated `401` challenge all pass.
+
+Credential creation or rotation must preserve that invariant without printing the password or hash:
+
+```bash
+worker_gid=$(docker exec cms-command-center-nginx id -g nginx)
+chown root:"$worker_gid" /etc/cms-data/command-center.htpasswd
+chmod 0640 /etc/cms-data/command-center.htpasswd
+docker exec --user nginx cms-command-center-nginx \
+  test -r /etc/nginx/command-center.htpasswd
+```
+
+Do not restore `root:root 0640`; that configuration fails only after a user submits credentials and
+can therefore evade an unauthenticated health probe.
+
 ## Rollback
 
 Rollback does not touch `release-current`, DuckDB, AACT, or production artifacts:

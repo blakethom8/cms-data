@@ -10,6 +10,8 @@ services:
       - /var/run
     volumes:
       - /etc/cms-data/command-center-nginx.conf:/etc/nginx/nginx.conf:ro
+      # Provision this host file as root:<container nginx gid> 0640. The worker,
+      # not only the root master process, opens it for authenticated requests.
       - /etc/cms-data/command-center.htpasswd:/etc/nginx/command-center.htpasswd:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
     security_opt:
