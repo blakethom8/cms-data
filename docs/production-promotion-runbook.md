@@ -327,8 +327,10 @@ install -o root -g dataops -m 0440 \
 ```
 
 6. Rehearse the prepared bundle on an unused loopback port and run the complete smoke suite
-   plus `verify`, exactly as in Phase 2 step 7 but with the candidate bundle and IDs. The
-   warehouse is unchanged, so **candidate counts equal rollback counts** and both
+   with the candidate bundle and IDs. Do not run standalone `production_manager.py verify`
+   against the prepared candidate: verification is a selected-deployment state transition,
+   and `production_cutover` performs it after selection. The warehouse is unchanged, so
+   **candidate counts equal rollback counts** and both
    `--expected-table-counts` arguments point at the same
    `releases/WAREHOUSE_RELEASE_ID/release.json`. While the rehearsal process is up, also
    check the serving contract against the rehearsal port: `GET /release` must return the

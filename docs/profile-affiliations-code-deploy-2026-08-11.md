@@ -1,8 +1,8 @@
 # Profile affiliations code-only deployment — 2026-08-11
 
-> **Status: BLOCKED at R3 — candidate smoke passed, but the documented pre-selection
-> `verify` command rejected the unselected candidate. Rehearsal is stopped and production
-> remains unchanged. Cutover is NOT approved.**
+> **Status: Phase 2 resumed after R3 procedure correction — candidate smoke passed;
+> contract checks, feature checks, and transition dry-runs remain. Production remains
+> unchanged. Cutover is NOT approved.**
 
 ## Background — what this ships and why
 
@@ -157,6 +157,11 @@ Before resuming, reconcile the working procedure's pre-cutover verification requ
 the manager's selected-only verification state machine. Do not treat the passing smoke file as
 cutover approval.
 
+Blake authorized that procedure correction after reviewing the stop evidence. The corrected
+code-only flow treats the complete candidate smoke suite as the pre-selection evidence and leaves
+the selected-deployment `verify` transition to `production_cutover`, which performs it after
+selection. This does not authorize R7 or any production selection change.
+
 ## Remaining steps
 
 Run in order. Each block is copy-paste safe; none touches the live service until the
@@ -190,7 +195,7 @@ for i in $(seq 1 60); do
 done
 ```
 
-### R3 — full smoke suite + verify
+### R3 — full pre-selection smoke suite
 
 Warehouse unchanged ⇒ candidate counts equal the rollback counts (values below are from
 the selected deployment's verified smoke evidence and the warehouse release evidence).
@@ -213,12 +218,11 @@ the selected deployment's verified smoke evidence and the warehouse release evid
   --expected-industry-detail-status 200 \
   --output /srv/cms-data-platform/production/evidence/deployment-20260811T041229Z-8eee0d7afd/smoke.json
 
-/usr/bin/python3 /srv/cms-data-platform/production-ops/current/pipeline/production_manager.py \
-  verify --production-root /srv/cms-data-platform/production \
-  --deployment-id deployment-20260811T041229Z-8eee0d7afd \
-  --evidence /srv/cms-data-platform/production/evidence/deployment-20260811T041229Z-8eee0d7afd/smoke.json \
-  --json
 ```
+
+Do not run standalone `production_manager.py verify` here. The manager only verifies the
+currently selected deployment; the approval-gated `production_cutover` command owns candidate
+selection followed by verification.
 
 ### R4 — serving-contract checks against the rehearsal port
 
@@ -330,7 +334,7 @@ Stop and report — do not improvise — if any of these holds:
 - a `transition-pending` sentinel exists;
 - the candidate bundle's code/runtime/warehouse links do not resolve to the identities in
   the table above;
-- any smoke check fails or `verify` does not mark the candidate verified;
+- any smoke check fails;
 - the rehearsal `/release` does not report the candidate ID with
   `representation_version` 2;
 - disk headroom cannot retain both complete releases.
