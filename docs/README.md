@@ -1,6 +1,6 @@
 # Documentation Guide
 
-> **Last reviewed: 2026-07-22** · **Status: canonical index**
+> **Last reviewed: 2026-08-05** · **Status: canonical index**
 
 This directory is organized to keep operational guidance distinct from historical planning material.
 When documents disagree, the operating model and the source code win.
@@ -14,7 +14,13 @@ When documents disagree, the operating model and the source code win.
 | [production-promotion-runbook.md](production-promotion-runbook.md) | The approval-gated staging rehearsal and atomic cutover procedure. |
 | [aact-clinical-trials.md](aact-clinical-trials.md) | Hosted AACT adapter runtime, verification, and refresh safety. |
 | [new-provider-radar.md](new-provider-radar.md) | NPPES weekly change detection, monthly reconciliation, and Provider Search handoff. |
+| [new-provider-radar-execution.md](new-provider-radar-execution.md) | Implementation handoff for the remaining Radar data-plane work: acquisition automation, production promotion, city-scope API, precision spike. |
 | [../deploy/systemd/README.md](../deploy/systemd/README.md) | Systemd release layout and the read-only publisher-status timer. |
+| [operations/hetzner-cms-server.md](operations/hetzner-cms-server.md) | Current production-host inventory, Provider Search boundary, decommission record, and infrastructure work. |
+| [operations/cms-private-network-runbook.md](operations/cms-private-network-runbook.md) | Current private WireGuard API boundary, verification, rollback, and retention procedure. |
+| [operations/cms-private-network-cutover-2026-08-05.md](operations/cms-private-network-cutover-2026-08-05.md) | Executed private-network and credential cutover record. |
+| [operations/public-sites-retirement-2026-08-05.md](operations/public-sites-retirement-2026-08-05.md) | Executed public-site retirement record and remaining owner actions. |
+| [operations/nginx-disentanglement-handoff.md](operations/nginx-disentanglement-handoff.md) | Historical implementation prompt, retained as superseded decision context. |
 
 ## Documentation rules
 

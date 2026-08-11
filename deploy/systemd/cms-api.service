@@ -1,6 +1,9 @@
 [Unit]
 Description=CMS Provider Data API
-After=network.target
+Wants=network-online.target
+Requires=cms-private-firewall.service wg-quick@wg-cms.service
+BindsTo=wg-quick@wg-cms.service
+After=network-online.target cms-private-firewall.service wg-quick@wg-cms.service
 
 [Service]
 Type=simple
@@ -12,10 +15,15 @@ EnvironmentFile=/etc/aact/reader.env
 EnvironmentFile=/etc/cms-data/production-release.env
 ExecStartPre=+/usr/bin/test ! -e /srv/cms-data-platform/production/aact-transition-pending
 ExecStartPre=+/usr/bin/python3 /srv/cms-data-platform/production-ops/current/pipeline/production_manager.py startup-check --production-root /srv/cms-data-platform/production
-ExecStart=/srv/cms-data-platform/production/release-current/runtime/bin/python -m uvicorn api.main:app --host 0.0.0.0 --port 8080
+ExecStart=/srv/cms-data-platform/production/release-current/runtime/bin/python -m uvicorn api.main:app --host 10.77.0.1 --port 8080
 Restart=on-failure
 RestartSec=5
 UMask=0027
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cms-api
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=1000
 
 [Install]
 WantedBy=multi-user.target

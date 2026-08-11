@@ -1,0 +1,11 @@
+[Unit]
+Description=Forward loopback CMS smoke checks to the private API
+Requires=cms-api.service
+After=cms-api.service
+
+[Service]
+ExecStart=/usr/lib/systemd/systemd-socket-proxyd 10.77.0.1:8080
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+NoNewPrivileges=true

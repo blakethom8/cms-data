@@ -1,0 +1,15 @@
+table inet cms_private {
+    chain input {
+        type filter hook input priority -5; policy accept;
+
+        # Only Provider Search may establish the public WireGuard handshake.
+        ip saddr 5.78.142.73 udp dport 51820 accept
+        udp dport 51820 drop
+
+        # The API is addressed only through WireGuard. Loopback is retained for
+        # on-host health checks against the tunnel address.
+        iifname "lo" ip daddr 10.77.0.1 tcp dport 8080 accept
+        iifname "wg-cms" ip saddr 10.77.0.2 ip daddr 10.77.0.1 tcp dport 8080 accept
+        ip daddr 10.77.0.1 tcp dport 8080 drop
+    }
+}

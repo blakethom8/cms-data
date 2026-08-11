@@ -1,0 +1,16 @@
+[Unit]
+Description=CMS private API nftables boundary
+Before=wg-quick@wg-cms.service cms-api.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/nft -f /etc/cms-data/cms-private-firewall.nft
+ExecStart=/bin/sh -c '/usr/sbin/iptables -C INPUT -i wg-cms -s 10.77.0.2/32 -d 10.77.0.1/32 -p tcp --dport 8080 -j ACCEPT 2>/dev/null || /usr/sbin/iptables -I INPUT 1 -i wg-cms -s 10.77.0.2/32 -d 10.77.0.1/32 -p tcp --dport 8080 -j ACCEPT'
+ExecReload=/bin/sh -c '/usr/sbin/nft delete table inet cms_private 2>/dev/null || true; /usr/sbin/nft -f /etc/cms-data/cms-private-firewall.nft'
+ExecReload=/bin/sh -c '/usr/sbin/iptables -C INPUT -i wg-cms -s 10.77.0.2/32 -d 10.77.0.1/32 -p tcp --dport 8080 -j ACCEPT 2>/dev/null || /usr/sbin/iptables -I INPUT 1 -i wg-cms -s 10.77.0.2/32 -d 10.77.0.1/32 -p tcp --dport 8080 -j ACCEPT'
+ExecStop=-/usr/sbin/iptables -D INPUT -i wg-cms -s 10.77.0.2/32 -d 10.77.0.1/32 -p tcp --dport 8080 -j ACCEPT
+ExecStop=-/usr/sbin/nft delete table inet cms_private
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

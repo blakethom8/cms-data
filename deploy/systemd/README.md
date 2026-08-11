@@ -10,6 +10,12 @@ checked-in `production-release.env` contains only non-secret release settings. T
 from the separate immutable `production-ops/current` checkout so rollback does not depend on a broken
 candidate runtime.
 
+The production API process binds only to the WireGuard address `10.77.0.1:8080` and requires
+`wg-quick@wg-cms.service` plus the repository-owned private firewall unit. A socket-activated,
+loopback-only `systemd-socket-proxyd` listener at `127.0.0.1:8080` preserves the existing cutover and
+smoke contract without exposing Uvicorn on a public or Docker interface. See
+`docs/operations/cms-private-network-runbook.md` for installation and rollback.
+
 Install these files only after production has been bootstrapped to a verified legacy rollback
 release. Preserve checksummed copies of the prior unit and environment files first. A unit install
 requires `systemctl daemon-reload` and one controlled restart followed by

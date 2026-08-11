@@ -1,0 +1,10 @@
+# Install as /etc/wireguard/wg-cms.conf, owned by root:root with mode 0600.
+# Replace placeholders on the host. Never commit either private key.
+[Interface]
+Address = 10.77.0.1/30
+ListenPort = 51820
+PrivateKey = REPLACE_WITH_CMS_PRIVATE_KEY
+
+[Peer]
+PublicKey = REPLACE_WITH_PROVIDER_SEARCH_PUBLIC_KEY
+AllowedIPs = 10.77.0.2/32
