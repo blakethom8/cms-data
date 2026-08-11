@@ -1,8 +1,8 @@
 # Profile affiliations code-only deployment — 2026-08-11
 
-> **Status: Phase 2 resumed after R3 procedure correction — candidate smoke passed;
-> contract checks, feature checks, and transition dry-runs remain. Production remains
-> unchanged. Cutover is NOT approved.**
+> **Status: BLOCKED at R6 — contract and feature rehearsals passed, but the activate
+> dry-run found root-created writable bytecode inside the candidate's sealed code artifact.
+> Production remains unchanged. Cutover is NOT approved.**
 
 ## Background — what this ships and why
 
@@ -149,7 +149,7 @@ code `2` instead of marking the candidate verified:
 This is a stop condition. The checked-in manager's `_verification_validation` explicitly
 requires the verification target to be the deployment currently selected by
 `release-current`; the candidate is correctly still only `prepared`. No alternative flag or
-undocumented command was substituted. R4–R6 were not run. Rehearsal PID `3106172` was stopped,
+undocumented command was substituted. R4–R6 were not run during that attempt. Rehearsal PID `3106172` was stopped,
 port 18080 was released, and a post-stop status check confirmed the healthy live selection is
 still `deployment-20260811T031052Z-73cea84b1b` with zero blocking transactions and no sentinel.
 
@@ -161,6 +161,64 @@ Blake authorized that procedure correction after reviewing the stop evidence. Th
 code-only flow treats the complete candidate smoke suite as the pre-selection evidence and leaves
 the selected-deployment `verify` transition to `production_cutover`, which performs it after
 selection. This does not authorize R7 or any production selection change.
+
+## R4–R6 resumed attempt and second stop record — 2026-08-11 04:45 UTC
+
+Preconditions were reconfirmed before resuming: production was healthy with zero blocking
+transactions, no sentinel, PID `3091528` still active, `release-current` still selecting
+`deployment-20260811T031052Z-73cea84b1b`, and port 18080 free. The same immutable candidate
+bundle started as rehearsal PID `3108460` and returned the expected health response.
+
+R4 passed all serving-contract expectations. `GET /release` returned:
+
+```text
+release_id: deployment-20260811T041229Z-8eee0d7afd
+representation_version: 2
+source_vintages: 18 non-empty entries
+build.checksum: 91e2ee4e22fd7b7f612765635e19601ce081730c8b0ddc634dc54d891a345ef2
+build.warehouse_release_id: warehouse-20260811T021837Z-f44c147e30
+```
+
+The validator checks returned exactly:
+
+```text
+etag: "deployment-20260811T041229Z-8eee0d7afd:2"
+304
+```
+
+R5 passed both fixed feature cases:
+
+```text
+[('CEDARS-SINAI MEDICAL CARE FOUNDATION', 'dac + reassignment'),
+ ('Southern California Permanente Medical Group', 'reassignment'),
+ ('Providence Saint Johns Medical Foundation', 'reassignment')]
+[('PROVIDENCE ST. JOSEPH HOSPITAL', '050069'),
+ ("SAINT JOHN'S HEALTH CENTER", '050290')]
+2 groups, 4 hospitals
+```
+
+Rehearsal PID `3108460` then stopped cleanly and port 18080 was released. The R6 activate
+dry-run returned exit code `2`:
+
+```json
+{"state": "error", "error_summary": "code target contains a writable path: /srv/cms-data-platform/production-artifacts/code/7285b4bab8969bcbd3cd4b00415149f15756bc8d/api/__pycache__"}
+```
+
+Read-only inspection found a root-owned mode `0755` `api/__pycache__` directory containing
+18 root-owned mode `0644` `.pyc` files, all timestamped `2026-08-11 04:35:16 UTC`, when the
+first root-run rehearsal imported the API. The documented R2 command ran Python as root from
+the sealed artifact, allowing Python to create bytecode despite the artifact's ordinary mode
+bits. This invalidates the candidate's immutability check. Nothing was deleted, resealed, or
+changed in place, and the rollback dry-run was not attempted.
+
+The candidate deployment and code artifact must now be treated as contaminated and retained
+only as failed evidence. Resume requires a fresh versioned code artifact and prepared deployment,
+followed by rehearsal as the service user with bytecode writes disabled. Re-run smoke, R4, R5,
+and both R6 dry-runs against the new deployment ID. Do not repair or reuse the existing artifact.
+
+A post-stop check confirmed production remains healthy on
+`deployment-20260811T031052Z-73cea84b1b`, with zero blocking transactions, no sentinel, and
+port 18080 free.
 
 ## Remaining steps
 
