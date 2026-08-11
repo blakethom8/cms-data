@@ -1,7 +1,7 @@
 # Command Center temporary publication — 2026-08-11
 
-> **Status: BLOCKED pending profile-affiliations recovery cutover approval; dashboard and public
-> listeners are not running.**
+> **Status: BLOCKED at approval gate for exact-NPI search fix candidate
+> `deployment-20260811T141921Z-b26c3f3d25`; dashboard and public listeners are not running.**
 
 ## Decision and boundary
 
@@ -87,6 +87,51 @@ evidence are recorded in `docs/profile-affiliations-code-deploy-2026-08-11.md`.
 Do not resume this runbook until the clean affiliation candidate is explicitly approved, selected,
 and verified. Resumption must start again at publication check 1; it must not assume the earlier API
 key or process state remains valid.
+
+## Resumed preparation and exact-NPI search stop — 2026-08-11 14:11–14:21 UTC
+
+After Blake explicitly approved the affiliation recovery deployment, the one-shot cutover selected
+and verified `deployment-20260811T135930Z-2c3fb4878d`. The API was then restarted with a freshly
+generated `command-center` scoped key while preserving the existing shared key. Both keys passed
+health checks, the manager remained healthy and verified, and Provider Search `/ready` reported CMS
+data `ok`.
+
+The loopback gateway started as PID `3215082`. Static assets, health, tables, catalog, and all four
+operations endpoints returned 200. The first exact-NPI dashboard request,
+`GET /api/profiles/search?q=1154580017&state=CA&limit=1`, returned 500. The upstream API journal
+showed DuckDB rejecting the unquoted result alias in `'medicare' source` because `source` is a
+reserved token. This was a publication stop condition. The gateway was stopped again; nginx was
+not started, and ports 80, 443, 4199, and 18080 remained closed.
+
+Commit `1b15cca1872d23a71bed005bd4e3ade4e33ab0c8` quotes both exact-NPI source aliases and adds DAC
+and registry fallback regression tests. Focused tests returned `7 passed in 0.30s`; the full API
+suite before commit returned `366 passed, 1 skipped, 135 warnings in 10.99s`. The fix does not
+change response shape, dependencies, or data, so representation version remains 2 and the existing
+runtime and warehouse are reused.
+
+A clean detached artifact was sealed at
+`production-artifacts/code/1b15cca1872d23a71bed005bd4e3ade4e33ab0c8-command-center-search1`.
+Prepare dry-run and real prepare passed, creating
+`deployment-20260811T141921Z-b26c3f3d25` with code fingerprint
+`sha256:d818c562feaac9d76e844584400ba4ee5aa6caad8814143652253b764d9f7402`.
+The unchanged provenance snapshot is `root:dataops` mode `0440`, 32,909 bytes, SHA-256
+`fd426f571eaf700fd0d70567b128c7195b80a780e3f6d73cdc1e77003df80244`.
+
+Pre-cutover evidence:
+
+- all 15 production smoke checks passed; smoke SHA-256
+  `d76f7a44348db4ee7072d07ecbbc9a2807879fcab0bc53ff2191f6669ec80d29`;
+- exact-NPI regression returned `[('1154580017', 'medicare', 'TREVAN FISCHER')]`;
+- `/release` returned the candidate ID, representation version 2, and 18 source-vintage entries;
+- ETag `"deployment-20260811T141921Z-b26c3f3d25:2"` and conditional response `304`;
+- Fischer returned 3 groups / 2 hospitals; Do returned 2 groups / 4 hospitals;
+- rehearsal stopped, port 18080 released, and the artifact retained zero bytecode paths;
+- activate and rollback dry-runs returned exit code 0 with `error_summary: null`;
+- live selection remains verified `deployment-20260811T135930Z-2c3fb4878d`.
+
+This candidate has its own approval-gated selection. Do not run the one-shot cutover or resume the
+gateway/nginx checks until Blake explicitly approves production cutover to
+`deployment-20260811T141921Z-b26c3f3d25`.
 
 ## Rollback
 
