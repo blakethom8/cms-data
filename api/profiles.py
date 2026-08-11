@@ -7,7 +7,9 @@ Five lenses assembled from validated queries (designed via warehouse review):
   prescribing— Part D persona (brand share, top drugs, specialty-tier flags)
   industry   — Open Payments (engagement tier, manufacturers, products,
                research PI role, ownership stakes)
-  access     — where to find them (best-door ranked locations, groups, MIPS)
+  access     — where to find them (best-door ranked locations, group
+               affiliations across DAC + reassignment, hospital
+               affiliations, MIPS)
 
 All SQL is whitelisted; the only inputs are an NPI (validated digits) and
 search strings, always bound as parameters.
@@ -63,6 +65,66 @@ def _rows(conn, sql: str, params: list) -> list[dict]:
 def _row(conn, sql: str, params: list) -> Optional[dict]:
     out = _rows(conn, sql, params)
     return out[0] if out else None
+
+
+def _affiliation_groups(conn, npi: str) -> list[dict]:
+    """DAC billing groups merged with PECOS reassignment relationships.
+
+    DAC contributes the door-bearing enrollment (name, roster size, address
+    count); reassignment contributes every group the clinician can bill
+    through. A reassignment-only group still matters to reps — it is a live
+    relationship even though CMS publishes no door for it at this NPI's grain.
+    ``sources`` states which file(s) assert each row so the UI can stay
+    transparent about provenance.
+    """
+    return _rows(conn, """
+        with dac as (
+          select org_pac_id group_id, any_value("Facility Name") group_name,
+                 any_value(num_org_mem) group_size,
+                 count(distinct upper(trim(adr_ln_1))) n_addresses
+          from raw_dac_national
+          where CAST("NPI" as varchar) = ? and org_pac_id is not null
+          group by org_pac_id),
+        reassign as (
+          select CAST("Group PAC ID" as varchar) group_id,
+                 any_value("Group Legal Business Name") group_name,
+                 any_value("Group Reassignments and Physician Assistants") reassignment_size
+          from raw_reassignment
+          where CAST("Individual NPI" as varchar) = ?
+          group by 1)
+        select coalesce(d.group_id, r.group_id) group_id,
+               coalesce(d.group_name, r.group_name) group_name,
+               d.group_size, coalesce(d.n_addresses, 0) n_addresses,
+               r.reassignment_size,
+               case when d.group_id is not null and r.group_id is not null then 'dac + reassignment'
+                    when d.group_id is not null then 'dac'
+                    else 'reassignment' end sources
+        from dac d full outer join reassign r on r.group_id = d.group_id
+        order by (d.group_id is not null) desc,
+                 coalesce(d.group_size, r.reassignment_size, 0) desc
+    """, [npi, npi])
+
+
+def _hospital_affiliations(conn, npi: str) -> list[dict]:
+    """DAC facility affiliations resolved to hospital names where possible.
+
+    Non-hospital facility types (and hospitals absent from the general-info
+    file) keep their row with a null ``facility_name`` — the CCN is still a
+    real affiliation the rep should see.
+    """
+    return _rows(conn, """
+        select f.facility_type,
+               CAST(f."Facility Affiliations Certification Number" as varchar) ccn,
+               any_value(h."Facility Name") facility_name,
+               any_value(h."City/Town") city, any_value(h."State") state
+        from raw_dac_facility_affiliations f
+        left join raw_hospital_general_info h
+          on CAST(h."Facility ID" as varchar)
+             = CAST(f."Facility Affiliations Certification Number" as varchar)
+        where CAST(f."NPI" as varchar) = ?
+        group by 1, 2
+        order by f.facility_type, ccn
+    """, [npi])
 
 
 class SearchHit(BaseModel):
@@ -440,14 +502,8 @@ def get_profiles_router(get_conn):
             l.get("roster_size") if l.get("roster_size") is not None else 10**9,
         ))
 
-        out["groups"] = _rows(conn, """
-            select org_pac_id group_id, any_value("Facility Name") group_name,
-                   any_value(num_org_mem) group_size,
-                   count(distinct upper(trim(adr_ln_1))) n_addresses
-            from raw_dac_national
-            where CAST("NPI" as varchar) = ? and org_pac_id is not null
-            group by org_pac_id
-        """, [npi])
+        out["groups"] = _affiliation_groups(conn, npi)
+        out["hospital_affiliations"] = _hospital_affiliations(conn, npi)
         if not _mips_stats:
             s = _row(conn, """select median(final_MIPS_score) med,
                               quantile_cont(final_MIPS_score, 0.25) q25,
