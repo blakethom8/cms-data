@@ -15,7 +15,7 @@ import tempfile
 import zipfile
 from contextlib import ExitStack, contextmanager
 from dataclasses import asdict
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Iterator
 
@@ -146,6 +146,7 @@ def verified_archive_runs(
     run_ids: tuple[str, ...],
     *,
     allowed_sources: frozenset[str],
+    repeatable_sources: frozenset[str] = frozenset(),
 ) -> tuple[tuple[RunManifest, Path], ...]:
     """Resolve and fully revalidate immutable ZIP runs."""
     if not run_ids or len(run_ids) != len(set(run_ids)):
@@ -159,7 +160,10 @@ def verified_archive_runs(
             raise ReleaseError(f"Source manifest is missing for run {run_id}")
         if manifest.source_id not in allowed_sources:
             raise ReleaseError(f"Archive loader does not support source {manifest.source_id}")
-        if manifest.source_id in seen_sources:
+        if (
+            manifest.source_id in seen_sources
+            and manifest.source_id not in repeatable_sources
+        ):
             raise ReleaseError(
                 f"Candidate contains more than one run for source {manifest.source_id}"
             )
@@ -358,20 +362,40 @@ def load_nppes_sources(
     *,
     data_root: Path,
     monthly_run_id: str,
-    weekly_run_id: str,
+    weekly_run_ids: tuple[str, ...],
 ) -> tuple[dict[str, int], dict[str, object]]:
-    """Install a monthly NPPES baseline and overlay one verified weekly release."""
+    """Install a monthly NPPES baseline and overlay consecutive weekly releases."""
+    if not weekly_run_ids:
+        raise ReleaseError("NPPES load requires at least one weekly V2 run")
     verified = verified_archive_runs(
         data_root,
-        (monthly_run_id, weekly_run_id),
+        (monthly_run_id, *weekly_run_ids),
         allowed_sources=NPPES_SOURCE_IDS,
+        repeatable_sources=frozenset({"nppes_weekly_incremental_v2"}),
     )
-    by_source = {manifest.source_id: (manifest, path) for manifest, path in verified}
-    if set(by_source) != NPPES_SOURCE_IDS:
-        raise ReleaseError("NPPES load requires one monthly and one weekly V2 run")
+    monthly_rows = [
+        item for item in verified if item[0].source_id == "nppes_monthly_v2"
+    ]
+    weekly_rows = sorted(
+        (
+            item
+            for item in verified
+            if item[0].source_id == "nppes_weekly_incremental_v2"
+        ),
+        key=lambda item: (*_period(item[0].source_data_period), item[0].run_id),
+    )
+    if len(monthly_rows) != 1 or len(weekly_rows) != len(weekly_run_ids):
+        raise ReleaseError("NPPES load requires one monthly and the requested weekly V2 runs")
+    for previous, current in zip(weekly_rows, weekly_rows[1:]):
+        previous_end = _period(previous[0].source_data_period)[1]
+        current_start = _period(current[0].source_data_period)[0]
+        if current_start != previous_end + timedelta(days=1):
+            raise ReleaseError(
+                "NPPES weekly source periods contain a gap or overlap: "
+                f"{previous[0].source_data_period} then {current[0].source_data_period}"
+            )
 
-    monthly_manifest, monthly_archive = by_source["nppes_monthly_v2"]
-    weekly_manifest, weekly_archive = by_source["nppes_weekly_incremental_v2"]
+    monthly_manifest, monthly_archive = monthly_rows[0]
     with ExitStack() as stack:
         monthly_csv = stack.enter_context(
             extracted_member(
@@ -382,23 +406,33 @@ def load_nppes_sources(
                 suffix=".csv",
             )
         )
-        weekly_csv = stack.enter_context(
-            extracted_member(
-                data_root,
-                weekly_manifest,
-                weekly_archive,
-                NPPES_MEMBER_PATTERN,
-                suffix=".csv",
+        weekly_csvs = [
+            (
+                manifest,
+                stack.enter_context(
+                    extracted_member(
+                        data_root,
+                        manifest,
+                        archive,
+                        NPPES_MEMBER_PATTERN,
+                        suffix=".csv",
+                    )
+                ),
             )
-        )
+            for manifest, archive in weekly_rows
+        ]
         connection.execute("BEGIN TRANSACTION")
         try:
             _load_nppes_raw_file(
                 connection, monthly_csv, monthly_manifest, baseline=True
             )
-            raw_count = _load_nppes_raw_file(
-                connection, weekly_csv, weekly_manifest, baseline=False
+            raw_count = int(
+                connection.execute("SELECT count(*) FROM raw_nppes").fetchone()[0]
             )
+            for weekly_manifest, weekly_csv in weekly_csvs:
+                raw_count = _load_nppes_raw_file(
+                    connection, weekly_csv, weekly_manifest, baseline=False
+                )
             connection.execute("COMMIT")
         except Exception:
             connection.execute("ROLLBACK")
@@ -416,7 +450,6 @@ def load_nppes_sources(
             connection.execute("ROLLBACK")
 
         month_start, month_end = _period(monthly_manifest.source_data_period)
-        week_start, week_end = _period(weekly_manifest.source_data_period)
         monthly_result = process_nppes_provider_file(
             connection,
             monthly_csv,
@@ -429,17 +462,22 @@ def load_nppes_sources(
             ),
             baseline=True,
         )
-        weekly_result = process_nppes_provider_file(
-            connection,
-            weekly_csv,
-            NppesRadarRelease(
-                source_release_id=weekly_manifest.release_id,
-                source_id=weekly_manifest.source_id,
-                release_kind="weekly_incremental",
-                period_start=week_start,
-                period_end=week_end,
-            ),
-        )
+        weekly_results = []
+        for weekly_manifest, weekly_csv in weekly_csvs:
+            week_start, week_end = _period(weekly_manifest.source_data_period)
+            weekly_results.append(
+                process_nppes_provider_file(
+                    connection,
+                    weekly_csv,
+                    NppesRadarRelease(
+                        source_release_id=weekly_manifest.release_id,
+                        source_id=weekly_manifest.source_id,
+                        release_kind="weekly_incremental",
+                        period_start=week_start,
+                        period_end=week_end,
+                    ),
+                )
+            )
 
     enrichment = enrich_core_providers(connection)
     specialty_updates = map_taxonomy_to_specialty(connection)
@@ -458,13 +496,139 @@ def load_nppes_sources(
             connection.execute("SELECT count(*) FROM core_providers").fetchone()[0]
         ),
     }
+    safety = validate_nppes_radar_candidate(
+        connection, expected_weekly_releases=len(weekly_results)
+    )
     details = {
         "monthly": asdict(monthly_result),
-        "weekly": asdict(weekly_result),
+        "weekly": asdict(weekly_results[-1]),
+        "weeklies": [asdict(result) for result in weekly_results],
+        "reconciliation": safety,
         "core_provider_enrichment": enrichment,
         "taxonomy_specialty_updates": specialty_updates,
     }
     return counts, details
+
+
+def validate_nppes_radar_candidate(
+    connection: duckdb.DuckDBPyConnection,
+    *,
+    expected_weekly_releases: int,
+) -> dict[str, int]:
+    """Enforce the Radar release-ledger and no-duplicate reconciliation gates."""
+    values = {
+        "provider_state_rows": int(
+            connection.execute(
+                "SELECT count(*) FROM nppes_radar_provider_state"
+            ).fetchone()[0]
+        ),
+        "event_rows": int(
+            connection.execute("SELECT count(*) FROM nppes_radar_events").fetchone()[0]
+        ),
+        "release_rows": int(
+            connection.execute("SELECT count(*) FROM nppes_radar_releases").fetchone()[0]
+        ),
+        "baseline_release_rows": int(
+            connection.execute(
+                "SELECT count(*) FROM nppes_radar_releases WHERE is_baseline"
+            ).fetchone()[0]
+        ),
+        "weekly_release_rows": int(
+            connection.execute(
+                """
+                SELECT count(*) FROM nppes_radar_releases
+                WHERE release_kind = 'weekly_incremental'
+                """
+            ).fetchone()[0]
+        ),
+        "baseline_event_rows": int(
+            connection.execute(
+                """
+                SELECT coalesce(sum(event_row_count), 0)
+                FROM nppes_radar_releases WHERE is_baseline
+                """
+            ).fetchone()[0]
+        ),
+        "ledger_event_delta": int(
+            connection.execute(
+                "SELECT coalesce(sum(event_row_count), 0) FROM nppes_radar_releases"
+            ).fetchone()[0]
+        ),
+        "orphan_event_releases": int(
+            connection.execute(
+                """
+                SELECT count(*) FROM nppes_radar_events event
+                LEFT JOIN nppes_radar_releases release
+                  ON release.source_release_id = event.source_release_id
+                WHERE release.source_release_id IS NULL
+                """
+            ).fetchone()[0]
+        ),
+        "orphan_state_releases": int(
+            connection.execute(
+                """
+                SELECT count(*) FROM nppes_radar_provider_state state
+                LEFT JOIN nppes_radar_releases release
+                  ON release.source_release_id = state.source_release_id
+                WHERE release.source_release_id IS NULL
+                """
+            ).fetchone()[0]
+        ),
+        "duplicate_logical_events": int(
+            connection.execute(
+                """
+                SELECT count(*) FROM (
+                    SELECT npi, event_type, effective_date,
+                           coalesce(old_zip5, ''), coalesce(new_zip5, ''),
+                           coalesce(old_primary_taxonomy_code, ''),
+                           coalesce(new_primary_taxonomy_code, '')
+                    FROM nppes_radar_events
+                    GROUP BY ALL HAVING count(*) > 1
+                ) duplicates
+                """
+            ).fetchone()[0]
+        ),
+        "out_of_order_releases": int(
+            connection.execute(
+                """
+                SELECT count(*) FROM (
+                    SELECT period_end,
+                           lag(period_end) OVER (
+                               ORDER BY processed_at, source_release_id
+                           ) AS previous_period_end
+                    FROM nppes_radar_releases
+                ) ordered
+                WHERE previous_period_end > period_end
+                """
+            ).fetchone()[0]
+        ),
+    }
+    values["ledger_event_delta"] -= values["event_rows"]
+    expected = {
+        "baseline_release_rows": 1,
+        "weekly_release_rows": expected_weekly_releases,
+        "baseline_event_rows": 0,
+        "ledger_event_delta": 0,
+        "orphan_event_releases": 0,
+        "orphan_state_releases": 0,
+        "duplicate_logical_events": 0,
+        "out_of_order_releases": 0,
+    }
+    failures = [
+        f"{name}={values[name]} (expected {wanted})"
+        for name, wanted in expected.items()
+        if values[name] != wanted
+    ]
+    if values["provider_state_rows"] <= 0:
+        failures.append("provider_state_rows must be positive")
+    if values["release_rows"] != expected_weekly_releases + 1:
+        failures.append(
+            f"release_rows={values['release_rows']} "
+            f"(expected {expected_weekly_releases + 1})"
+        )
+    if failures:
+        raise ReleaseError("NPPES Radar validation failed: " + "; ".join(failures))
+    return values
 
 
 def _table_columns(

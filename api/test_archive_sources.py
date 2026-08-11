@@ -52,10 +52,10 @@ def _stage_archive(
     inspection = inspect_archive(artifact, ARCHIVE_PROFILES[source_id])
     manifest = RunManifest(
         run_id=run_id,
-        release_id=f"{source_id}-release",
+        release_id=f"{source_id}-{run_id}-release",
         source_id=source_id,
         publisher=SOURCE_REGISTRY[source_id].publisher.value,
-        publisher_version=f"{source_id}-version",
+        publisher_version=f"{source_id}-{run_id}-version",
         source_data_period=period,
         discovery_timestamp="2026-07-21T00:00:00+00:00",
         retrieval_timestamp="2026-07-21T00:01:00+00:00",
@@ -142,7 +142,7 @@ def _nppes_csv(
 @pytest.mark.parametrize(
     "gender_column", ("Provider Gender Code", "Provider Sex Code")
 )
-def test_nppes_monthly_baseline_and_weekly_overlay_are_synchronized(
+def test_nppes_monthly_baseline_and_consecutive_weeklies_are_synchronized(
     tmp_path: Path, gender_column: str,
 ) -> None:
     data_root = tmp_path / "data"
@@ -191,26 +191,49 @@ def test_nppes_monthly_baseline_and_weekly_overlay_are_synchronized(
             )
         },
     )
+    second_weekly = _stage_archive(
+        data_root,
+        "nppes_weekly_incremental_v2",
+        "second-weekly-run",
+        "2026-07-21/2026-07-27",
+        {
+            "npidata_pfile_20260721-20260727.csv": _nppes_csv(
+                [
+                    {
+                        "NPI": "1111111111",
+                        "Provider First Name": "Ada",
+                        "Provider Last Name (Legal Name)": "Lovelace",
+                        "Provider Business Practice Location Address Postal Code": "90003",
+                        "Last Update Date": "07/22/2026",
+                    }
+                ],
+                gender_column=gender_column,
+            )
+        },
+    )
     connection = duckdb.connect(":memory:")
     counts, details = load_nppes_sources(
         connection,
         data_root=data_root,
         monthly_run_id=monthly.run_id,
-        weekly_run_id=weekly.run_id,
+        weekly_run_ids=(weekly.run_id, second_weekly.run_id),
     )
 
     assert counts["raw_nppes"] == 2
     assert counts["nppes_radar_provider_state"] == 2
-    assert counts["nppes_radar_events"] == 2
-    assert counts["nppes_radar_releases"] == 2
+    assert counts["nppes_radar_events"] == 3
+    assert counts["nppes_radar_releases"] == 3
     assert connection.execute(
         "SELECT practice_zip FROM raw_nppes WHERE npi = '1111111111'"
-    ).fetchone() == ("90002",)
+    ).fetchone() == ("90003",)
     assert connection.execute(
         "SELECT count(*) FROM core_providers WHERE medicare_participating = 'N'"
     ).fetchone() == (2,)
     assert details["monthly"]["is_baseline"] is True
-    assert details["weekly"]["event_row_count"] == 2
+    assert details["weekly"]["event_row_count"] == 1
+    assert len(details["weeklies"]) == 2
+    assert details["reconciliation"]["duplicate_logical_events"] == 0
+    assert details["reconciliation"]["ledger_event_delta"] == 0
     assert not list((data_root / "staging" / "extracts").glob("*.partial"))
 
 

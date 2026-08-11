@@ -1164,6 +1164,63 @@ def _resolve_exact_source_set(
     return by_source_id
 
 
+def _resolve_full_platform_source_runs(
+    data_root: Path,
+    source_run_ids: tuple[str, ...],
+) -> tuple[dict[str, RunManifest], tuple[RunManifest, ...]]:
+    """Resolve the platform bundle while allowing consecutive NPPES weeklies."""
+    if len(source_run_ids) != len(set(source_run_ids)):
+        raise ReleaseError("Full platform warehouse build source run IDs must be unique")
+    document = ManifestStore(data_root / "manifests.json").load()
+    by_run_id = {manifest.run_id: manifest for manifest in document.manifests}
+    try:
+        manifests = tuple(by_run_id[run_id] for run_id in source_run_ids)
+    except KeyError as error:
+        raise ReleaseError(f"Source manifest is missing for run {error.args[0]}") from error
+    unexpected = sorted(
+        {manifest.source_id for manifest in manifests}
+        - FULL_PLATFORM_WAREHOUSE_SOURCE_IDS
+    )
+    if unexpected:
+        raise ReleaseError(
+            "Full platform warehouse build source set is incomplete: unexpected="
+            + ",".join(unexpected)
+        )
+    grouped = {
+        source_id: tuple(
+            manifest for manifest in manifests if manifest.source_id == source_id
+        )
+        for source_id in FULL_PLATFORM_WAREHOUSE_SOURCE_IDS
+    }
+    missing = sorted(source_id for source_id, rows in grouped.items() if not rows)
+    if missing:
+        raise ReleaseError(
+            "Full platform warehouse build source set is incomplete: missing="
+            + ",".join(missing)
+        )
+    repeated = sorted(
+        source_id
+        for source_id, rows in grouped.items()
+        if len(rows) != 1 and source_id != "nppes_weekly_incremental_v2"
+    )
+    if repeated:
+        raise ReleaseError(
+            "Full platform warehouse build contains multiple runs for source: "
+            + ",".join(repeated)
+        )
+    weeklies = tuple(
+        sorted(
+            grouped["nppes_weekly_incremental_v2"],
+            key=lambda manifest: (manifest.source_data_period, manifest.run_id),
+        )
+    )
+    by_source_id = {
+        source_id: rows[-1]
+        for source_id, rows in grouped.items()
+    }
+    return by_source_id, weeklies
+
+
 def _validate_ppef_relationships(
     connection: duckdb.DuckDBPyConnection,
     table_counts: dict[str, int],
@@ -1708,11 +1765,8 @@ def build_full_platform_warehouse_release(
     not a DuckDB source. Its run ID must therefore not be passed to this builder.
     """
     from .archive_sources import load_nppes_sources, load_open_payments_sources
-    by_source_id = _resolve_exact_source_set(
-        data_root,
-        source_run_ids,
-        FULL_PLATFORM_WAREHOUSE_SOURCE_IDS,
-        label="Full platform warehouse build",
+    by_source_id, weekly_manifests = _resolve_full_platform_source_runs(
+        data_root, source_run_ids
     )
     baseline, baseline_sha, baseline_bytes = _load_backup_manifest(backup_manifest_path)
     commit = code_commit or pipeline_commit()
@@ -1756,9 +1810,9 @@ def build_full_platform_warehouse_release(
                     connection,
                     data_root=data_root,
                     monthly_run_id=by_source_id["nppes_monthly_v2"].run_id,
-                    weekly_run_id=by_source_id[
-                        "nppes_weekly_incremental_v2"
-                    ].run_id,
+                    weekly_run_ids=tuple(
+                        manifest.run_id for manifest in weekly_manifests
+                    ),
                 )
                 payments_counts, payments_details = load_open_payments_sources(
                     connection,
