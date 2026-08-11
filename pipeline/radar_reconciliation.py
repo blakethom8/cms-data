@@ -10,10 +10,9 @@ from pathlib import Path
 from .acquisition import pipeline_commit
 from .manifests import ManifestStore, RunManifest, ValidationState
 from .releases import (
-    FULL_PLATFORM_WAREHOUSE_SOURCE_IDS,
     ReleaseError,
     WarehouseReleaseStore,
-    build_full_platform_warehouse_release,
+    build_radar_warehouse_release,
     compare_warehouse_release,
 )
 
@@ -32,13 +31,14 @@ def select_reconciliation_runs(data_root: Path) -> tuple[str, ...]:
         manifest
         for manifest in ManifestStore(data_root / "manifests.json").load().manifests
         if manifest.validation_state == ValidationState.PASSED
-        and manifest.source_id in FULL_PLATFORM_WAREHOUSE_SOURCE_IDS
+        and manifest.source_id
+        in {"nppes_monthly_v2", "nppes_weekly_incremental_v2"}
     ]
     grouped = {
         source_id: [
             manifest for manifest in manifests if manifest.source_id == source_id
         ]
-        for source_id in FULL_PLATFORM_WAREHOUSE_SOURCE_IDS
+        for source_id in {"nppes_monthly_v2", "nppes_weekly_incremental_v2"}
     }
     missing = sorted(source_id for source_id, rows in grouped.items() if not rows)
     if missing:
@@ -56,11 +56,7 @@ def select_reconciliation_runs(data_root: Path) -> tuple[str, ...]:
             ),
         )
 
-    selected = {
-        source_id: latest(rows)
-        for source_id, rows in grouped.items()
-        if source_id != "nppes_weekly_incremental_v2"
-    }
+    selected = {"nppes_monthly_v2": latest(grouped["nppes_monthly_v2"])}
     monthly_start, _ = _period(
         selected["nppes_monthly_v2"].source_data_period
     )
@@ -82,9 +78,8 @@ def select_reconciliation_runs(data_root: Path) -> tuple[str, ...]:
         raise ReleaseError(
             "Radar reconciliation has no weekly release at or after the monthly baseline"
         )
-    return tuple(
-        sorted(manifest.run_id for manifest in selected.values())
-        + [manifest.run_id for manifest in weeklies]
+    return (selected["nppes_monthly_v2"].run_id,) + tuple(
+        manifest.run_id for manifest in weeklies
     )
 
 
@@ -123,9 +118,10 @@ def reconcile_radar_candidate(
                     "wrote_candidate": False,
                 }
 
-    build = build_full_platform_warehouse_release(
+    build = build_radar_warehouse_release(
         data_root=data_root,
-        source_run_ids=run_ids,
+        monthly_run_id=run_ids[0],
+        weekly_run_ids=run_ids[1:],
         backup_manifest_path=backup_manifest_path,
         code_commit=commit,
     )

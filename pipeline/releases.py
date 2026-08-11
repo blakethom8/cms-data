@@ -79,6 +79,18 @@ PPEF_CHANGED_TABLES = frozenset(
         "pecos_enrollment_practice_locations",
     }
 )
+RADAR_SOURCE_IDS = frozenset(
+    {"nppes_monthly_v2", "nppes_weekly_incremental_v2"}
+)
+RADAR_CHANGED_TABLES = frozenset(
+    {
+        "core_providers",
+        "raw_nppes",
+        "nppes_radar_provider_state",
+        "nppes_radar_events",
+        "nppes_radar_releases",
+    }
+)
 FULL_PLATFORM_SMOKE_TABLES = (
     "core_providers",
     "practice_locations",
@@ -1895,6 +1907,138 @@ def build_full_platform_warehouse_release(
     )
 
 
+def build_radar_warehouse_release(
+    *,
+    data_root: Path,
+    monthly_run_id: str,
+    weekly_run_ids: tuple[str, ...],
+    backup_manifest_path: Path,
+    code_commit: str | None = None,
+) -> BuildResult:
+    """Build an NPPES-only Radar candidate from a verified immutable baseline."""
+    from .archive_sources import load_nppes_sources
+
+    source_run_ids = (monthly_run_id, *weekly_run_ids)
+    if not weekly_run_ids or len(source_run_ids) != len(set(source_run_ids)):
+        raise ReleaseError(
+            "Radar warehouse build requires one monthly and unique weekly run IDs"
+        )
+    source_document = ManifestStore(data_root / "manifests.json").load()
+    by_run_id = {manifest.run_id: manifest for manifest in source_document.manifests}
+    try:
+        manifests = tuple(by_run_id[run_id] for run_id in source_run_ids)
+    except KeyError as error:
+        raise ReleaseError(f"Source manifest is missing for run {error.args[0]}") from error
+    if manifests[0].source_id != "nppes_monthly_v2" or any(
+        manifest.source_id != "nppes_weekly_incremental_v2"
+        for manifest in manifests[1:]
+    ):
+        raise ReleaseError(
+            "Radar warehouse build requires one monthly run followed by weekly runs"
+        )
+
+    baseline, baseline_sha, baseline_bytes = _load_backup_manifest(backup_manifest_path)
+    commit = code_commit or pipeline_commit()
+    if commit is None:
+        raise ReleaseError("A full pipeline Git commit is required to build a release")
+    identity = hashlib.sha256("\0".join(sorted(source_run_ids)).encode()).hexdigest()
+    warehouse_release_id = make_warehouse_release_id(identity, commit)
+    release_dir = data_root / "releases" / warehouse_release_id
+    database_path = release_dir / "warehouse.duckdb"
+    partial_path = release_dir / "warehouse.duckdb.partial"
+    release_store_path = _release_store_path(data_root)
+
+    with _exclusive_lock(data_root / "locks" / "build.lock"):
+        release_dir.mkdir(parents=True, exist_ok=False)
+        document = WarehouseReleaseStore(release_store_path).load()
+        release = WarehouseRelease(
+            warehouse_release_id=warehouse_release_id,
+            created_at=utc_now(),
+            source_run_ids=tuple(sorted(source_run_ids)),
+            pipeline_code_commit=commit,
+            baseline_path=str(baseline),
+            baseline_sha256=baseline_sha,
+            database_path=str(database_path.relative_to(data_root)),
+            duckdb_version=duckdb.__version__,
+        )
+        document.releases.append(release)
+        _save_release_document(data_root, document)
+        try:
+            _copy_verified_baseline(
+                baseline,
+                partial_path,
+                expected_sha256=baseline_sha,
+                expected_bytes=baseline_bytes,
+            )
+            connection = duckdb.connect(str(partial_path), read_only=False)
+            try:
+                table_counts, nppes_details = load_nppes_sources(
+                    connection,
+                    data_root=data_root,
+                    monthly_run_id=monthly_run_id,
+                    weekly_run_ids=weekly_run_ids,
+                )
+                empty = [
+                    table
+                    for table in (
+                        "core_providers",
+                        "raw_nppes",
+                        "nppes_radar_provider_state",
+                        "nppes_radar_releases",
+                    )
+                    if table_counts.get(table, 0) <= 0
+                ]
+                if empty:
+                    raise ReleaseError(
+                        "Radar candidate has empty required tables: " + ", ".join(empty)
+                    )
+                smoke_table_counts = {
+                    table: int(
+                        connection.execute(
+                            f'SELECT count(*) FROM "{table}"'
+                        ).fetchone()[0]
+                    )
+                    for table in RADAR_CHANGED_TABLES
+                }
+                release.validation_details = {
+                    "release_scope": "targeted_additive",
+                    "source_periods": {
+                        "nppes_monthly_v2": manifests[0].source_data_period,
+                        "nppes_weekly_incremental_v2": manifests[-1].source_data_period,
+                    },
+                    "weekly_source_periods": [
+                        manifest.source_data_period for manifest in manifests[1:]
+                    ],
+                    "changed_tables": sorted(RADAR_CHANGED_TABLES),
+                    "nppes": nppes_details,
+                    "smoke_table_counts": smoke_table_counts,
+                }
+                connection.execute("CHECKPOINT")
+            finally:
+                connection.close()
+
+            release.byte_size = partial_path.stat().st_size
+            release.sha256 = sha256_file(partial_path)
+            release.table_counts = dict(sorted(table_counts.items()))
+            release.validation_state = ValidationState.PASSED
+            release.validation_timestamp = utc_now()
+            os.replace(partial_path, database_path)
+            os.chmod(database_path, 0o440)
+            _save_release_document(data_root, document)
+        except Exception as error:
+            release.validation_state = ValidationState.FAILED
+            release.error_summary = safe_error(error)
+            _save_release_document(data_root, document)
+            raise ReleaseError(release.error_summary) from error
+
+    return BuildResult(
+        release=release,
+        database_path=database_path,
+        release_manifest_path=_release_manifest_path(data_root, warehouse_release_id),
+        release_store_path=release_store_path,
+    )
+
+
 def _database_table_counts(
     connection: duckdb.DuckDBPyConnection,
 ) -> dict[str, int]:
@@ -1924,6 +2068,17 @@ def _comparison_policy(
     """Select the exact source-owned table set for a release comparison."""
     source_periods = release.validation_details.get("source_periods")
     source_ids = set(source_periods) if isinstance(source_periods, dict) else set()
+    if source_ids == RADAR_SOURCE_IDS:
+        evidence = release.validation_details.get("smoke_table_counts")
+        if not isinstance(evidence, dict) or set(evidence) != RADAR_CHANGED_TABLES:
+            raise ReleaseError(
+                "Radar release is missing exact changed-table count evidence"
+            )
+        return (
+            "nppes_radar_targeted_v1",
+            RADAR_CHANGED_TABLES,
+            {table: int(count) for table, count in evidence.items()},
+        )
     if source_ids in (FULL_PLATFORM_WAREHOUSE_SOURCE_IDS, PPEF_SOURCE_IDS):
         evidence = release.validation_details.get("smoke_table_counts")
         if not isinstance(evidence, dict):

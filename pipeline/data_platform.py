@@ -42,6 +42,7 @@ from .releases import (
     build_full_cms_warehouse_release,
     build_full_platform_warehouse_release,
     build_ppef_warehouse_release,
+    build_radar_warehouse_release,
     build_warehouse_release,
     compare_warehouse_release,
     promote_staging_release,
@@ -389,6 +390,20 @@ def _parser() -> argparse.ArgumentParser:
         "--environment", choices=[STAGING_ENVIRONMENT], required=True
     )
     build_platform.add_argument("--json", action="store_true")
+    build_radar = subparsers.add_parser(
+        "build-radar-release",
+        help="Build a targeted NPPES Radar staging candidate",
+    )
+    build_radar.add_argument("--monthly-run-id", required=True)
+    build_radar.add_argument("--weekly-run-id", action="append", required=True)
+    build_radar.add_argument("--backup-manifest", required=True, type=Path)
+    build_radar.add_argument(
+        "--data-root", type=Path, default=DEFAULT_MANIFEST_PATH.parent
+    )
+    build_radar.add_argument(
+        "--environment", choices=[STAGING_ENVIRONMENT], required=True
+    )
+    build_radar.add_argument("--json", action="store_true")
     prepare_aact = subparsers.add_parser(
         "prepare-aact-release",
         help="Prepare a sealed AACT PostgreSQL restore artifact in staging",
@@ -538,6 +553,7 @@ def main(argv: list[str] | None = None) -> int:
         "build-cms-release",
         "build-ppef-release",
         "build-platform-release",
+        "build-radar-release",
         "prepare-aact-release",
         "stage-aact-database",
         "compare-release",
@@ -575,6 +591,14 @@ def main(argv: list[str] | None = None) -> int:
                     backup_manifest_path=args.backup_manifest,
                 ).to_dict()
                 heading = "Full platform staging warehouse release built"
+            elif args.command == "build-radar-release":
+                payload = build_radar_warehouse_release(
+                    data_root=args.data_root,
+                    monthly_run_id=args.monthly_run_id,
+                    weekly_run_ids=tuple(args.weekly_run_id),
+                    backup_manifest_path=args.backup_manifest,
+                ).to_dict()
+                heading = "NPPES Radar staging warehouse release built"
             elif args.command == "prepare-aact-release":
                 payload = prepare_aact_release(
                     data_root=args.data_root,
