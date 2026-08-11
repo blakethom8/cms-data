@@ -1,6 +1,7 @@
 # Command Center temporary publication — 2026-08-11
 
-> **Status: prepared for direct HTTPS publication pending DNS**
+> **Status: BLOCKED pending profile-affiliations recovery cutover approval; dashboard and public
+> listeners are not running.**
 
 ## Decision and boundary
 
@@ -68,6 +69,24 @@ After the owner points the apex A record to `5.78.148.70`, validate from outside
 The retained certificate expires 2026-09-06. After DNS resolves to this host, replace its stale
 standalone renewal hooks with a reviewed renewal method and enable/test renewal. Do not enable the
 old hook: it names the retired `personal-website_nginx_1` container.
+
+## Preparation and stop record — 2026-08-11
+
+GitHub issue [#13](https://github.com/blakethom8/cms-data/issues/13) tracks the deferred Cloudflare
+Tunnel and Access hardening. The sealed dashboard artifact, loopback systemd unit, and dedicated
+nginx configuration were installed on the Hetzner host. Systemd and nginx configuration validation
+passed, but neither service was started and ports 80, 443, 4199, and 18080 were confirmed closed
+after rehearsal.
+
+Publication stopped during the scoped-key API restart because the selected profile-affiliations
+code artifact failed the immutable startup check. The API environment was restored exactly, the
+intact predecessor was selected through the production manager, and its full smoke and verification
+passed. The proposed Command Center key is not active. Full incident and clean recovery-candidate
+evidence are recorded in `docs/profile-affiliations-code-deploy-2026-08-11.md`.
+
+Do not resume this runbook until the clean affiliation candidate is explicitly approved, selected,
+and verified. Resumption must start again at publication check 1; it must not assume the earlier API
+key or process state remains valid.
 
 ## Rollback
 

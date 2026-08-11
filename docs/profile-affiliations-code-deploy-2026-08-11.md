@@ -1,8 +1,10 @@
 # Profile affiliations code-only deployment — 2026-08-11
 
-> **Status: COMPLETE — `deployment-20260811T050116Z-3eb99c92bf` was selected and
-> verified on 2026-08-11 after Blake's explicit R7 approval. The unchanged predecessor
-> `deployment-20260811T031052Z-73cea84b1b` remains intact for rollback.**
+> **Status: RECOVERY READY, CUTOVER APPROVAL REQUIRED — the intact predecessor
+> `deployment-20260811T031052Z-73cea84b1b` is selected and verified after the
+> 2026-08-11 rollback described below. Clean replacement
+> `deployment-20260811T135930Z-2c3fb4878d` passed R1–R6; do not select it without a new
+> explicit approval.**
 
 ## Background — what this ships and why
 
@@ -525,6 +527,56 @@ Final production state:
 - journal: no warning-level entries since 05:00 UTC; transition sentinel absent;
 - rollback: predecessor bundle `deployment-20260811T031052Z-73cea84b1b` remains intact with
   its original code, reused runtime, and unchanged warehouse links.
+
+## Command Center preflight incident and recovery — 2026-08-11 13:51–14:03 UTC
+
+While preparing the separately approved Command Center publication, a root-run read-only
+authentication diagnostic imported `api/auth.py` from the selected code artifact. Python wrote
+`api/__pycache__/auth.cpython-312.pyc`, violating the immutable-artifact invariant. The subsequent
+API restart was correctly rejected by the systemd startup integrity guard. The exact original
+`/etc/cms-data/cms-api.env` was restored from its root-only backup; the proposed scoped Command
+Center key is not active. No warehouse, release ledger, or bundle pointer was edited by hand.
+
+The first actual rollback invocation incorrectly included `--deployment-id`, which the manager
+rejects outside dry-run; it made no state change. The documented actual rollback without that flag
+then selected the intact predecessor `deployment-20260811T031052Z-73cea84b1b`. A fresh full smoke
+run passed all 15 checks, and manager verification restored this state:
+
+- manager healthy and control plane healthy; artifact integrity passed;
+- selected state `verified` at `2026-08-11T13:53:05+00:00`;
+- zero blocking transactions, pointer matches ledger, and no transition sentinel;
+- `cms-api` active/running on PID `3208720` with
+  `{"status":"ok","core_providers":7395713}`;
+- rollback smoke evidence SHA-256
+  `5ada62285772be8e64b433f82284a22a4c1858039f6a5065888652eae5b80a3a`.
+
+Two unsuccessful replacement-artifact constructions were retained and never prepared:
+`safe-recovery2` lacked Git metadata, and `safe-recovery3`/`safe-recovery4` were rejected during
+dry-run because their checkout modes were not clean/immutable. `safe-recovery5` is a clean detached
+checkout of exact commit `7285b4bab8969bcbd3cd4b00415149f15756bc8d`, sealed without changing
+Git-tracked executable modes. Two identical prepare operations outlived their SSH client sessions
+and created prepared audit records; only the first,
+`deployment-20260811T135930Z-2c3fb4878d`, is the recovery candidate. The duplicate remains
+unselected and must not be used.
+
+Recovery R1–R6 evidence for `deployment-20260811T135930Z-2c3fb4878d`:
+
+- unchanged warehouse `warehouse-20260811T021837Z-f44c147e30` and reused runtime
+  `runtime-candidate-8985e8a-c26024b3`;
+- provenance snapshot: 32,909 bytes, `root:dataops` mode `0440`, SHA-256
+  `fd426f571eaf700fd0d70567b128c7195b80a780e3f6d73cdc1e77003df80244`;
+- all 15 production smoke checks passed; smoke SHA-256
+  `2a7bc83a09afdb880b8e5fb6ceb12e1e1668cf9ce5ddc0eacecd80074922c049`;
+- `/release`: candidate ID, representation version 2, 18 source-vintage entries, and unchanged
+  warehouse checksum; ETag `"deployment-20260811T135930Z-2c3fb4878d:2"`; conditional GET `304`;
+- fixed features: Fischer returned 3 groups / 2 hospitals and Do returned 2 groups / 4 hospitals;
+- rehearsal stopped, port 18080 released, and the sealed artifact retained zero bytecode paths;
+- activate and rollback dry-runs both returned exit code 0 with `error_summary: null`.
+
+This is a new deployment ID, so the earlier approval does not authorize its selection. Stop here
+and obtain Blake's explicit approval before running a one-shot cutover targeting
+`deployment-20260811T135930Z-2c3fb4878d`. Dashboard publication remains paused until the affiliation
+API is restored and verified.
 
 ## Stop conditions (from the runbook, instantiated)
 
