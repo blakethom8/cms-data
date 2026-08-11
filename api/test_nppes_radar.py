@@ -16,6 +16,7 @@ from pipeline.nppes_radar import (
     WEEKLY_SOURCE_ID,
     NppesRadarError,
     NppesRadarRelease,
+    ensure_radar_schema,
     process_nppes_provider_file,
 )
 from radar import get_radar_router
@@ -38,6 +39,24 @@ BASE_HEADERS = [
     "Provider Business Practice Location Address Postal Code",
     "Provider Business Practice Location Address Telephone Number",
 ]
+
+
+def test_radar_schema_install_is_limited_to_radar_owned_tables() -> None:
+    connection = duckdb.connect(":memory:")
+    ensure_radar_schema(connection)
+
+    tables = {
+        row[0]
+        for row in connection.execute(
+            "SELECT table_name FROM information_schema.tables WHERE table_schema = 'main'"
+        ).fetchall()
+    }
+    assert tables == {
+        "nppes_radar_provider_state",
+        "nppes_radar_events",
+        "nppes_radar_releases",
+    }
+    connection.close()
 HEADERS = BASE_HEADERS + [
     field
     for position in range(1, 16)

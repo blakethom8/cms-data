@@ -19,6 +19,7 @@ import duckdb
 logger = logging.getLogger(__name__)
 
 DDL_PATH = Path(__file__).resolve().parent.parent / "schema" / "ddl.sql"
+RADAR_DDL_MARKER = "-- NPPES New Provider Radar"
 MONTHLY_SOURCE_ID = "nppes_monthly_v2"
 WEEKLY_SOURCE_ID = "nppes_weekly_incremental_v2"
 ReleaseKind = Literal["monthly_full", "weekly_incremental"]
@@ -68,8 +69,11 @@ class NppesRadarProcessResult:
 
 
 def ensure_radar_schema(connection: duckdb.DuckDBPyConnection) -> None:
-    """Create the warehouse schema, including the Radar state and event tables."""
-    connection.execute(DDL_PATH.read_text())
+    """Create only the Radar-owned tables in an existing warehouse candidate."""
+    ddl = DDL_PATH.read_text()
+    if RADAR_DDL_MARKER not in ddl:
+        raise NppesRadarError("Radar DDL marker is missing from schema/ddl.sql")
+    connection.execute(ddl.split(RADAR_DDL_MARKER, 1)[1])
 
 
 def _sql_date(column: str) -> str:

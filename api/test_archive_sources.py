@@ -212,6 +212,9 @@ def test_nppes_monthly_baseline_and_consecutive_weeklies_are_synchronized(
         },
     )
     connection = duckdb.connect(":memory:")
+    connection.execute(
+        (REPOSITORY_ROOT / "schema" / "ddl.sql").read_text(encoding="utf-8")
+    )
     counts, details = load_nppes_sources(
         connection,
         data_root=data_root,
