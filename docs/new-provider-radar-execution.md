@@ -1,6 +1,6 @@
 # New Provider Radar — cms-data execution handoff
 
-> **Last reviewed: 2026-08-11** · **Status: T1-T3 complete; T4 awaiting market ZIPs**
+> **Last reviewed: 2026-08-11** · **Status: T1, T2, T4 complete; T3 built, promotion approval pending**
 
 This is the build brief for finishing the cms-data side of New Provider Radar. Design authority
 is [new-provider-radar.md](new-provider-radar.md) — event vocabulary, warehouse model, API
@@ -25,9 +25,8 @@ Built and tested:
 - `pipeline/discovery.py` — already parses the official NPPES download index and recognizes the
   `nppes_monthly_v2` and `nppes_weekly_incremental_v2` filename shapes.
 
-Remaining work:
-
-- No precision measurement against a real market (T4).
+All four tracks are complete. Product follow-ups from the precision spike are recorded in
+[new-provider-radar-precision-2026-08-11.md](new-provider-radar-precision-2026-08-11.md).
 
 ## Tracks
 
@@ -123,7 +122,9 @@ Completed 2026-08-11: `/radar/providers` now requires exactly one geographic sco
 `zip5` values or `city` plus two-letter `state`. City/state matching trims and uppercases both
 request and current NPPES primary-practice values; ZIP filtering and every other filter retain
 their existing semantics. Invalid partial or combined scopes fail with 422, and the response model
-is unchanged. No T3 blockers remain.
+is unchanged. Implementation is committed at `fa4bcdd`; production still serves T2 code commit
+`3c3e761`, so a separate approval-gated code-only promotion is required before provider-search may
+send city/state requests. That approval is the only T3 blocker.
 
 ### T4 — Precision spike (R1 in the product plan)
 
@@ -142,6 +143,15 @@ Deliverable: a short dated report committed under `docs/` (or an evidence file r
 this doc) with the numbers and a recommendation for default filters and digest safety. No
 numeric success targets exist until this establishes the denominator.
 
+Completed 2026-08-11: the three promoted weekly releases were replayed against the real hosted-dev
+saved market **Radar QA — Denver** (`80206`, `80220`). The dated
+[precision report](new-provider-radar-precision-2026-08-11.md) records weekly volume, taxonomy
+distribution, duplicate and location-quality rates, manual noise review, and recommended defaults.
+The data and boundary classifications were precise, but the market has no configured taxonomy
+rules and 0 of 27 V1 candidates matched the expected cardiology family. Recommendation: keep the
+digest disabled until taxonomy selection is required and a second targeted market is sampled. No
+T4 implementation blocker remains; the no-digest verdict is the result of the spike.
+
 ## Explicitly deferred (do not build in these tracks)
 
 From the design doc's later phases: secondary practice locations (Practice Location Reference
@@ -155,7 +165,9 @@ cache, Type 2 organization events. Also deferred: any ZCTA/metro crosswalk (see 
 `/md-watch` page ("MD Watch", Search rail), the proxy router, and the workspace state tables
 (migration `20260810070000`, applied to the hosted dev project). The app shipped against the
 ZIP-mode contract; T1 + T2 now provide its production data. **T3's additive city/state API mode
-is complete here and awaits app-side adoption; T4 still gates only the digest.**
+is built but must not be adopted until its pending code-only production promotion completes. T4 is
+complete; its precision report recommends keeping the digest disabled pending required taxonomy
+targeting and a second sampled market.**
 
 - `event_id` is a durable foreign key for workspace state in the application — treat its
   determinism rule (release, provider, event type, effective date, before/after values) as a
