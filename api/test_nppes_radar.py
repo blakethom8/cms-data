@@ -398,3 +398,53 @@ def test_invalid_npi_rolls_back_release_and_state(tmp_path: Path) -> None:
         "SELECT COUNT(*) FROM nppes_radar_releases"
     ).fetchone()[0] == 0
     connection.close()
+
+
+def test_historical_reactivation_date_does_not_repeat_in_later_weeklies(
+    tmp_path: Path,
+) -> None:
+    connection = duckdb.connect(":memory:")
+    provider = _provider(
+        "1111111111",
+        first_name="Ada",
+        last_name="Historical",
+        enumeration_date="01/01/2006",
+        last_update_date="02/01/2020",
+        zip5="80220",
+        taxonomy="207RC0000X",
+        deactivation_date="01/01/2020",
+        reactivation_date="02/01/2020",
+    )
+    baseline = _write_csv(tmp_path / "baseline.csv", [provider])
+    process_nppes_provider_file(
+        connection,
+        baseline,
+        _release(
+            "monthly-release",
+            kind="monthly_full",
+            period_start=date(2026, 7, 13),
+            period_end=date(2026, 7, 13),
+        ),
+        baseline=True,
+    )
+    periods = (
+        (date(2026, 7, 14), date(2026, 7, 20)),
+        (date(2026, 7, 21), date(2026, 7, 27)),
+    )
+    for index, (period_start, period_end) in enumerate(periods, start=1):
+        weekly = _write_csv(tmp_path / f"weekly-{index}.csv", [provider])
+        process_nppes_provider_file(
+            connection,
+            weekly,
+            _release(
+                f"weekly-release-{index}",
+                kind="weekly_incremental",
+                period_start=period_start,
+                period_end=period_end,
+            ),
+        )
+
+    assert connection.execute(
+        "SELECT count(*) FROM nppes_radar_events WHERE event_type = 'reactivated'"
+    ).fetchone() == (0,)
+    connection.close()

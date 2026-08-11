@@ -363,8 +363,7 @@ def _insert_events(
         predicate=(
             "c.npi IS NOT NULL "
             "AND i.reactivation_date IS NOT NULL "
-            "AND (i.reactivation_date IS DISTINCT FROM c.reactivation_date "
-            "OR c.deactivation_date IS NOT NULL)"
+            "AND i.reactivation_date IS DISTINCT FROM c.reactivation_date"
         ),
         effective_date="i.reactivation_date",
     )
