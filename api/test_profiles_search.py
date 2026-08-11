@@ -6,7 +6,7 @@ names that happen to sit inside the metro city proper.
 """
 import duckdb
 
-from profiles import CRED, _search_dac, _search_registry
+from profiles import CRED, _search_dac, _search_npi, _search_registry
 
 
 def _connection() -> duckdb.DuckDBPyConnection:
@@ -107,3 +107,50 @@ def test_registry_city_match_breaks_score_ties() -> None:
     rows = _search_registry(connection, ["JANE", "SMITH"], "Los Angeles", "CA", 15)
 
     assert [row["npi"] for row in rows] == ["1000000005", "1000000004"]
+
+
+def test_exact_npi_search_returns_dac_source() -> None:
+    connection = _connection()
+    connection.execute(
+        "insert into raw_dac_national values "
+        "('1154580017', 'TREVAN', 'FISCHER', 'MD', 'GENERAL SURGERY', "
+        "'LOS ANGELES', 'CA', 'CEDARS-SINAI MEDICAL CARE FOUNDATION')"
+    )
+
+    rows = _search_npi(connection, "1154580017", "CA")
+
+    assert rows == [
+        {
+            "npi": "1154580017",
+            "name": "TREVAN FISCHER",
+            "credentials": "MD",
+            "specialty": "GENERAL SURGERY",
+            "city": "LOS ANGELES",
+            "state": "CA",
+            "group_name": "CEDARS-SINAI MEDICAL CARE FOUNDATION",
+            "source": "medicare",
+        }
+    ]
+
+
+def test_exact_npi_search_falls_back_to_registry_source() -> None:
+    connection = _connection()
+    connection.execute(
+        "insert into raw_nppes values "
+        "('1881985521', 1, 'DUC', 'DO', 'MD', 'LOS ANGELES', 'CA', null)"
+    )
+
+    rows = _search_npi(connection, "1881985521", "CA")
+
+    assert rows == [
+        {
+            "npi": "1881985521",
+            "name": "DUC DO",
+            "credentials": "MD",
+            "specialty": None,
+            "city": "LOS ANGELES",
+            "state": "CA",
+            "group_name": None,
+            "source": "registry",
+        }
+    ]

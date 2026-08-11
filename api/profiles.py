@@ -272,7 +272,7 @@ def _search_npi(conn, npi: str, state: Optional[str]) -> list[dict]:
                trim(coalesce(any_value({CRED}), '')) credentials,
                any_value(pri_spec) specialty, any_value("City/Town") city,
                any_value("State") state, any_value("Facility Name") group_name,
-               'medicare' source
+               'medicare' AS "source"
         from raw_dac_national
         where CAST("NPI" as varchar) = ? {state_predicate}
         group by "NPI"
@@ -283,7 +283,7 @@ def _search_npi(conn, npi: str, state: Optional[str]) -> list[dict]:
     return _rows(conn, f"""
         select CAST(npi as varchar) npi, coalesce(first_name || ' ', '') || last_name as "name",
                credentials, null specialty, practice_city city, practice_state state,
-               null group_name, 'registry' source
+               null group_name, 'registry' AS "source"
         from raw_nppes where CAST(npi as varchar) = ? {state_predicate}
     """, [npi, state.upper()] if state else [npi])
 
