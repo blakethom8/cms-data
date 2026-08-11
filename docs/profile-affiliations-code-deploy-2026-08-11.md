@@ -1,8 +1,8 @@
 # Profile affiliations code-only deployment — 2026-08-11
 
-> **Status: R1–R6 GREEN on replacement candidate
-> `deployment-20260811T050116Z-3eb99c92bf`; stopped at the R7 approval gate.
-> Production remains unchanged. Cutover is NOT approved.**
+> **Status: COMPLETE — `deployment-20260811T050116Z-3eb99c92bf` was selected and
+> verified on 2026-08-11 after Blake's explicit R7 approval. The unchanged predecessor
+> `deployment-20260811T031052Z-73cea84b1b` remains intact for rollback.**
 
 ## Background — what this ships and why
 
@@ -468,6 +468,63 @@ Then update this document: mark the status line complete, record the final selec
 deployment, service PID, smoke evidence path + SHA-256, journal state, and the untouched
 rollback bundle, following the pattern in `new-provider-radar-execution.md`. Commit as
 `docs(platform): record profile-affiliations cutover` and push.
+
+## R7–R8 completion evidence — 2026-08-11 05:11 UTC
+
+Blake explicitly approved the production cutover of
+`deployment-20260811T050116Z-3eb99c92bf`. The immediately preceding checks found the live
+service healthy on PID `3091528`, zero blocking transactions, artifact integrity passed, no
+transition sentinel, no warning-level journal entries since 05:00 UTC, 80 GiB free, the sealed
+candidate still free of runtime cache paths, and `release-current` still selecting the expected
+predecessor.
+
+The exact documented R7 `pipeline.production_cutover` command returned exit code `0`:
+
+```json
+{
+  "rollback_available": true,
+  "selected_deployment_id": "deployment-20260811T050116Z-3eb99c92bf",
+  "smoke_evidence": "/srv/cms-data-platform/production/evidence/deployment-20260811T050116Z-3eb99c92bf/smoke.json",
+  "state": "promoted"
+}
+```
+
+R8 confirmed the live serving contract:
+
+```text
+release_id: deployment-20260811T050116Z-3eb99c92bf
+representation_version: 2
+source_vintages: 18 non-empty entries
+build.checksum: 91e2ee4e22fd7b7f612765635e19601ce081730c8b0ddc634dc54d891a345ef2
+build.warehouse_release_id: warehouse-20260811T021837Z-f44c147e30
+etag: "deployment-20260811T050116Z-3eb99c92bf:2"
+304
+```
+
+The live feature checks returned:
+
+```text
+[('CEDARS-SINAI MEDICAL CARE FOUNDATION', 'dac + reassignment'), ('Southern California Permanente Medical Group', 'reassignment'), ('Providence Saint Johns Medical Foundation', 'reassignment')]
+[('PROVIDENCE ST. JOSEPH HOSPITAL', '050069'), ("SAINT JOHN'S HEALTH CENTER", '050290')]
+2 groups, 4 hospitals
+```
+
+Final production state:
+
+- selected and verified deployment: `deployment-20260811T050116Z-3eb99c92bf`;
+- selected code commit: `7285b4bab8969bcbd3cd4b00415149f15756bc8d`;
+- service: PID `3113223`, active/running, cwd resolves to the sealed replacement code artifact;
+- warehouse: unchanged `warehouse-20260811T021837Z-f44c147e30` with SHA-256
+  `91e2ee4e22fd7b7f612765635e19601ce081730c8b0ddc634dc54d891a345ef2`;
+- verified smoke evidence:
+  `/srv/cms-data-platform/production/evidence/deployment-20260811T050116Z-3eb99c92bf/smoke.json`,
+  `root:root` mode `0440`, 3,512 bytes, SHA-256
+  `31d5c830bb38cde3d17ddbfc8daba98bf4902be814eb31b92edfec0af5987262`;
+- manager: healthy, artifact integrity passed, zero blocking transactions, pointer matches
+  ledger, selected state `verified`, verified at `2026-08-11T05:10:55+00:00`;
+- journal: no warning-level entries since 05:00 UTC; transition sentinel absent;
+- rollback: predecessor bundle `deployment-20260811T031052Z-73cea84b1b` remains intact with
+  its original code, reused runtime, and unchanged warehouse links.
 
 ## Stop conditions (from the runbook, instantiated)
 
