@@ -10,10 +10,11 @@ The owner approved temporarily publishing the read-only Data Command Center at
 intentional reversal of the public-site retirement for this one surface; it does not restore the
 archived website or its broad `/api/*` proxy.
 
-This temporary path is not identity-authenticated. It is suitable only for the public CMS-derived
-data and non-secret operating metadata already represented by the Command Center. GitHub issue #13
-tracks replacement with Cloudflare Tunnel and Access. Do not add customer data, PHI, credentials,
-write controls, arbitrary SQL, or other private material to this surface.
+This temporary path uses one shared HTTP Basic Auth account as a short-term access barrier. The
+account name is `dashboard`; its password and bcrypt record remain root-owned outside Git in
+`/etc/cms-data/command-center.htpasswd`. This is not individual identity, authorization, or an audit
+trail. GitHub issue #13 tracks replacement with Cloudflare Tunnel and Access. Do not add customer
+data, PHI, credentials, write controls, arbitrary SQL, or other private material to this surface.
 
 The serving boundary is:
 
@@ -33,12 +34,12 @@ public HTTPS -> pinned nginx container -> 127.0.0.1:4199 Command Center gateway
 
 - `deploy/systemd/cms-command-center.service`: unprivileged loopback gateway service.
 - `deploy/command-center/nginx.conf`: HTTPS, security headers, connection/rate limits, and proxy
-  boundary.
+  boundary, including the temporary HTTP Basic Auth challenge.
 - `deploy/command-center/docker-compose.yml`: pinned nginx container with read-only filesystem.
 - Dashboard code comes from a sealed commit artifact selected through
   `/srv/cms-data-platform/command-center/current`.
 - Secrets remain root-owned outside Git in `/etc/cms-data/cms-command-center.env` and
-  `/etc/cms-data/cms-api.env`.
+  `/etc/cms-data/cms-api.env`; the Basic Auth credential file is also outside Git.
 
 ## Publication checks
 
@@ -316,6 +317,19 @@ remained outside the public listener boundary. Provider Search `/ready` continue
 No additional server change is required for DNS. Allow prior TTLs and local resolver/browser caches
 to expire, then repeat an unpinned public request. Certificate-renewal remediation and Cloudflare
 Access remain the two infrastructure follow-ups.
+
+### Temporary password gate — 2026-08-11
+
+Blake requested a simple shared password while Cloudflare Access remains deferred. Nginx Basic Auth
+is enabled for the entire HTTPS server. The root-owned credential file is mounted read-only into the
+pinned nginx container; neither its password nor its bcrypt record is stored in the repository,
+deployment documentation, or container image.
+
+Configuration validation passed before the gateway container was recreated. After reload,
+unauthenticated HTTPS returned `401`, HTTP continued to redirect to HTTPS with `301`, the nginx
+container was running with restart count 0, and the private CMS API `/health` endpoint remained
+healthy. This gate reduces casual exposure but remains a shared-secret control: it does not replace
+per-user identity, MFA, access policy, or attributable audit logs.
 
 ## Rollback
 
