@@ -351,6 +351,20 @@ docker exec --user nginx cms-command-center-nginx \
 Do not restore `root:root 0640`; that configuration fails only after a user submits credentials and
 can therefore evade an unauthenticated health probe.
 
+After the permission repair, an end-to-end browser check correctly reached nginx's credential
+validation but returned `401`. The live password file contained zero entries, and nginx logged that
+the intended user was not found. The single shared account was recreated interactively with
+`htpasswd -B`; neither the password nor its hash was printed or committed. The file then contained
+exactly one entry for the intended username, retained `root:<nginx worker gid>` mode `0640`, remained
+readable by the unprivileged worker, and passed `nginx -t`.
+
+A fresh automated Chromium session supplied the intended HTTP Basic credentials and loaded
+`https://healthcaredataai.com/` successfully. The rendered page title was `Overview · CMS Data
+Command Center`, and its Overview, Provider Evidence, Data Catalog, Lineage, Contracts, and
+Operations navigation targets were present. This browser check is required after future credential
+creation or rotation; file readability and an unauthenticated `401` alone do not prove that an
+account entry exists or that its password validates.
+
 ## Rollback
 
 Rollback does not touch `release-current`, DuckDB, AACT, or production artifacts:
