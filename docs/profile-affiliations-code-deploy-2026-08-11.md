@@ -1,7 +1,8 @@
 # Profile affiliations code-only deployment — 2026-08-11
 
-> **Status: Phase 2 in progress — candidate prepared and provenance-confirmed; rehearsal,
-> verification, and the approval-gated cutover remain. Cutover is NOT approved.**
+> **Status: BLOCKED at R3 — candidate smoke passed, but the documented pre-selection
+> `verify` command rejected the unselected candidate. Rehearsal is stopped and production
+> remains unchanged. Cutover is NOT approved.**
 
 ## Background — what this ships and why
 
@@ -85,6 +86,76 @@ deployment) contains only `smoke.json` — its `source-manifests.json` was never
 `GET /release` currently serves `source_vintages: {}`. This deployment's candidate
 evidence copies from the 02:37Z predecessor instead and fixes the observable gap for the
 next release. No action against the selected deployment is required or authorized.
+
+## R1–R3 attempt and stop record — 2026-08-11 04:36 UTC
+
+The required preconditions matched this document before rehearsal:
+
+- `production_manager.py status` reported `healthy: true`, `control_plane_healthy: true`,
+  `blocking_transactions: 0`, `pointer_matches_ledger: true`, and no transition sentinel;
+- `release-current` still selected
+  `deployment-20260811T031052Z-73cea84b1b`, with live PID `3091528` active;
+- candidate code, runtime, and warehouse links resolved to the identities in the candidate
+  table above; port 18080 was free; and the host retained approximately 80 GiB free.
+
+R1 sealed the candidate provenance snapshot as `root:dataops` mode `0440`, 32,909 bytes.
+Its SHA-256 matched the reconciled predecessor snapshot exactly:
+
+```text
+fd426f571eaf700fd0d70567b128c7195b80a780e3f6d73cdc1e77003df80244
+```
+
+R2 started candidate rehearsal PID `3106172` on `127.0.0.1:18080`. Health returned:
+
+```json
+{"status":"ok","core_providers":7395713}
+```
+
+R3 smoke passed all 15 canonical checks with the documented counts:
+
+```text
+Production smoke: passed
+Evidence: /srv/cms-data-platform/production/evidence/deployment-20260811T041229Z-8eee0d7afd/smoke.json
+- health: passed
+- process_identity: passed
+- authentication_required: passed
+- practice_capabilities: passed
+- practice_search: passed
+- provider_profile: passed
+- industry_search: passed
+- industry_options: passed
+- industry_exact_option_round_trip: passed
+- industry_detail: passed
+- research: passed
+- clinical_trials: passed
+- explorer_catalog: passed
+- required_tables: passed
+- warehouse_counts: passed
+```
+
+The smoke file is `root:root` mode `0440`, 3,497 bytes, with SHA-256:
+
+```text
+fe4f0c2bb9fcace05bc12c3f299f6f43019af719303b1d74823cdea94d56bd26
+```
+
+The immediately following documented `production_manager.py verify` command returned exit
+code `2` instead of marking the candidate verified:
+
+```json
+{"state": "error", "error_summary": "Verification target is not selected"}
+```
+
+This is a stop condition. The checked-in manager's `_verification_validation` explicitly
+requires the verification target to be the deployment currently selected by
+`release-current`; the candidate is correctly still only `prepared`. No alternative flag or
+undocumented command was substituted. R4–R6 were not run. Rehearsal PID `3106172` was stopped,
+port 18080 was released, and a post-stop status check confirmed the healthy live selection is
+still `deployment-20260811T031052Z-73cea84b1b` with zero blocking transactions and no sentinel.
+
+Before resuming, reconcile the working procedure's pre-cutover verification requirement with
+the manager's selected-only verification state machine. Do not treat the passing smoke file as
+cutover approval.
 
 ## Remaining steps
 
