@@ -1,7 +1,7 @@
 # Command Center temporary publication — 2026-08-11
 
-> **Status: BLOCKED at approval gate for combined NPPES-first v3 candidate
-> `deployment-20260811T145509Z-187674a921`; dashboard and public listeners are not running.**
+> **Status: SERVER DEPLOYED on combined NPPES-first v3 deployment
+> `deployment-20260811T145509Z-187674a921`; awaiting owner DNS repoint.**
 
 ## Decision and boundary
 
@@ -238,6 +238,64 @@ ledger, and no transition sentinel. Live selection remains the verified predeces
 Stop here. Production cutover to `deployment-20260811T145509Z-187674a921` requires Blake's explicit
 approval naming this candidate. Only after successful cutover may the gateway and nginx publication
 checks resume; DNS remains an owner action after local HTTPS validation.
+
+## Combined v3 cutover and server publication — 2026-08-11 15:07–15:12 UTC
+
+Blake explicitly approved production cutover to
+`deployment-20260811T145509Z-187674a921`. The immediately preceding checks found the selected
+predecessor healthy and verified on API PID `3214625`, with artifact integrity passed, zero blocking
+transactions, no transition sentinels, 80 GiB free, the candidate smoke checksum intact, and no
+candidate bytecode/cache paths.
+
+The one-shot `pipeline.production_cutover` command returned exit code 0:
+
+```json
+{
+  "rollback_available": true,
+  "selected_deployment_id": "deployment-20260811T145509Z-187674a921",
+  "smoke_evidence": "/srv/cms-data-platform/production/evidence/deployment-20260811T145509Z-187674a921/smoke.json",
+  "state": "promoted"
+}
+```
+
+Post-cutover manager status is healthy and verified at `2026-08-11T15:07:37+00:00`, with artifact
+integrity passed, zero blocking transactions, pointer matching the ledger, no transition sentinel,
+and selected code commit `18bfc9f88c168af4a48cd1271761f1e589972d8b`. The API is active on PID
+`3226584`. The immutable warehouse remains
+`warehouse-20260811T021837Z-f44c147e30` and was not rebuilt, copied over, or modified in place.
+
+The cutover-owned verified smoke evidence is `root:root` mode `0440`, 3,510 bytes, SHA-256
+`154901949140619619a63ab5c44b3e4009b79caea57d222fb8cbad22a45dfa37`. Live contract checks
+returned representation version 3, 18 source vintages, ETag
+`"deployment-20260811T145509Z-187674a921:3"`, and a 304 conditional round trip. Alicia name search,
+her two DAC/NPPES doors, the NPPES-only Gerardo Gomez profile, Fischer's 3 groups / 2 hospitals, and
+Do's 2 groups / 4 hospitals all passed against port 8080. Provider Search `/ready` reported CMS data
+`ok`, and neither the API nor Command Center journal contained warning-level entries during the
+cutover/publication window.
+
+The predecessor `deployment-20260811T135930Z-2c3fb4878d` remains intact for rollback with its
+original sealed code target, the reused runtime, and unchanged warehouse link.
+
+The Command Center selector now points at sealed release
+`command-center-20260811T1510Z-18bfc9f`, retaining
+`command-center-20260811T-local-217a777f` as its rollback bundle. The loopback gateway is active on
+PID `3227475`. All reviewed static, health, catalog, profile-search, provider-evidence, and operations
+routes returned 200. Query, docs, OpenAPI, release metadata, Radar, path traversal, and hidden files
+were blocked; POST was rejected.
+
+The retained Let's Encrypt certificate is valid for `healthcaredataai.com` through
+`2026-09-06T00:17:21Z`. The pinned nginx configuration passed `nginx -t`; container
+`cms-command-center-nginx` is running with restart count 0 and owns ports 80/443. Local HTTPS tests
+using `--resolve healthcaredataai.com:443:127.0.0.1` passed for the application, Alicia discovery,
+provider evidence, and operations. Blocked routes remained blocked, HTTP redirected to HTTPS, and
+Content Security Policy, Permissions Policy, Referrer Policy, HSTS, MIME-sniffing, and frame headers
+were present. The gateway and nginx both emit some defense headers, so duplicate header lines are
+expected and harmless.
+
+Owner DNS action remains: the apex A record still resolved to `204.168.128.251` at the end of these
+checks. Point `healthcaredataai.com` to `5.78.148.70`. After propagation, rerun the external checks
+in this runbook and replace the stale certificate renewal hook before the September expiry. GitHub
+issue #13 continues to track the later Cloudflare Tunnel and Access migration.
 
 ## Rollback
 

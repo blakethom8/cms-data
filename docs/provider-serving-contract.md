@@ -1,6 +1,6 @@
 # Provider discovery, profile, and evidence serving contract
 
-> **Last reviewed: 2026-08-11** · **Status: representation version 3 candidate**
+> **Last reviewed: 2026-08-11** · **Status: representation version 3 in production**
 
 The serving API deliberately exposes three provider views. They share NPI as the identity key, but
 they answer different questions and must not be collapsed into one oversized response.
