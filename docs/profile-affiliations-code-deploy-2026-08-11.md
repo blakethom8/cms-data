@@ -1,7 +1,7 @@
 # Profile affiliations code-only deployment — 2026-08-11
 
-> **Status: BLOCKED at R6 — contract and feature rehearsals passed, but the activate
-> dry-run found root-created writable bytecode inside the candidate's sealed code artifact.
+> **Status: R1–R6 GREEN on replacement candidate
+> `deployment-20260811T050116Z-3eb99c92bf`; stopped at the R7 approval gate.
 > Production remains unchanged. Cutover is NOT approved.**
 
 ## Background — what this ships and why
@@ -50,12 +50,13 @@ lens renders the new fields when present and older payloads unchanged
 | Item | Value |
 | --- | --- |
 | Candidate code commit | `7285b4bab8969bcbd3cd4b00415149f15756bc8d` (origin/main) |
-| Candidate deployment ID | `deployment-20260811T041229Z-8eee0d7afd` (state: prepared) |
+| Candidate deployment ID | `deployment-20260811T050116Z-3eb99c92bf` (state: prepared) |
 | Rollback target (selected, live) | `deployment-20260811T031052Z-73cea84b1b` (state: verified) |
 | Served code commit at prep time | `fa4bcdd78ffc3ac3c60b2d63f7187035258a7417` |
 | Warehouse (unchanged) | `warehouse-20260811T021837Z-f44c147e30` · sha256 `91e2ee4e22fd7b7f612765635e19601ce081730c8b0ddc634dc54d891a345ef2` · 20,569,665,536 bytes |
 | Runtime (reused) | `runtime-candidate-8985e8a-c26024b3` — `git diff fa4bcdd..7285b4b -- api/requirements.txt` is empty |
-| Code fingerprint (prepare echo) | `sha256:6f8fb93a15859e7fcd47d6c84066d9829381f1a492adb1546bde61a8da367ad6` |
+| Code artifact | `production-artifacts/code/7285b4bab8969bcbd3cd4b00415149f15756bc8d-safe-rehearsal1` |
+| Code fingerprint (prepare echo) | `sha256:c11716672cb61387eb8644f72f043ea5eede420cf351473bfd04bf572c4ddb04` |
 
 Local verification before any box work: `363 passed, 1 skipped` from `api/` at `7285b4b`.
 
@@ -220,19 +221,102 @@ A post-stop check confirmed production remains healthy on
 `deployment-20260811T031052Z-73cea84b1b`, with zero blocking transactions, no sentinel, and
 port 18080 free.
 
-## Remaining steps
+## Replacement candidate and completed R1–R6 — 2026-08-11 05:07 UTC
 
-Run in order. Each block is copy-paste safe; none touches the live service until the
-approval-gated cutover in R7.
+Blake authorized creation of a fresh immutable artifact and repetition of the pre-cutover
+checks. The contaminated artifact and deployment were left intact as failed evidence; neither
+was repaired or reused.
+
+A clean, detached, no-hardlink checkout of the exact approved commit was created at
+`production-artifacts/code/7285b4bab8969bcbd3cd4b00415149f15756bc8d-safe-rehearsal1`.
+It contained no environment files, data, databases, virtual environments, logs, Python bytecode,
+or cache directories, and was sealed `root:dataops`. Prepare dry-run and real prepare succeeded,
+creating `deployment-20260811T050116Z-3eb99c92bf` with the unchanged runtime and warehouse.
+The resulting code fingerprint is
+`sha256:c11716672cb61387eb8644f72f043ea5eede420cf351473bfd04bf572c4ddb04`.
+
+R1 copied and sealed the reconciled provenance snapshot as `root:dataops` mode `0440`,
+32,909 bytes. Its SHA-256 remained:
+
+```text
+fd426f571eaf700fd0d70567b128c7195b80a780e3f6d73cdc1e77003df80244
+```
+
+R2 ran rehearsal PID `3111481` as `dataops`, with `PYTHONDONTWRITEBYTECODE=1` and Python's
+`-B` flag. Health returned `{"status":"ok","core_providers":7395713}`. R3 then passed all
+15 canonical smoke checks:
+
+```text
+Production smoke: passed
+Evidence: /srv/cms-data-platform/production/evidence/deployment-20260811T050116Z-3eb99c92bf/smoke.json
+- health: passed
+- process_identity: passed
+- authentication_required: passed
+- practice_capabilities: passed
+- practice_search: passed
+- provider_profile: passed
+- industry_search: passed
+- industry_options: passed
+- industry_exact_option_round_trip: passed
+- industry_detail: passed
+- research: passed
+- clinical_trials: passed
+- explorer_catalog: passed
+- required_tables: passed
+- warehouse_counts: passed
+```
+
+The smoke file is `root:root` mode `0440`, 3,513 bytes, with SHA-256:
+
+```text
+7aa667808617f481bba582515bd5f4b2b421938ba86b52d5c659c2767adb0409
+```
+
+No standalone verify was run: as corrected above, verification is selected-only and belongs
+to the approval-gated one-shot cutover. R4 returned the four serving-contract results:
+
+```text
+release_id: deployment-20260811T050116Z-3eb99c92bf
+representation_version: 2
+source_vintages: 18 non-empty entries
+build.checksum: 91e2ee4e22fd7b7f612765635e19601ce081730c8b0ddc634dc54d891a345ef2
+build.warehouse_release_id: warehouse-20260811T021837Z-f44c147e30
+etag: "deployment-20260811T050116Z-3eb99c92bf:2"
+304
+```
+
+R5 returned the exact expected feature evidence:
+
+```text
+[('CEDARS-SINAI MEDICAL CARE FOUNDATION', 'dac + reassignment'), ('Southern California Permanente Medical Group', 'reassignment'), ('Providence Saint Johns Medical Foundation', 'reassignment')]
+[('PROVIDENCE ST. JOSEPH HOSPITAL', '050069'), ("SAINT JOHN'S HEALTH CENTER", '050290')]
+2 groups, 4 hospitals
+```
+
+The rehearsal stopped cleanly, port 18080 was released, and a scan confirmed the fresh sealed
+artifact still contained zero `__pycache__` or `.pyc` paths. R6 activate dry-run returned the
+replacement deployment in `prepared` state with `error_summary: null`, the code fingerprint
+above, and the unchanged warehouse identity. Rollback dry-run returned exit code `0` and the
+currently selected verified predecessor `deployment-20260811T031052Z-73cea84b1b` with
+`error_summary: null`.
+
+The final pre-gate status is healthy with `blocking_transactions: 0`,
+`control_plane_healthy: true`, `pointer_matches_ledger: true`, and no transition sentinel.
+`release-current` still selects `deployment-20260811T031052Z-73cea84b1b`; port 18080 is free.
+
+## Validated steps and remaining gate
+
+The blocks below preserve the exact commands used for R1–R6 and the command reserved for R7.
+R1–R6 are complete; none touched the live service. R7 remains approval-gated.
 
 ### R1 — seal the candidate provenance snapshot
 
 ```bash
 install -d -o root -g dataops -m 0750 \
-  /srv/cms-data-platform/production/evidence/deployment-20260811T041229Z-8eee0d7afd
+  /srv/cms-data-platform/production/evidence/deployment-20260811T050116Z-3eb99c92bf
 install -o root -g dataops -m 0440 \
   /srv/cms-data-platform/production/evidence/deployment-20260811T023712Z-b68e0ca9c3/source-manifests.json \
-  /srv/cms-data-platform/production/evidence/deployment-20260811T041229Z-8eee0d7afd/source-manifests.json
+  /srv/cms-data-platform/production/evidence/deployment-20260811T050116Z-3eb99c92bf/source-manifests.json
 ```
 
 ### R2 — start the rehearsal process on loopback 18080
@@ -242,10 +326,12 @@ clinical-trials check queries the AACT PostgreSQL database.
 
 ```bash
 set -a; . /etc/cms-data/cms-api.env; . /etc/aact/reader.env; set +a
-cd /srv/cms-data-platform/production/releases/deployment-20260811T041229Z-8eee0d7afd/code
-DUCKDB_PATH=/srv/cms-data-platform/production/releases/deployment-20260811T041229Z-8eee0d7afd/warehouse \
-  /srv/cms-data-platform/production/releases/deployment-20260811T041229Z-8eee0d7afd/runtime/bin/python \
-  -m uvicorn api.main:app --host 127.0.0.1 --port 18080 &
+cd /srv/cms-data-platform/production/releases/deployment-20260811T050116Z-3eb99c92bf/code
+PYTHONDONTWRITEBYTECODE=1 \
+DUCKDB_PATH=/srv/cms-data-platform/production/releases/deployment-20260811T050116Z-3eb99c92bf/warehouse \
+  /usr/bin/setpriv --reuid=dataops --regid=dataops --init-groups \
+  /srv/cms-data-platform/production/releases/deployment-20260811T050116Z-3eb99c92bf/runtime/bin/python \
+  -B -m uvicorn api.main:app --host 127.0.0.1 --port 18080 &
 REHEARSAL_PID=$!
 for i in $(seq 1 60); do
   curl -fsS -o /dev/null http://127.0.0.1:18080/health -H "X-API-Key: $CMS_API_KEY" && break
@@ -262,9 +348,9 @@ the selected deployment's verified smoke evidence and the warehouse release evid
 /srv/cms-data-platform/production-artifacts/runtimes/runtime-candidate-8985e8a-c26024b3/bin/python \
   /srv/cms-data-platform/production-ops/current/pipeline/production_smoke.py \
   --base-url http://127.0.0.1:18080 \
-  --deployment-id deployment-20260811T041229Z-8eee0d7afd \
+  --deployment-id deployment-20260811T050116Z-3eb99c92bf \
   --production-root /srv/cms-data-platform/production \
-  --release-bundle /srv/cms-data-platform/production/releases/deployment-20260811T041229Z-8eee0d7afd \
+  --release-bundle /srv/cms-data-platform/production/releases/deployment-20260811T050116Z-3eb99c92bf \
   --process-id $REHEARSAL_PID \
   --expected-core-providers 7395713 \
   --expected-hospital-affiliations 139775 \
@@ -274,7 +360,7 @@ the selected deployment's verified smoke evidence and the warehouse release evid
   --expected-aact-snapshot-date 2026-07-21 \
   --expected-table-counts /srv/cms-data-platform/data/releases/warehouse-20260811T021837Z-f44c147e30/release.json \
   --expected-industry-detail-status 200 \
-  --output /srv/cms-data-platform/production/evidence/deployment-20260811T041229Z-8eee0d7afd/smoke.json
+  --output /srv/cms-data-platform/production/evidence/deployment-20260811T050116Z-3eb99c92bf/smoke.json
 
 ```
 
@@ -286,13 +372,13 @@ selection followed by verification.
 
 ```bash
 curl -fsS -H "X-API-Key: $CMS_API_KEY" http://127.0.0.1:18080/release
-# expect: release_id deployment-20260811T041229Z-8eee0d7afd, representation_version 2,
+# expect: release_id deployment-20260811T050116Z-3eb99c92bf, representation_version 2,
 #         non-empty source_vintages (proves R1 worked)
 curl -fsSi -o /dev/null -D - -H "X-API-Key: $CMS_API_KEY" \
   http://127.0.0.1:18080/practices/capabilities | grep -i '^etag'
-# expect: ETag: "deployment-20260811T041229Z-8eee0d7afd:2"
+# expect: ETag: "deployment-20260811T050116Z-3eb99c92bf:2"
 curl -s -o /dev/null -w '%{http_code}\n' -H "X-API-Key: $CMS_API_KEY" \
-  -H 'If-None-Match: "deployment-20260811T041229Z-8eee0d7afd:2"' \
+  -H 'If-None-Match: "deployment-20260811T050116Z-3eb99c92bf:2"' \
   http://127.0.0.1:18080/practices/capabilities
 # expect: 304
 ```
@@ -323,10 +409,10 @@ sleep 2; ss -ltn | grep 18080 || echo "rehearsal stopped, port released"
 ```bash
 /usr/bin/python3 /srv/cms-data-platform/production-ops/current/pipeline/production_manager.py \
   activate --production-root /srv/cms-data-platform/production \
-  --deployment-id deployment-20260811T041229Z-8eee0d7afd --dry-run --json
+  --deployment-id deployment-20260811T050116Z-3eb99c92bf --dry-run --json
 /usr/bin/python3 /srv/cms-data-platform/production-ops/current/pipeline/production_manager.py \
   rollback --production-root /srv/cms-data-platform/production \
-  --deployment-id deployment-20260811T041229Z-8eee0d7afd --dry-run --json
+  --deployment-id deployment-20260811T050116Z-3eb99c92bf --dry-run --json
 ```
 
 ### R7 — ⛔ APPROVAL GATE, then the one-shot cutover
@@ -343,7 +429,7 @@ PYTHONPATH=/srv/cms-data-platform/production-ops/current \
   /srv/cms-data-platform/production/release-current/runtime/bin/python \
   -m pipeline.production_cutover \
   --production-root /srv/cms-data-platform/production \
-  --deployment-id deployment-20260811T041229Z-8eee0d7afd \
+  --deployment-id deployment-20260811T050116Z-3eb99c92bf \
   --candidate-core-providers 7395713 \
   --candidate-hospital-affiliations 139775 \
   --candidate-affiliated-providers 111881 \
@@ -364,7 +450,7 @@ PYTHONPATH=/srv/cms-data-platform/production-ops/current \
 
 The cutover auto-selects, restarts, smoke-tests, and re-verifies the predecessor on any
 required failure. Manual rollback afterward, if ever needed:
-`production_manager.py rollback --production-root /srv/cms-data-platform/production --deployment-id deployment-20260811T041229Z-8eee0d7afd --json`
+`production_manager.py rollback --production-root /srv/cms-data-platform/production --deployment-id deployment-20260811T050116Z-3eb99c92bf --json`
 (then confirm the predecessor serves and re-runs smoke).
 
 ### R8 — post-cutover checks and record

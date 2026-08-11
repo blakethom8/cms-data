@@ -326,8 +326,12 @@ install -o root -g dataops -m 0440 \
   /srv/cms-data-platform/production/evidence/CANDIDATE_DEPLOYMENT_ID/source-manifests.json
 ```
 
-6. Rehearse the prepared bundle on an unused loopback port and run the complete smoke suite
-   with the candidate bundle and IDs. Do not run standalone `production_manager.py verify`
+6. Rehearse the prepared bundle on an unused loopback port as the production service account,
+   with `PYTHONDONTWRITEBYTECODE=1` and Python's `-B` flag, then run the complete smoke suite
+   with the candidate bundle and IDs. Running rehearsal as root can create writable
+   `__pycache__` content inside an otherwise sealed artifact and invalidate its immutability;
+   after stopping rehearsal, confirm the code artifact contains no `__pycache__` directories or
+   `.pyc` files before transition dry-runs. Do not run standalone `production_manager.py verify`
    against the prepared candidate: verification is a selected-deployment state transition,
    and `production_cutover` performs it after selection. The warehouse is unchanged, so
    **candidate counts equal rollback counts** and both
