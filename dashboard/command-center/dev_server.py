@@ -56,6 +56,34 @@ HOP_BY_HOP_HEADERS = {
     "transfer-encoding",
     "upgrade",
 }
+LOCAL_ENVIRONMENT_KEYS = {"CMS_API_BASE_URL", "CMS_API_KEY"}
+
+
+def load_local_environment(path: Path) -> None:
+    """Load simple local key/value configuration without logging secret values.
+
+    The Command Center is intentionally dependency-free, so it reads its local
+    ``.env`` file directly instead of adding a dotenv package. Shell-provided
+    environment variables take precedence over the local file.
+    """
+    if not path.is_file():
+        return
+
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if (
+            not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key)
+            or key not in LOCAL_ENVIRONMENT_KEYS
+        ):
+            continue
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        os.environ.setdefault(key, value)
 
 
 class CommandCenterHandler(SimpleHTTPRequestHandler):
@@ -76,13 +104,27 @@ class CommandCenterHandler(SimpleHTTPRequestHandler):
         if self.path == "/api" or self.path.startswith("/api/"):
             self._proxy_read_request(include_body=True)
             return
+        if self._hidden_static_path_requested():
+            self.send_error(404)
+            return
         super().do_GET()
 
     def do_HEAD(self) -> None:  # noqa: N802 - stdlib handler contract
         if self.path == "/api" or self.path.startswith("/api/"):
             self._proxy_read_request(include_body=False)
             return
+        if self._hidden_static_path_requested():
+            self.send_error(404)
+            return
         super().do_HEAD()
+
+    def _hidden_static_path_requested(self) -> bool:
+        """Keep local configuration and other dotfiles outside the HTTP surface."""
+        return any(
+            segment.startswith(".")
+            for segment in unquote(urlparse(self.path).path).split("/")
+            if segment
+        )
 
     def _proxy_read_request(self, *, include_body: bool) -> None:
         if urlparse(self.path).path == "/api/explorer/provider-evidence":
@@ -359,6 +401,7 @@ class CommandCenterHandler(SimpleHTTPRequestHandler):
 
 
 def main() -> None:
+    load_local_environment(STATIC_DIRECTORY / ".env")
     parser = argparse.ArgumentParser(description="Serve the CMS Data Command Center locally")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=4199)

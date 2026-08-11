@@ -54,6 +54,11 @@ read-only `/query` endpoint; this keeps a local dashboard preview usable before 
 routes are deployed. It adds the API key server-side; the credential is never returned to or stored
 by the browser application. Use `CMS_API_BASE_URL` to target a different tunnel endpoint.
 
+For repeat local use, `dashboard/command-center/.env` may define only `CMS_API_KEY` and
+`CMS_API_BASE_URL`. Existing shell values take precedence. The development server rejects HTTP
+requests for `.env` and every other hidden path, and the file remains gitignored; never add local
+credentials to tracked files.
+
 ## Evidence Model
 
 The Command Center distinguishes facts from missing evidence:
@@ -74,6 +79,11 @@ a single canonical employer field. It starts with four Cedars-Sinai examples and
 source-by-provider matrix. Selecting a cell opens the physical fields from each native row so that
 addresses, organization names, enrollment identifiers, source periods, and duplicate rows can be
 compared directly.
+
+The provider-first dossier shows every bounded source row in a horizontally scrollable raw-result
+ledger before the selected row's complete field/value view. Click a row or use
+Up/Down/Home/End to move the single keyboard selection. This replaces numbered record tabs that
+hid the row context needed to compare duplicates and multi-address records.
 
 The sources intentionally remain separate because they make different claims:
 

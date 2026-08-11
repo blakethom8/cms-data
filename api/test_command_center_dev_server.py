@@ -1,4 +1,5 @@
 import importlib.util
+import os
 from pathlib import Path
 
 
@@ -82,3 +83,30 @@ def test_provider_evidence_compat_rejects_invalid_npi_without_querying() -> None
     handler._serve_provider_evidence_compat(include_body=True)
 
     assert response["status"] == 422
+
+
+def test_load_local_environment_uses_file_values_without_overriding_shell(
+    tmp_path: Path, monkeypatch
+) -> None:
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "# comment\nCMS_API_KEY='local-key'\nCMS_API_BASE_URL=http://localhost:9080\n"
+        "UNRELATED_SECRET=must-not-load\n",
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("CMS_API_KEY", raising=False)
+    monkeypatch.setenv("CMS_API_BASE_URL", "http://shell.example")
+    monkeypatch.delenv("UNRELATED_SECRET", raising=False)
+
+    DEV_SERVER.load_local_environment(env_file)
+
+    assert os.environ["CMS_API_KEY"] == "local-key"
+    assert os.environ["CMS_API_BASE_URL"] == "http://shell.example"
+    assert "UNRELATED_SECRET" not in os.environ
+
+
+def test_hidden_static_paths_are_not_served() -> None:
+    assert _handler("/.env")._hidden_static_path_requested() is True
+    assert _handler("/assets/.private/key")._hidden_static_path_requested() is True
+    assert _handler("/%2Eenv")._hidden_static_path_requested() is True
+    assert _handler("/styles.css")._hidden_static_path_requested() is False

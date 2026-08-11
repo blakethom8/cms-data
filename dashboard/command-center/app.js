@@ -1252,7 +1252,30 @@
       <section class="evidence-shelf" aria-labelledby="evidence-shelf-title"><div class="evidence-shelf-heading"><div><span class="eyebrow">Evidence shelf</span><h2 id="evidence-shelf-title">Publisher-source records <b>${publisherSources.length} sources</b></h2></div><p>Each tab is a separate raw publisher-source result for this NPI.</p></div><div class="evidence-tabs-frame"><button type="button" class="evidence-tab-scroll back" data-evidence-tab-scroll="back" aria-label="Show earlier evidence sources">←</button><div class="evidence-tabs" id="evidence-tabs" role="tablist" aria-label="Publisher evidence sources">${publisherSources.map(source => { const table = providerTable(source); const availability = evidenceAvailability(source); const selected = source.key === activeSource.key; const count = source.availability === "available" ? table.rows.length : availability.label; return `<button type="button" role="tab" aria-selected="${selected}" class="evidence-source-tab ${selected ? "selected" : ""}" data-evidence-source-tab="${escapeHtml(source.key)}"><span>${escapeHtml(source.title)}</span><b class="status-${availability.status}">${escapeHtml(String(count))}</b></button>`; }).join("")}</div><button type="button" class="evidence-tab-scroll forward" data-evidence-tab-scroll="forward" aria-label="Show later evidence sources">→</button></div>${renderEvidenceInspector(activeSource, provider, activeTable)}</section>
       ${derivedSources.length ? `<aside class="derived-relationships"><strong>Derived relationships · not publisher-source evidence</strong><p>${derivedSources.map(source => `<code>${escapeHtml(source.title)}</code>`).join(" · ")}</p><small>These warehouse bridges and inferences are intentionally kept outside the raw evidence shelf.</small></aside>` : ""}
       <aside class="evidence-caveat"><strong>Source rows stay separate.</strong><p>Records are never joined together in this workspace. A zero count means no matching source row was returned; an unavailable tab means the source cannot be retrieved in this warehouse.</p></aside>`;
+    bindEvidenceLedgerRows();
     requestAnimationFrame(() => $(".evidence-source-tab.selected")?.scrollIntoView({ behavior: "auto", block: "nearest", inline: "center" }));
+  }
+
+  function bindEvidenceLedgerRows() {
+    $$(".raw-results-table tr[data-evidence-row]").forEach(row => {
+      row.addEventListener("click", event => {
+        event.stopPropagation();
+        selectEvidenceRow(Number(row.dataset.evidenceRow));
+      });
+      row.addEventListener("keydown", event => {
+        const rowIndex = Number(row.dataset.evidenceRow);
+        const lastIndex = $$(".raw-results-table tr[data-evidence-row]").length - 1;
+        const nextIndex = event.key === "ArrowDown" ? Math.min(rowIndex + 1, lastIndex)
+          : event.key === "ArrowUp" ? Math.max(rowIndex - 1, 0)
+            : event.key === "Home" ? 0
+              : event.key === "End" ? lastIndex
+                : rowIndex;
+        if (!["Enter", " ", "ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        selectEvidenceRow(nextIndex);
+      });
+    });
   }
 
   function hydrateProviderIdentityFromEvidence(sources) {
@@ -1281,6 +1304,45 @@
     };
   }
 
+  function evidenceTableValue(value) {
+    if (value === null || value === undefined || value === "") return "null";
+    if (typeof value === "object") return JSON.stringify(value);
+    return String(value);
+  }
+
+  function renderEvidenceRecordLedger(source, table, rowIndex) {
+    if (!table.rows.length) return "";
+    const sourceName = escapeHtml(source.title);
+    const sourceGrain = escapeHtml(source.grain || "Source-native record");
+    const hasVerticalContinuation = table.rows.length > 10;
+    const rows = table.rows.map((row, index) => {
+      const selected = index === rowIndex;
+      return `<tr class="${selected ? "selected" : ""}" data-evidence-row="${index}" tabindex="${selected ? "0" : "-1"}" aria-selected="${selected}" aria-label="Raw record ${index + 1} of ${table.rows.length}">${table.columns.map((column, columnIndex) => {
+        const rawValue = evidenceTableValue(row[columnIndex]);
+        return `<td title="${escapeHtml(rawValue)}">${formatCell(row[columnIndex])}</td>`;
+      }).join("")}</tr>`;
+    }).join("");
+    return `<section class="evidence-record-ledger" aria-labelledby="raw-results-title">
+      <div class="evidence-record-ledger-heading">
+        <div><span class="eyebrow">Raw result ledger</span><h3 id="raw-results-title">All returned source rows <b>${table.rows.length} ${table.rows.length === 1 ? "row" : "rows"}</b></h3></div>
+        <p><strong>${sourceName}</strong> · ${sourceGrain}<br><span>Select a row to inspect every raw field below.</span></p>
+      </div>
+      <div class="raw-results-instruments" aria-hidden="true"><span>← scroll across fields →</span>${hasVerticalContinuation ? `<span>↓ ${table.rows.length} rows · scroll down for more</span>` : ""}</div>
+      <div class="raw-results-frame${hasVerticalContinuation ? " has-vertical-continuation" : ""}" tabindex="0" aria-label="All ${table.rows.length} source-native records for ${sourceName}. Scroll horizontally to review all publisher fields.${hasVerticalContinuation ? " Scroll down to review remaining rows." : ""}">
+        <table class="raw-results-table" role="grid" aria-label="Raw source records"><thead><tr>${table.columns.map(column => `<th scope="col" title="${escapeHtml(column)}"><code>${escapeHtml(column)}</code></th>`).join("")}</tr></thead><tbody>${rows}</tbody></table>
+      </div>
+    </section>`;
+  }
+
+  function selectEvidenceRow(rowIndex) {
+    const source = state.providerEvidence.data?.sources?.find(item => item.key === state.providerEvidence.selectedSourceKey);
+    const rowCount = providerTable(source).rows.length;
+    if (!Number.isInteger(rowIndex) || rowIndex < 0 || rowIndex >= rowCount) return;
+    state.providerEvidence.selectedRow = rowIndex;
+    renderProviderEvidence();
+    requestAnimationFrame(() => $(".raw-results-table tr.selected")?.focus({ preventScroll: true }));
+  }
+
   function renderEvidenceInspector(source, provider, table) {
     const availability = evidenceAvailability(source);
     const rowIndex = Math.min(state.providerEvidence.selectedRow, Math.max(table.rows.length - 1, 0));
@@ -1290,8 +1352,9 @@
     const body = source.availability !== "available"
       ? `<div class="inspector-unavailable"><span class="status-chip ${availability.status}"><i class="status-dot ${availability.status}"></i>${escapeHtml(availability.label)}</span><strong>These records are not currently available.</strong><p>${missing.length ? `Required source table: ${missing.map(item => `<code>${escapeHtml(item)}</code>`).join(" · ")}` : "The live source query did not complete."}</p></div>`
       : !table.rows.length ? '<div class="inspector-unavailable empty"><span class="status-chip unavailable"><i class="status-dot unavailable"></i>0 records</span><strong>No record for this provider in this source.</strong><p>An empty result is evidence too; it is not replaced with a row from another file.</p></div>'
-      : `<div class="raw-record-workbench">${table.rows.length > 1 ? `<div class="record-tabs" role="tablist" aria-label="Raw records">${table.rows.map((_, index) => `<button type="button" role="tab" aria-selected="${index === rowIndex}" class="${index === rowIndex ? "selected" : ""}" data-evidence-row="${index}"><span>${String(index + 1).padStart(2, "0")}</span>Record ${index + 1}</button>`).join("")}</div>` : '<div class="single-record-label">RAW RECORD 01</div>'}<div class="raw-field-frame" tabindex="0" aria-label="Source-native field and value table"><span class="raw-scroll-cue" aria-hidden="true">← scroll fields →</span><table class="raw-field-table"><thead><tr><th scope="col">Physical field</th><th scope="col">Source value</th></tr></thead><tbody>${table.columns.map((column, index) => `<tr><th scope="row"><code>${escapeHtml(column)}</code></th><td>${formatCell(row[index])}</td></tr>`).join("")}</tbody></table></div></div>`;
-    return `<section class="record-inspector" aria-live="polite" aria-labelledby="record-inspector-title"><div class="inspector-heading"><div><span class="eyebrow">Selected source record</span><h2 id="record-inspector-title">${escapeHtml(source.title)}</h2><p><code>${escapeHtml(provider.npi)}</code> · <code>${escapeHtml(source.table)}</code></p></div><span class="inspector-row-count">${source.availability === "available" ? `${table.rows.length} ${table.rows.length === 1 ? "ROW" : "ROWS"} RETURNED` : availability.label.toUpperCase()}</span></div><div class="claim-ledger"><article class="claim-proves"><span>What this proves</span><p>${escapeHtml(source.proves)}</p></article><article class="claim-limits"><span>What this does not prove</span><p>${escapeHtml(source.does_not_prove)}</p></article><article class="claim-grain"><span>Source relationship</span><p>${escapeHtml(source.relationship)}</p></article></div>${body}</section>`;
+      : `<div class="raw-record-workbench"><div class="selected-record-label"><span>Selected raw row</span><strong>${String(rowIndex + 1).padStart(2, "0")}</strong><small>Choose another row above to update this field-level view.</small></div><div class="raw-field-frame" tabindex="0" aria-label="Source-native field and value table"><span class="raw-scroll-cue" aria-hidden="true">← scroll fields →</span><table class="raw-field-table"><thead><tr><th scope="col">Physical field</th><th scope="col">Source value</th></tr></thead><tbody>${table.columns.map((column, index) => `<tr><th scope="row"><code>${escapeHtml(column)}</code></th><td>${formatCell(row[index])}</td></tr>`).join("")}</tbody></table></div></div>`;
+    const ledger = source.availability === "available" && table.rows.length ? renderEvidenceRecordLedger(source, table, rowIndex) : "";
+    return `<section class="record-inspector" aria-live="polite" aria-labelledby="record-inspector-title"><div class="inspector-heading"><div><span class="eyebrow">Selected source record</span><h2 id="record-inspector-title">${escapeHtml(source.title)}</h2><p><code>${escapeHtml(provider.npi)}</code> · <code>${escapeHtml(source.table)}</code></p></div><span class="inspector-row-count">${source.availability === "available" ? `${table.rows.length} ${table.rows.length === 1 ? "ROW" : "ROWS"} RETURNED` : availability.label.toUpperCase()}</span></div><div class="claim-ledger"><article class="claim-proves"><span>What this proves</span><p>${escapeHtml(source.proves)}</p></article><article class="claim-limits"><span>What this does not prove</span><p>${escapeHtml(source.does_not_prove)}</p></article><article class="claim-grain"><span>Source relationship</span><p>${escapeHtml(source.relationship)}</p></article></div>${ledger}${body}</section>`;
   }
 
   function renderProviderSearchResults() {
@@ -1310,6 +1373,21 @@
     renderProviderSearchResults();
     try {
       evidence.searchResults = await getJson(`/profiles/search?q=${encodeURIComponent(query)}&state=CA&limit=12`);
+      // The deployed profile-search route can lag the Command Center's
+      // provider-evidence compatibility endpoint. For an exact NPI, confirm
+      // against the source-record response before telling an analyst that the
+      // provider is absent. This is still a bounded, read-only NPI lookup.
+      const exactNpi = /^\d{10}$/.test(query);
+      if (!evidence.searchResults.length && exactNpi) {
+        const sourceResponse = await getJson(`/explorer/provider-evidence?npis=${encodeURIComponent(query)}&limit=1`);
+        const hasPublisherRecord = (sourceResponse.sources || []).some(source =>
+          (source.layer || "raw") === "raw" && (source.providers?.[query]?.rows || []).length
+        );
+        if (hasPublisherRecord) {
+          await selectProvider({ npi: query, name: `NPI ${query}` });
+          return;
+        }
+      }
       if (!evidence.searchResults.length) evidence.searchError = "No California provider matched that name or NPI.";
     } catch (_) { evidence.searchError = "Provider search is currently unavailable. Check the API connection and try again."; }
     finally { evidence.searching = false; renderProviderSearchResults(); }
