@@ -7,8 +7,10 @@ pool, so `pool_wait_ms` is deliberately `null` rather than an invented zero.
 
 ## Workload
 
-Create a JSON file containing representative, non-secret GET paths for the exact release under
-test. Keep provider identifiers and geographic filters stable between runs.
+Use the committed
+[`provider-search-mixed-v1.json`](workloads/provider-search-mixed-v1.json) workload. Keeping the
+fixture under version control preserves both its request semantics and raw SHA-256 between runs;
+do not recreate it from the example by hand.
 
 ```json
 {
@@ -35,7 +37,7 @@ the scoped key in the environment; never pass it on the command line or include 
 export CMS_API_KEY='<scoped-key>'
 .venv/bin/python -m pipeline.serving_benchmark \
   --base-url http://127.0.0.1:8080 \
-  --workload /absolute/path/workload.json \
+  --workload docs/operations/workloads/provider-search-mixed-v1.json \
   --server-process-id <uvicorn-pid> \
   --requests-per-level 60 \
   --output /absolute/path/evidence.json

@@ -1,0 +1,25 @@
+{
+  "requests": [
+    {
+      "name": "provider_search",
+      "path": "/profiles/search?q=Smith&state=OH&limit=10"
+    },
+    {
+      "name": "provider_profile",
+      "path": "/profiles/1003005257",
+      "weight": 2
+    },
+    {
+      "name": "practice_search",
+      "path": "/practices/search?specialty=Cardiology&state=OH&limit=25"
+    },
+    {
+      "name": "radar",
+      "path": "/radar/providers?city=Cleveland&state=OH&limit=100"
+    },
+    {
+      "name": "explorer",
+      "path": "/explorer/provider-evidence?npis=1003005257"
+    }
+  ]
+}

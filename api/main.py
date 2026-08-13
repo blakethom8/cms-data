@@ -6,6 +6,7 @@ import asyncio
 import json
 import os
 import re
+import sys
 import threading
 import time
 from contextlib import asynccontextmanager
@@ -16,6 +17,13 @@ from fastapi import FastAPI, HTTPException, Depends, Security
 from fastapi.security import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+
+# Production launches ``uvicorn api.main:app`` from the release root, while
+# tests run from ``api/`` and import ``main`` directly. Route modules retain
+# their historical top-level imports, so make the API directory available
+# before importing the request-scoped database executor below.
+sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 DB_PATH = os.getenv("DUCKDB_PATH", "/home/dataops/cms-data/data/provider_searcher.duckdb")
 API_KEY = os.getenv("CMS_API_KEY", "")  # Set in production!
@@ -90,10 +98,6 @@ app = FastAPI(
 )
 
 # --- Auth (defined before router includes so they can require it) ---
-import sys, os
-sys.path.insert(0, os.path.dirname(__file__))
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-
 from auth import (
     API_KEY_HEADER,
     configured_consumer_names,
