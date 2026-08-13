@@ -1,0 +1,3 @@
+[submodule "cms-public-data-catalog"]
+	path = cms-public-data-catalog
+	url = https://github.com/forwardshapes/cms-public-data-catalog.git
