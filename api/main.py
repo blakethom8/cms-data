@@ -2,9 +2,11 @@
 CMS Data API — lightweight DuckDB query service.
 """
 
-import os
+import asyncio
 import json
+import os
 import re
+import threading
 import time
 from contextlib import asynccontextmanager
 from typing import Optional
@@ -20,6 +22,9 @@ API_KEY = os.getenv("CMS_API_KEY", "")  # Set in production!
 MAX_ROWS = int(os.getenv("MAX_ROWS", "1000"))
 MAX_QUERY_SQL_CHARS = int(os.getenv("MAX_QUERY_SQL_CHARS", "20000"))
 MAX_QUERY_RESPONSE_BYTES = int(os.getenv("MAX_QUERY_RESPONSE_BYTES", "1000000"))
+MAX_QUERY_SECONDS = float(os.getenv("MAX_QUERY_SECONDS", "15"))
+DUCKDB_MEMORY_LIMIT = os.getenv("DUCKDB_MEMORY_LIMIT", "2GB")
+DUCKDB_THREADS = int(os.getenv("DUCKDB_THREADS", "4"))
 READ_ONLY = True
 
 # Connection pool (DuckDB is single-writer but supports multiple read cursors)
@@ -36,6 +41,11 @@ def get_conn() -> duckdb.DuckDBPyConnection:
                 # runtime extension installation. Enforce that below SQL text.
                 "enable_external_access": "false",
                 "allow_unsigned_extensions": "false",
+                # Bound the serving process as a whole. DuckDB's memory limit
+                # is database-wide rather than cursor-local, so configuring it
+                # once avoids request races caused by SET/RESET statements.
+                "memory_limit": DUCKDB_MEMORY_LIMIT,
+                "threads": str(DUCKDB_THREADS),
             },
         )
     return _conn
@@ -223,6 +233,39 @@ def _validated_operator_query(conn, sql: str) -> str:
     return statements[0].query.strip().rstrip(";")
 
 
+class _OperatorQueryTimedOut(Exception):
+    """Internal marker used to avoid exposing DuckDB interruption details."""
+
+
+def _execute_operator_query(sql: str, limit: int) -> tuple[list[str], list[tuple]]:
+    """Run operator SQL on an interruptible cursor outside the event loop."""
+
+    query_conn = get_conn().cursor()
+    timed_out = threading.Event()
+
+    def interrupt_query() -> None:
+        timed_out.set()
+        query_conn.interrupt()
+
+    timer = threading.Timer(MAX_QUERY_SECONDS, interrupt_query)
+    timer.daemon = True
+    timer.start()
+    try:
+        result = query_conn.execute(
+            f"SELECT * FROM ({sql}) AS operator_query LIMIT ?", [limit + 1]
+        )
+        columns = [desc[0] for desc in result.description]
+        return columns, result.fetchmany(limit + 1)
+    except duckdb.Error as exc:
+        if timed_out.is_set():
+            raise _OperatorQueryTimedOut from exc
+        raise
+    finally:
+        timer.cancel()
+        timer.join()
+        query_conn.close()
+
+
 @app.post(
     "/query",
     response_model=QueryResponse,
@@ -237,13 +280,19 @@ async def run_query(req: QueryRequest):
     try:
         # An outer bound cannot be bypassed by a LIMIT token in a comment,
         # string literal, CTE, or nested subquery.
-        result = conn.execute(
-            f"SELECT * FROM ({sql}) AS operator_query LIMIT ?", [limit + 1]
+        columns, fetched_rows = await asyncio.to_thread(
+            _execute_operator_query, sql, limit
         )
-        columns = [desc[0] for desc in result.description]
-        fetched_rows = result.fetchmany(limit + 1)
+    except _OperatorQueryTimedOut as exc:
+        raise HTTPException(
+            status_code=408, detail="Query exceeded the configured execution time limit"
+        ) from exc
+    except duckdb.OutOfMemoryException as exc:
+        raise HTTPException(
+            status_code=422, detail="Query exceeded the configured memory limit"
+        ) from exc
     except duckdb.Error as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     elapsed = (time.perf_counter() - t0) * 1000
 
     truncated = len(fetched_rows) > limit
