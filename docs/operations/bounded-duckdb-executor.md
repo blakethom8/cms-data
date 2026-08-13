@@ -77,3 +77,6 @@ the active database in place.
   rejected or already-satisfied requests cannot deplete scarce query slots.
 - 2026-08-13: The first migration covers the benchmarked route families only. Remaining database
   routes require explicit conversion and measurement rather than an unverified bulk switch.
+- 2026-08-13: Candidate preflight must exercise the production launch shape from the release root,
+  not only the repository's `api/` test working directory. The first rehearsal preflight caught and
+  corrected an import-order mismatch before a candidate process was started.
