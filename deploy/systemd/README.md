@@ -52,3 +52,37 @@ unknown; `2` means publisher discovery, manifest parsing, or production control-
 failed. Nonzero results are monitoring signals, not reasons to auto-refresh. The timer will run again
 after a failed oneshot. The service has a read-only filesystem view, makes only metadata requests,
 does not load secrets, and never opens DuckDB.
+
+## NPPES Radar staging reconciliation
+
+`cms-nppes-radar-reconciliation.timer` gives the CMS data-platform operator a daily 07:15 UTC
+polling opportunity. Its oneshot service idempotently acquires the latest monthly and weekly NPPES
+archives, then builds and compares an immutable staging candidate. It never promotes a candidate,
+changes `production/release-current`, or restarts the API. The backup-manifest path is configured in
+the root-owned `/etc/cms-data/nppes-radar-reconciliation.env`; use the checked-in example as the
+non-secret shape.
+
+At a monthly rollover, the new monthly file is a complete baseline. The service may build a
+monthly-only candidate when no weekly period begins on or after that baseline. Older weekly files
+are superseded and are not replayed. A later run adds consecutive eligible weeklies in publisher
+period order. After monthly promotion, the freshness monitor reports an older latest-weekly period
+as covered when its end date is on or before the installed monthly period. A publisher-version no-op
+exits successfully; a failed acquisition, validation, build, or comparison leaves production
+unchanged and is visible in the unit result and journal.
+
+Installation or enablement is a production change and requires the runbook's explicit approval.
+After approval, install the service, timer, and environment file, then verify the first run without
+promoting its output:
+
+```bash
+install -o root -g root -m 0644 deploy/systemd/cms-nppes-radar-reconciliation.service \
+  /etc/systemd/system/cms-nppes-radar-reconciliation.service
+install -o root -g root -m 0644 deploy/systemd/cms-nppes-radar-reconciliation.timer \
+  /etc/systemd/system/cms-nppes-radar-reconciliation.timer
+test -r /etc/cms-data/nppes-radar-reconciliation.env
+systemctl daemon-reload
+systemctl enable --now cms-nppes-radar-reconciliation.timer
+systemctl start cms-nppes-radar-reconciliation.service
+systemctl show cms-nppes-radar-reconciliation.service -p Result -p ExecMainStatus
+journalctl -u cms-nppes-radar-reconciliation.service -n 200 --no-pager
+```

@@ -77,6 +77,21 @@ def test_reconciliation_selects_monthly_and_all_consecutive_weeklies(
     assert selected == ("monthly-run", "weekly-one", "weekly-two")
 
 
+def test_reconciliation_uses_new_monthly_without_superseded_weeklies(
+    tmp_path: Path,
+) -> None:
+    data_root = tmp_path / "data"
+    rows = _platform_manifests()
+    rows.append(_manifest("nppes_monthly_v2", "august-monthly", "2026-08-10"))
+    ManifestStore(data_root / "manifests.json").save(
+        ManifestDocument(manifests=rows)
+    )
+
+    selected = select_reconciliation_runs(data_root)
+
+    assert selected == ("august-monthly",)
+
+
 def test_reconciliation_fails_closed_when_a_platform_source_is_missing(
     tmp_path: Path,
 ) -> None:
@@ -137,6 +152,67 @@ def test_reconciliation_builds_and_compares_without_promoting(
     assert calls == ["build", "compare"]
     assert result["status"] == "candidate_ready"
     assert result["promoted"] is False
+
+
+def test_targeted_radar_release_accepts_a_monthly_only_baseline(
+    tmp_path: Path,
+) -> None:
+    data_root = tmp_path / "data"
+    monthly = _stage_archive(
+        data_root,
+        "nppes_monthly_v2",
+        "august-monthly",
+        "2026-08-10",
+        {
+            "npidata_pfile_20050523-20260809.csv": _nppes_csv(
+                [
+                    {
+                        "NPI": "1111111111",
+                        "Provider Last Name (Legal Name)": "August",
+                    }
+                ]
+            )
+        },
+    )
+    backup = tmp_path / "backup" / "warehouse.duckdb"
+    backup.parent.mkdir()
+    connection = duckdb.connect(str(backup))
+    connection.execute((REPOSITORY_ROOT / "schema/ddl.sql").read_text(encoding="utf-8"))
+    connection.execute("CHECKPOINT")
+    connection.close()
+    backup_digest = sha256_file(backup)
+    backup_manifest = backup.parent / "backup-manifest.json"
+    backup_manifest.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "backup_path": str(backup),
+                "backup_identity": {"byte_size": backup.stat().st_size},
+                "sha256": backup_digest,
+                "validation": {"read_only_open": "passed"},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = build_radar_warehouse_release(
+        data_root=data_root,
+        monthly_run_id=monthly.run_id,
+        weekly_run_ids=(),
+        backup_manifest_path=backup_manifest,
+        code_commit=CODE_COMMIT,
+    )
+
+    assert result.release.validation_state == ValidationState.PASSED
+    assert result.release.source_run_ids == (monthly.run_id,)
+    assert result.release.validation_details["source_periods"] == {
+        "nppes_monthly_v2": "2026-08-10",
+        "nppes_weekly_incremental_v2": None,
+    }
+    assert result.release.validation_details["nppes"]["weekly"] is None
+    assert result.release.validation_details["nppes"]["reconciliation"][
+        "weekly_release_rows"
+    ] == 0
 
 
 def test_targeted_radar_release_preserves_baseline_and_installs_two_weeklies(

@@ -1943,10 +1943,8 @@ def build_radar_warehouse_release(
     from .archive_sources import load_nppes_sources
 
     source_run_ids = (monthly_run_id, *weekly_run_ids)
-    if not weekly_run_ids or len(source_run_ids) != len(set(source_run_ids)):
-        raise ReleaseError(
-            "Radar warehouse build requires one monthly and unique weekly run IDs"
-        )
+    if len(source_run_ids) != len(set(source_run_ids)):
+        raise ReleaseError("Radar warehouse build requires unique source run IDs")
     source_document = ManifestStore(data_root / "manifests.json").load()
     by_run_id = {manifest.run_id: manifest for manifest in source_document.manifests}
     try:
@@ -2028,7 +2026,11 @@ def build_radar_warehouse_release(
                     "release_scope": "targeted_additive",
                     "source_periods": {
                         "nppes_monthly_v2": manifests[0].source_data_period,
-                        "nppes_weekly_incremental_v2": manifests[-1].source_data_period,
+                        "nppes_weekly_incremental_v2": (
+                            manifests[-1].source_data_period
+                            if len(manifests) > 1
+                            else None
+                        ),
                     },
                     "weekly_source_periods": [
                         manifest.source_data_period for manifest in manifests[1:]
