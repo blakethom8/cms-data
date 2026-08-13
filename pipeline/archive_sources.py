@@ -364,9 +364,7 @@ def load_nppes_sources(
     monthly_run_id: str,
     weekly_run_ids: tuple[str, ...],
 ) -> tuple[dict[str, int], dict[str, object]]:
-    """Install a monthly NPPES baseline and overlay consecutive weekly releases."""
-    if not weekly_run_ids:
-        raise ReleaseError("NPPES load requires at least one weekly V2 run")
+    """Install a monthly NPPES baseline and overlay zero or more consecutive weeklies."""
     verified = verified_archive_runs(
         data_root,
         (monthly_run_id, *weekly_run_ids),
@@ -386,6 +384,15 @@ def load_nppes_sources(
     )
     if len(monthly_rows) != 1 or len(weekly_rows) != len(weekly_run_ids):
         raise ReleaseError("NPPES load requires one monthly and the requested weekly V2 runs")
+    monthly_start, monthly_end = _period(monthly_rows[0][0].source_data_period)
+    if weekly_rows:
+        first_weekly_start = _period(weekly_rows[0][0].source_data_period)[0]
+        if not monthly_start <= first_weekly_start <= monthly_end + timedelta(days=1):
+            raise ReleaseError(
+                "First NPPES weekly source period is not contiguous with the monthly baseline: "
+                f"{monthly_rows[0][0].source_data_period} then "
+                f"{weekly_rows[0][0].source_data_period}"
+            )
     for previous, current in zip(weekly_rows, weekly_rows[1:]):
         previous_end = _period(previous[0].source_data_period)[1]
         current_start = _period(current[0].source_data_period)[0]
@@ -501,7 +508,7 @@ def load_nppes_sources(
     )
     details = {
         "monthly": asdict(monthly_result),
-        "weekly": asdict(weekly_results[-1]),
+        "weekly": asdict(weekly_results[-1]) if weekly_results else None,
         "weeklies": [asdict(result) for result in weekly_results],
         "reconciliation": safety,
         "core_provider_enrichment": enrichment,
