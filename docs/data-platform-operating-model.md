@@ -320,6 +320,22 @@ is absent, installed provenance remains `unknown`. Output and semantic exit stat
 the systemd journal: `0` is current, `1` is stale/unknown, and `2` is discovery or control-plane
 failure. This monitor downloads no dataset, opens no DuckDB file, and never launches a refresh.
 
+Capture a monitor result as immutable audit input, then run `pipeline.refresh_plan` against the
+staging manifest before acquiring anything. The planner requires the exact 18-source status set,
+orders missing publisher versions for acquisition, selects only validated staging runs, and chooses
+the narrowest implemented candidate lanes. In the current topology those lanes are AACT PostgreSQL,
+NPPES Radar, targeted PPEF, targeted Hospital Enrollments, full CMS, or full platform. If one stale
+CMS source lacks a scoped builder, the planner correctly expands to the complete full-CMS input set
+instead of pretending a narrow refresh exists. If a current production source has no matching
+validated artifact in staging but is required by that expanded candidate, it is named separately as
+`candidate_input_restore` and included in acquisition order.
+
+The planner is read-only and never downloads, builds, promotes, changes a pointer, or restarts a
+service. An intentional stale source must be recorded explicitly as
+`--exception source_id=reason`; the planner then requires validated staging evidence for the
+installed version rather than silently substituting the latest publisher version. Every candidate
+lane continues to report `manual_approval_required` for production promotion.
+
 Before activating every future candidate, write a root-owned `root:dataops` mode `0440`
 source-manifest snapshot into a root-owned `root:dataops` mode `0750` deployment evidence
 directory. It must contain only validated active source

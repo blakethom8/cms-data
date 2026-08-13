@@ -441,6 +441,31 @@ systemctl show cms-data-status.service -p Result -p ExecMainStatus
 journalctl -u cms-data-status.service -n 200 --no-pager
 ```
 
+Before acquisition, save a fresh structured monitor result in the audit directory and generate the
+read-only execution plan. The plan names exact acquisition order, validated run IDs, missing inputs,
+candidate lanes, and any explicit exceptions. Current sources required only to complete an expanded
+candidate are listed under `candidate_input_restore_ids`. The planner does not execute those actions.
+
+```bash
+mkdir -p /srv/cms-data-platform/audits/REFRESH_AUDIT_ID
+/srv/cms-data-platform/production/release-current/runtime/bin/python \
+  -m pipeline.production_status_monitor \
+  --production-root /srv/cms-data-platform/production --json \
+  > /srv/cms-data-platform/audits/REFRESH_AUDIT_ID/freshness-status.json
+
+/srv/cms-data-platform/production/release-current/runtime/bin/python \
+  -m pipeline.refresh_plan \
+  --status-json /srv/cms-data-platform/audits/REFRESH_AUDIT_ID/freshness-status.json \
+  --staging-manifest /srv/cms-data-platform/data/manifests.json \
+  --json
+```
+
+Add `--exception 'SOURCE_ID=REVIEWED_REASON'` only for an approved intentional deferral and retain
+that plan with the refresh evidence. Exit `2` means the inputs are malformed; exit `1` means source
+provenance blocks planning; exit `0` means the plan is actionable, not that acquisition or promotion
+has been authorized. Review every `awaiting_validated_runs` lane before running the named acquire
+commands in publisher-period order.
+
 ### Retrospective source provenance
 
 Use retrospective backfill only for retained legacy source artifacts that predate manifests. Keep
