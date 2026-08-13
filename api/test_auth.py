@@ -12,6 +12,7 @@ from auth import (
     SHARED_KEY_NAME,
     configured_consumer_names,
     make_key_resolver,
+    parse_consumer_names,
     parse_scoped_keys,
 )
 
@@ -125,6 +126,20 @@ def test_configured_names_are_safe_to_log_and_exclude_values() -> None:
 
     assert names == ["ps-dev", "ps-prod", SHARED_KEY_NAME]
     assert "prod-value" not in names and "shared-secret" not in names
+
+
+def test_consumer_allowlist_is_normalized_and_contains_no_key_values() -> None:
+    assert parse_consumer_names(" command-center,ops,command-center ") == {
+        "command-center",
+        "ops",
+    }
+    assert parse_consumer_names("") == frozenset()
+
+
+@pytest.mark.parametrize("raw", ["shared key", "UPPER", "bad:name", "line\nbreak"])
+def test_consumer_allowlist_rejects_unsafe_names(raw: str) -> None:
+    with pytest.raises(ValueError, match="Invalid consumer name"):
+        parse_consumer_names(raw)
 
 
 # --- Both enforcement points must follow the same resolver -------------------

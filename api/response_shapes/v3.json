@@ -3628,6 +3628,159 @@
       "200": {}
     }
   },
+  "/profiles/hospital-affiliations": {
+    "get": {
+      "200": {
+        "properties": {
+          "providers": {
+            "additionalProperties": {
+              "items": {
+                "properties": {
+                  "address": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "title": "Address"
+                  },
+                  "ccn": {
+                    "title": "Ccn",
+                    "type": "string"
+                  },
+                  "city": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "title": "City"
+                  },
+                  "facility_type": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "title": "Facility Type"
+                  },
+                  "hospital_type": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "title": "Hospital Type"
+                  },
+                  "name": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "title": "Name"
+                  },
+                  "state": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "title": "State"
+                  },
+                  "zip5": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "title": "Zip5"
+                  }
+                },
+                "required": [
+                  "ccn"
+                ],
+                "title": "HospitalAffiliation",
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "title": "Providers",
+            "type": "object"
+          }
+        },
+        "required": [
+          "providers"
+        ],
+        "title": "HospitalAffiliationsResponse",
+        "type": "object"
+      },
+      "422": {
+        "properties": {
+          "detail": {
+            "items": {
+              "properties": {
+                "loc": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "title": "Location",
+                  "type": "array"
+                },
+                "msg": {
+                  "title": "Message",
+                  "type": "string"
+                },
+                "type": {
+                  "title": "Error Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "loc",
+                "msg",
+                "type"
+              ],
+              "title": "ValidationError",
+              "type": "object"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      }
+    }
+  },
   "/profiles/search": {
     "get": {
       "200": {

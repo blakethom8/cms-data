@@ -240,6 +240,53 @@ def _hospital_affiliations(conn, npi: str) -> list[dict]:
     """, [npi])
 
 
+def _hospital_affiliations_bulk(conn, npis: list[str]) -> list[dict]:
+    """Bounded batch form used by product consumers instead of arbitrary SQL."""
+
+    placeholders = ", ".join("?" for _ in npis)
+    return _rows(conn, f"""
+        select CAST(f."NPI" as varchar) npi,
+               f.facility_type,
+               CAST(f."Facility Affiliations Certification Number" as varchar) ccn,
+               any_value(h."Facility Name") AS "name",
+               any_value(h."Address") address,
+               any_value(h."City/Town") city,
+               any_value(h."State") state,
+               any_value(CAST(h."ZIP Code" as varchar)) zip5,
+               any_value(h."Hospital Type") hospital_type
+        from raw_dac_facility_affiliations f
+        left join raw_hospital_general_info h
+          on CAST(h."Facility ID" as varchar)
+             = CAST(f."Facility Affiliations Certification Number" as varchar)
+        where CAST(f."NPI" as varchar) in ({placeholders})
+        group by 1, 2, 3
+        order by npi, f.facility_type, ccn
+    """, npis)
+
+
+def _hospital_affiliation_npis(raw: str) -> list[str]:
+    requested = list(dict.fromkeys(value.strip() for value in raw.split(",")))
+    if not requested or len(requested) > 50 or any(
+        not re.fullmatch(r"\d{10}", npi) for npi in requested
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="Provide between 1 and 50 comma-separated 10-digit NPIs",
+        )
+    return requested
+
+
+def _hospital_affiliations_response(conn, raw_npis: str) -> dict:
+    requested = _hospital_affiliation_npis(raw_npis)
+    rows = _hospital_affiliations_bulk(conn, requested)
+    providers: dict[str, list[dict]] = {npi: [] for npi in requested}
+    for row in rows:
+        npi = row.pop("npi")
+        row["zip5"] = (str(row.get("zip5") or "")[:5] or None)
+        providers[npi].append(row)
+    return {"providers": providers}
+
+
 class SearchHit(BaseModel):
     npi: str
     name: str
@@ -250,6 +297,21 @@ class SearchHit(BaseModel):
     group_name: str | None = None
     source: str = "nppes"  # "nppes" | "nppes + medicare" | rare DAC-only "medicare"
     match_score: float | None = None  # fuzzy similarity for NPPES name hits
+
+
+class HospitalAffiliation(BaseModel):
+    facility_type: str | None = None
+    ccn: str
+    name: str | None = None
+    address: str | None = None
+    city: str | None = None
+    state: str | None = None
+    zip5: str | None = None
+    hospital_type: str | None = None
+
+
+class HospitalAffiliationsResponse(BaseModel):
+    providers: dict[str, list[HospitalAffiliation]]
 
 
 # Registry-tier fuzzy thresholds (jaro-winkler); validated on misspelled
@@ -409,6 +471,13 @@ def get_profiles_router(get_conn):
             rows = _search_nppes(conn, parts, city, state, limit)
         return [SearchHit(**{**r, "credentials": (r.get("credentials") or "").strip() or None})
                 for r in rows]
+
+    @router.get(
+        "/hospital-affiliations", response_model=HospitalAffiliationsResponse
+    )
+    async def hospital_affiliations(npis: str):
+        """Return facility affiliations for at most 50 comma-separated NPIs."""
+        return _hospital_affiliations_response(get_conn(), npis)
 
     @router.get("/{npi}")
     async def profile(npi: str):

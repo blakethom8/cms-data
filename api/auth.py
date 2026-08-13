@@ -49,6 +49,20 @@ NAME_PATTERN = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}")
 KeyResolver = Callable[[str | None], str | None]
 
 
+def parse_consumer_names(raw: str) -> frozenset[str]:
+    """Parse a comma-separated consumer allowlist without accepting secrets."""
+
+    names: set[str] = set()
+    for entry in raw.split(","):
+        name = entry.strip()
+        if not name:
+            continue
+        if not NAME_PATTERN.fullmatch(name):
+            raise ValueError(f"Invalid consumer name in allowlist: {name!r}")
+        names.add(name)
+    return frozenset(names)
+
+
 def parse_scoped_keys(raw: str) -> dict[str, str]:
     """Parse `name:value,…` into {key value: consumer name}.
 

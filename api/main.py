@@ -3,6 +3,8 @@ CMS Data API — lightweight DuckDB query service.
 """
 
 import os
+import json
+import re
 import time
 from contextlib import asynccontextmanager
 from typing import Optional
@@ -16,6 +18,8 @@ from pydantic import BaseModel
 DB_PATH = os.getenv("DUCKDB_PATH", "/home/dataops/cms-data/data/provider_searcher.duckdb")
 API_KEY = os.getenv("CMS_API_KEY", "")  # Set in production!
 MAX_ROWS = int(os.getenv("MAX_ROWS", "1000"))
+MAX_QUERY_SQL_CHARS = int(os.getenv("MAX_QUERY_SQL_CHARS", "20000"))
+MAX_QUERY_RESPONSE_BYTES = int(os.getenv("MAX_QUERY_RESPONSE_BYTES", "1000000"))
 READ_ONLY = True
 
 # Connection pool (DuckDB is single-writer but supports multiple read cursors)
@@ -24,7 +28,16 @@ _conn = None
 def get_conn() -> duckdb.DuckDBPyConnection:
     global _conn
     if _conn is None:
-        _conn = duckdb.connect(DB_PATH, read_only=READ_ONLY)
+        _conn = duckdb.connect(
+            DB_PATH,
+            read_only=READ_ONLY,
+            config={
+                # Serving queries never need local/network file readers or
+                # runtime extension installation. Enforce that below SQL text.
+                "enable_external_access": "false",
+                "allow_unsigned_extensions": "false",
+            },
+        )
     return _conn
 
 
@@ -53,9 +66,17 @@ import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from auth import API_KEY_HEADER, configured_consumer_names, make_key_resolver
+from auth import (
+    API_KEY_HEADER,
+    configured_consumer_names,
+    make_key_resolver,
+    parse_consumer_names,
+)
 
 SCOPED_API_KEYS = os.getenv("CMS_API_KEYS", "")
+QUERY_CONSUMERS = parse_consumer_names(
+    os.getenv("CMS_QUERY_CONSUMERS", "command-center")
+)
 
 api_key_header = APIKeyHeader(name=API_KEY_HEADER, auto_error=False)
 
@@ -68,6 +89,19 @@ resolve_api_key_name = make_key_resolver(API_KEY, SCOPED_API_KEYS)
 async def check_api_key(key: Optional[str] = Security(api_key_header)):
     if resolve_api_key_name(key) is None:
         raise HTTPException(status_code=401, detail="Invalid or missing API key")
+
+
+async def check_query_api_key(key: Optional[str] = Security(api_key_header)):
+    """Require a named operator consumer for the legacy arbitrary-SQL route."""
+
+    consumer = resolve_api_key_name(key)
+    if consumer is None:
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+    if consumer not in QUERY_CONSUMERS:
+        raise HTTPException(
+            status_code=403,
+            detail="Arbitrary SQL access is restricted to approved operator consumers",
+        )
 
 
 # Data routers — every route requires the X-API-Key header.
@@ -159,38 +193,72 @@ async def health():
     return {"status": "ok", "core_providers": row[0]}
 
 
-@app.post("/query", response_model=QueryResponse, dependencies=[Depends(check_api_key)])
+_FORBIDDEN_QUERY_TOKENS = re.compile(
+    r"\b(?:attach|detach|install|load|copy|export|import|pragma|call|set|reset|"
+    r"create|alter|drop|insert|update|delete|merge|truncate|vacuum|checkpoint|"
+    r"read_csv(?:_auto)?|read_json(?:_auto)?|read_ndjson(?:_auto)?|read_parquet|"
+    r"parquet_scan|csv_scan|json_scan|glob|sqlite_scan|postgres_scan|mysql_scan|"
+    r"iceberg_scan|delta_scan|duckdb_secrets|which_secret|range|generate_series|"
+    r"repeat)\b",
+    re.IGNORECASE,
+)
+
+
+def _validated_operator_query(conn, sql: str) -> str:
+    """Accept exactly one SELECT and reject external-I/O or control features."""
+
+    if len(sql) > MAX_QUERY_SQL_CHARS:
+        raise HTTPException(status_code=413, detail="Query text exceeds the configured limit")
+    try:
+        statements = conn.extract_statements(sql)
+    except duckdb.Error as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if len(statements) != 1 or statements[0].type != duckdb.StatementType.SELECT:
+        raise HTTPException(status_code=403, detail="Only one SELECT statement is allowed")
+    if _FORBIDDEN_QUERY_TOKENS.search(sql):
+        raise HTTPException(
+            status_code=403,
+            detail="Query uses a feature unavailable through the operator SQL endpoint",
+        )
+    return statements[0].query.strip().rstrip(";")
+
+
+@app.post(
+    "/query",
+    response_model=QueryResponse,
+    dependencies=[Depends(check_query_api_key)],
+)
 async def run_query(req: QueryRequest):
     sql = req.sql.strip().rstrip(";")
-
-    # Block writes
-    first_word = sql.split()[0].upper() if sql else ""
-    if first_word in ("INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "CREATE", "TRUNCATE", "COPY"):
-        raise HTTPException(status_code=403, detail="Write operations not allowed")
-
-    limit = min(req.limit or MAX_ROWS, MAX_ROWS)
-
-    # Wrap in a limit if not already present
-    sql_upper = sql.upper()
-    if "LIMIT" not in sql_upper:
-        sql = f"{sql} LIMIT {limit + 1}"
-
+    limit = max(1, min(req.limit or MAX_ROWS, MAX_ROWS))
     conn = get_conn()
+    sql = _validated_operator_query(conn, sql)
     t0 = time.perf_counter()
     try:
-        result = conn.execute(sql)
+        # An outer bound cannot be bypassed by a LIMIT token in a comment,
+        # string literal, CTE, or nested subquery.
+        result = conn.execute(
+            f"SELECT * FROM ({sql}) AS operator_query LIMIT ?", [limit + 1]
+        )
         columns = [desc[0] for desc in result.description]
-        rows = result.fetchmany(limit + 1)
+        fetched_rows = result.fetchmany(limit + 1)
     except duckdb.Error as e:
         raise HTTPException(status_code=400, detail=str(e))
     elapsed = (time.perf_counter() - t0) * 1000
 
-    truncated = len(rows) > limit
-    if truncated:
-        rows = rows[:limit]
-
-    # Convert to plain lists (DuckDB returns tuples)
-    rows = [list(r) for r in rows]
+    truncated = len(fetched_rows) > limit
+    rows: list[list] = []
+    response_bytes = len(json.dumps(columns, separators=(",", ":")).encode("utf-8"))
+    for raw_row in fetched_rows[:limit]:
+        row = list(raw_row)
+        row_bytes = len(
+            json.dumps(row, default=str, separators=(",", ":")).encode("utf-8")
+        )
+        if response_bytes + row_bytes > MAX_QUERY_RESPONSE_BYTES:
+            truncated = True
+            break
+        rows.append(row)
+        response_bytes += row_bytes
 
     return QueryResponse(
         columns=columns,
@@ -218,8 +286,19 @@ async def list_tables():
 @app.get("/tables/{table_name}/schema", dependencies=[Depends(check_api_key)])
 async def table_schema(table_name: str):
     conn = get_conn()
+    exists = conn.execute(
+        """
+        SELECT 1
+        FROM duckdb_tables()
+        WHERE schema_name = 'main' AND table_name = ?
+        """,
+        [table_name],
+    ).fetchone()
+    if exists is None:
+        raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found")
+    quoted_table = '"' + table_name.replace('"', '""') + '"'
     try:
-        result = conn.execute(f"DESCRIBE {table_name}")
+        result = conn.execute(f"DESCRIBE {quoted_table}")
         cols = [{"name": r[0], "type": r[1], "nullable": r[2]} for r in result.fetchall()]
     except duckdb.Error:
         raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found")
