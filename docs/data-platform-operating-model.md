@@ -384,6 +384,25 @@ evidence.
    that deployment's evidence snapshot), and `pipeline.production_cutover` owns the one restart
    and re-verification. Rollback never rebuilds data and never opens DuckDB.
 
+   Before a refresh or cleanup, run the read-only retention planner. It validates the production
+   ledger, proves the active-plus-two rollback floor, inventories allocated bytes without following
+   symlinks or crossing mounts, and names paths for operator review:
+
+   ```bash
+   python -m pipeline.retention preview \
+     --platform-root /srv/cms-data-platform \
+     --json
+   ```
+
+   The planner has no delete mode and reports zero confirmed reclaimable bytes. A
+   `review_candidate` is an exact path requiring a separate approved cleanup; it is not deletion
+   authorization. Backups remain protected until off-host restore proof and the recovery-retention
+   decision exist. Staging releases remain manual-review-only because their manifests and promotion
+   provenance must be checked. The default disk states are warning at 70%, critical at 80%, and
+   promotion-blocking at a projected 85%. The promotion capacity gate also requires enough free
+   bytes for the proposed candidate and a proven rollback floor. Pass `--candidate-bytes` when the
+   candidate size differs materially from the selected warehouse.
+
 Consumers additionally rely on two serving-contract rules: release changes are learned by
 polling `GET /release` and observing the `ETag` change (a push webhook may be added as sugar,
 but nothing may depend on it), and any response-shape change must bump the
