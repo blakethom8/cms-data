@@ -43,11 +43,17 @@ removed after that migration. References to the public CMS Provider Data Catalog
 ```text
 CMS_API_KEYS=ps-prod:<value>,ps-dev:<value>,command-center:<value>
 CMS_QUERY_CONSUMERS=command-center
+MAX_QUERY_SECONDS=15
+DUCKDB_MEMORY_LIMIT=2GB
+DUCKDB_THREADS=4
 MAX_QUERY_SQL_CHARS=20000
 MAX_QUERY_RESPONSE_BYTES=1000000
 ```
 
 - Consumer names, never key values, appear in `CMS_QUERY_CONSUMERS`.
+- `MAX_QUERY_SECONDS` interrupts runaway operator work; the default is 15 seconds.
+- `DUCKDB_MEMORY_LIMIT` and `DUCKDB_THREADS` bound the serving process as a whole. DuckDB applies
+  these settings database-wide, so they are configured once when the read-only connection opens.
 - Provider Search keys authenticate typed endpoints but are not SQL operators.
 - The Command Center key remains server-side. It must not be embedded in static HTML or returned to
   the browser.

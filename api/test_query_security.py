@@ -113,6 +113,66 @@ async def test_operator_query_bounds_query_text_and_serialized_rows(
     assert len(result.rows) < 3
 
 
+@pytest.mark.anyio
+async def test_operator_query_interrupts_runaway_recursive_work(
+    connection, monkeypatch
+) -> None:
+    monkeypatch.setattr(main, "MAX_QUERY_SECONDS", 0.01)
+
+    with pytest.raises(HTTPException) as timed_out:
+        await main.run_query(
+            main.QueryRequest(
+                sql="""
+                    WITH RECURSIVE work(value) AS (
+                        SELECT 1
+                        UNION ALL
+                        SELECT value + 1 FROM work WHERE value < 1000000000
+                    )
+                    SELECT sum(value) FROM work
+                """
+            )
+        )
+
+    assert timed_out.value.status_code == 408
+    assert "execution time limit" in timed_out.value.detail
+
+
+@pytest.mark.anyio
+async def test_operator_query_maps_memory_exhaustion_without_leaking_details(
+    connection, monkeypatch
+) -> None:
+    def exceed_memory(_sql: str, _limit: int):
+        raise duckdb.OutOfMemoryException("host-specific allocator details")
+
+    monkeypatch.setattr(main, "_execute_operator_query", exceed_memory)
+
+    with pytest.raises(HTTPException) as exhausted:
+        await main.run_query(main.QueryRequest(sql="SELECT * FROM safe_table"))
+
+    assert exhausted.value.status_code == 422
+    assert exhausted.value.detail == "Query exceeded the configured memory limit"
+
+
+def test_serving_connection_configures_process_resource_bounds(monkeypatch) -> None:
+    captured: dict = {}
+    connection = duckdb.connect(":memory:")
+
+    def connect(path, *, read_only, config):
+        captured.update(path=path, read_only=read_only, config=config)
+        return connection
+
+    monkeypatch.setattr(main, "_conn", None)
+    monkeypatch.setattr(main.duckdb, "connect", connect)
+
+    assert main.get_conn() is connection
+    assert captured["config"]["memory_limit"] == main.DUCKDB_MEMORY_LIMIT
+    assert captured["config"]["threads"] == str(main.DUCKDB_THREADS)
+    assert captured["config"]["enable_external_access"] == "false"
+
+    monkeypatch.setattr(main, "_conn", None)
+    connection.close()
+
+
 @pytest.fixture
 def anyio_backend() -> str:
     return "asyncio"
