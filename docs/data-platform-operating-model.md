@@ -320,6 +320,22 @@ is absent, installed provenance remains `unknown`. Output and semantic exit stat
 the systemd journal: `0` is current, `1` is stale/unknown, and `2` is discovery or control-plane
 failure. This monitor downloads no dataset, opens no DuckDB file, and never launches a refresh.
 
+Capture a monitor result as immutable audit input, then run `pipeline.refresh_plan` against the
+staging manifest before acquiring anything. The planner requires the exact 18-source status set,
+orders missing publisher versions for acquisition, selects only validated staging runs, and chooses
+the narrowest implemented candidate lanes. In the current topology those lanes are AACT PostgreSQL,
+NPPES Radar, targeted PPEF, targeted Hospital Enrollments, full CMS, or full platform. If one stale
+CMS source lacks a scoped builder, the planner correctly expands to the complete full-CMS input set
+instead of pretending a narrow refresh exists. If a current production source has no matching
+validated artifact in staging but is required by that expanded candidate, it is named separately as
+`candidate_input_restore` and included in acquisition order.
+
+The planner is read-only and never downloads, builds, promotes, changes a pointer, or restarts a
+service. An intentional stale source must be recorded explicitly as
+`--exception source_id=reason`; the planner then requires validated staging evidence for the
+installed version rather than silently substituting the latest publisher version. Every candidate
+lane continues to report `manual_approval_required` for production promotion.
+
 Before activating every future candidate, write a root-owned `root:dataops` mode `0440`
 source-manifest snapshot into a root-owned `root:dataops` mode `0750` deployment evidence
 directory. It must contain only validated active source
@@ -367,6 +383,25 @@ evidence.
    rollback atomically restores the prior `release-current` bundle pointer (which also restores
    that deployment's evidence snapshot), and `pipeline.production_cutover` owns the one restart
    and re-verification. Rollback never rebuilds data and never opens DuckDB.
+
+   Before a refresh or cleanup, run the read-only retention planner. It validates the production
+   ledger, proves the active-plus-two rollback floor, inventories allocated bytes without following
+   symlinks or crossing mounts, and names paths for operator review:
+
+   ```bash
+   python -m pipeline.retention preview \
+     --platform-root /srv/cms-data-platform \
+     --json
+   ```
+
+   The planner has no delete mode and reports zero confirmed reclaimable bytes. A
+   `review_candidate` is an exact path requiring a separate approved cleanup; it is not deletion
+   authorization. Backups remain protected until off-host restore proof and the recovery-retention
+   decision exist. Staging releases remain manual-review-only because their manifests and promotion
+   provenance must be checked. The default disk states are warning at 70%, critical at 80%, and
+   promotion-blocking at a projected 85%. The promotion capacity gate also requires enough free
+   bytes for the proposed candidate and a proven rollback floor. Pass `--candidate-bytes` when the
+   candidate size differs materially from the selected warehouse.
 
 Consumers additionally rely on two serving-contract rules: release changes are learned by
 polling `GET /release` and observing the `ETag` change (a push webhook may be added as sugar,

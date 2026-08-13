@@ -9,7 +9,8 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
+from datetime import date
 from enum import Enum
 from pathlib import Path
 
@@ -211,9 +212,13 @@ def build_status_report(
     manifest_path: Path,
     discovery_mode: str,
 ) -> StatusReport:
-    sources = tuple(
-        evaluate_source(SOURCE_REGISTRY[source_id], discoveries[source_id], manifests)
-        for source_id in sorted(SOURCE_REGISTRY)
+    sources = reconcile_source_family_statuses(
+        tuple(
+            evaluate_source(
+                SOURCE_REGISTRY[source_id], discoveries[source_id], manifests
+            )
+            for source_id in sorted(SOURCE_REGISTRY)
+        )
     )
     return StatusReport(
         schema_version=1,
@@ -222,6 +227,50 @@ def build_status_report(
         discovery_mode=discovery_mode,
         sources=sources,
     )
+
+
+def _period_end(value: str | None) -> date | None:
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value.split("/", 1)[-1])
+    except ValueError:
+        return None
+
+
+def reconcile_source_family_statuses(
+    sources: tuple[SourceStatus, ...],
+) -> tuple[SourceStatus, ...]:
+    """Apply publisher-family coverage rules after per-source evaluation."""
+    by_id = {source.source_id: source for source in sources}
+    monthly = by_id.get("nppes_monthly_v2")
+    weekly = by_id.get("nppes_weekly_incremental_v2")
+    monthly_period = (
+        _period_end(monthly.installed_source_data_period) if monthly else None
+    )
+    weekly_period = _period_end(weekly.source_data_period) if weekly else None
+    if (
+        monthly is not None
+        and weekly is not None
+        and monthly.freshness_status == FreshnessStatus.CURRENT
+        and weekly.freshness_status == FreshnessStatus.STALE
+        and monthly_period is not None
+        and weekly_period is not None
+        and monthly_period >= weekly_period
+    ):
+        covered = replace(
+            weekly,
+            freshness_status=FreshnessStatus.CURRENT,
+            reason=(
+                "Latest validated monthly NPPES baseline covers the latest published "
+                f"weekly period ending {weekly_period.isoformat()}."
+            ),
+        )
+        return tuple(
+            covered if source.source_id == covered.source_id else source
+            for source in sources
+        )
+    return sources
 
 
 def _short(value: str | None, width: int) -> str:
@@ -395,7 +444,7 @@ def _parser() -> argparse.ArgumentParser:
         help="Build a targeted NPPES Radar staging candidate",
     )
     build_radar.add_argument("--monthly-run-id", required=True)
-    build_radar.add_argument("--weekly-run-id", action="append", required=True)
+    build_radar.add_argument("--weekly-run-id", action="append", default=[])
     build_radar.add_argument("--backup-manifest", required=True, type=Path)
     build_radar.add_argument(
         "--data-root", type=Path, default=DEFAULT_MANIFEST_PATH.parent

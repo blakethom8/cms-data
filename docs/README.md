@@ -17,6 +17,7 @@ When documents disagree, the operating model and the source code win.
 | [new-provider-radar-execution.md](new-provider-radar-execution.md) | Implementation handoff for the remaining Radar data-plane work: acquisition automation, production promotion, city-scope API, precision spike. |
 | [provider-serving-contract.md](provider-serving-contract.md) | NPPES-first discovery, curated profile, raw evidence endpoint separation, provenance labels, and v3 cache contract. |
 | [provider-evidence-model.md](provider-evidence-model.md) | Source-preserving provider address and organization evidence grains, provenance, refresh, and consumer rules. |
+| [proposals/2026-08-data-platform-roadmap.md](proposals/2026-08-data-platform-roadmap.md) | Current production-readiness and product-data roadmap: priorities, sequencing, acceptance gates, issue mapping, and operating cadence. |
 | [worktree-integration-assessment-2026-08-11.md](worktree-integration-assessment-2026-08-11.md) | Decision log, verification record, commit map, and agent handoff for the assessed deployment, evidence, API, and Command Center work. |
 | [../deploy/systemd/README.md](../deploy/systemd/README.md) | Systemd release layout and the read-only publisher-status timer. |
 | [operations/hetzner-cms-server.md](operations/hetzner-cms-server.md) | Current production-host inventory, Provider Search boundary, decommission record, and infrastructure work. |

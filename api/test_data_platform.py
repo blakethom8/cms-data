@@ -16,6 +16,7 @@ from pipeline.data_platform import (
     FreshnessStatus,
     evaluate_source,
     main,
+    reconcile_source_family_statuses,
 )
 from pipeline.discovery import (
     DiscoveryError,
@@ -71,7 +72,11 @@ def _active_manifest(source_id: str, publisher_version: str) -> RunManifest:
     )
 
 
-def _available(source_id: str, publisher_version: str = "publisher-v2") -> DiscoveryResult:
+def _available(
+    source_id: str,
+    publisher_version: str = "publisher-v2",
+    source_data_period: str = "2098-01-01/2098-12-31",
+) -> DiscoveryResult:
     return DiscoveryResult(
         source_id=source_id,
         state=DiscoveryState.AVAILABLE,
@@ -79,7 +84,7 @@ def _available(source_id: str, publisher_version: str = "publisher-v2") -> Disco
         release=ReleaseMetadata(
             source_id=source_id,
             publisher_version=publisher_version,
-            source_data_period="2098-01-01/2098-12-31",
+            source_data_period=source_data_period,
             publisher_release_timestamp="2099-06-30T00:00:00+00:00",
             source_url="https://example.invalid/source.zip",
         ),
@@ -311,6 +316,40 @@ def test_status_decisions_cover_current_stale_unknown_and_unavailable() -> None:
     )
     assert unavailable_with_manifest.installed_version == "publisher-v1"
     assert unavailable_with_manifest.ingestion_timestamp == "2099-07-20T01:00:00+00:00"
+
+
+@pytest.mark.parametrize(
+    ("monthly_period", "expected_weekly_status"),
+    (
+        ("2026-08-10", FreshnessStatus.CURRENT),
+        ("2026-08-08", FreshnessStatus.STALE),
+    ),
+)
+def test_nppes_monthly_baseline_covers_older_weekly_freshness(
+    monthly_period: str,
+    expected_weekly_status: FreshnessStatus,
+) -> None:
+    monthly_id = "nppes_monthly_v2"
+    weekly_id = "nppes_weekly_incremental_v2"
+    monthly_manifest = _active_manifest(monthly_id, "publisher-v2")
+    monthly_manifest.source_data_period = monthly_period
+    monthly = evaluate_source(
+        SOURCE_REGISTRY[monthly_id],
+        _available(monthly_id, source_data_period=monthly_period),
+        ManifestDocument(manifests=[monthly_manifest]),
+    )
+    weekly = evaluate_source(
+        SOURCE_REGISTRY[weekly_id],
+        _available(weekly_id, source_data_period="2026-08-03/2026-08-09"),
+        ManifestDocument(manifests=[_active_manifest(weekly_id, "publisher-v1")]),
+    )
+
+    reconciled = reconcile_source_family_statuses((monthly, weekly))
+    weekly_result = next(item for item in reconciled if item.source_id == weekly_id)
+
+    assert weekly_result.freshness_status == expected_weekly_status
+    if expected_weekly_status == FreshnessStatus.CURRENT:
+        assert "monthly NPPES baseline covers" in weekly_result.reason
 
 
 def test_cli_json_output_and_healthy_stale_unknown_exit_codes(

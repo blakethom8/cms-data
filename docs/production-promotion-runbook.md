@@ -176,6 +176,20 @@ rollback bundle.
 Immediately before changes, reconfirm the live PID, current database path/SHA-256, rollback artifact
 hashes, candidate artifact hashes, free disk, and clean production journal. Any mismatch stops.
 
+Run the retention and capacity preview from the selected immutable bundle, supplying the prepared
+candidate's byte size. Exit 1 blocks promotion because the rollback floor or projected disk gate is
+not satisfied; exit 2 means the preview itself could not prove a safe result. The command is
+read-only and has no delete mode.
+
+```bash
+cd /srv/cms-data-platform/production/release-current/code
+/srv/cms-data-platform/production/release-current/runtime/bin/python \
+  -m pipeline.retention preview \
+  --platform-root /srv/cms-data-platform \
+  --candidate-bytes CANDIDATE_WAREHOUSE_BYTES \
+  --json
+```
+
 Archive checksummed copies of the current systemd unit, environment-file metadata, and all drop-ins.
 Inspect `systemctl cat cms-api.service`; remove or neutralize only the known obsolete AACT drop-in
 after confirming the checked-in unit loads `/etc/aact/reader.env` directly. Install the checked-in
@@ -426,6 +440,31 @@ the latest structured result with:
 systemctl show cms-data-status.service -p Result -p ExecMainStatus
 journalctl -u cms-data-status.service -n 200 --no-pager
 ```
+
+Before acquisition, save a fresh structured monitor result in the audit directory and generate the
+read-only execution plan. The plan names exact acquisition order, validated run IDs, missing inputs,
+candidate lanes, and any explicit exceptions. Current sources required only to complete an expanded
+candidate are listed under `candidate_input_restore_ids`. The planner does not execute those actions.
+
+```bash
+mkdir -p /srv/cms-data-platform/audits/REFRESH_AUDIT_ID
+/srv/cms-data-platform/production/release-current/runtime/bin/python \
+  -m pipeline.production_status_monitor \
+  --production-root /srv/cms-data-platform/production --json \
+  > /srv/cms-data-platform/audits/REFRESH_AUDIT_ID/freshness-status.json
+
+/srv/cms-data-platform/production/release-current/runtime/bin/python \
+  -m pipeline.refresh_plan \
+  --status-json /srv/cms-data-platform/audits/REFRESH_AUDIT_ID/freshness-status.json \
+  --staging-manifest /srv/cms-data-platform/data/manifests.json \
+  --json
+```
+
+Add `--exception 'SOURCE_ID=REVIEWED_REASON'` only for an approved intentional deferral and retain
+that plan with the refresh evidence. Exit `2` means the inputs are malformed; exit `1` means source
+provenance blocks planning; exit `0` means the plan is actionable, not that acquisition or promotion
+has been authorized. Review every `awaiting_validated_runs` lane before running the named acquire
+commands in publisher-period order.
 
 ### Retrospective source provenance
 
