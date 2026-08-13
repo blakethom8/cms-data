@@ -86,7 +86,7 @@ def get_radar_router(get_conn: Callable) -> APIRouter:
     router = APIRouter(prefix="/radar", tags=["New Provider Radar"])
 
     @router.get("/providers", response_model=RadarProviderEventResponse)
-    async def provider_events(
+    def provider_events(
         zip5: list[str] | None = Query(None),
         city: str | None = None,
         state: str | None = None,

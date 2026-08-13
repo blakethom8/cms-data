@@ -25,30 +25,45 @@ MAX_QUERY_RESPONSE_BYTES = int(os.getenv("MAX_QUERY_RESPONSE_BYTES", "1000000"))
 MAX_QUERY_SECONDS = float(os.getenv("MAX_QUERY_SECONDS", "15"))
 DUCKDB_MEMORY_LIMIT = os.getenv("DUCKDB_MEMORY_LIMIT", "2GB")
 DUCKDB_THREADS = int(os.getenv("DUCKDB_THREADS", "4"))
+DUCKDB_POOL_SIZE = int(os.getenv("DUCKDB_POOL_SIZE", "4"))
+DUCKDB_POOL_ACQUIRE_SECONDS = float(os.getenv("DUCKDB_POOL_ACQUIRE_SECONDS", "2"))
 READ_ONLY = True
 
-# Connection pool (DuckDB is single-writer but supports multiple read cursors)
+# Fallback connection for startup checks and routes not yet moved into the pool.
 _conn = None
 
+
+def _connect_readonly() -> duckdb.DuckDBPyConnection:
+    return duckdb.connect(
+        DB_PATH,
+        read_only=READ_ONLY,
+        config={
+            "enable_external_access": "false",
+            "allow_unsigned_extensions": "false",
+            "memory_limit": DUCKDB_MEMORY_LIMIT,
+            "threads": str(DUCKDB_THREADS),
+        },
+    )
+
 def get_conn() -> duckdb.DuckDBPyConnection:
+    from database_pool import request_connection
+
+    scoped_connection = request_connection()
+    if scoped_connection is not None:
+        return scoped_connection
     global _conn
     if _conn is None:
-        _conn = duckdb.connect(
-            DB_PATH,
-            read_only=READ_ONLY,
-            config={
-                # Serving queries never need local/network file readers or
-                # runtime extension installation. Enforce that below SQL text.
-                "enable_external_access": "false",
-                "allow_unsigned_extensions": "false",
-                # Bound the serving process as a whole. DuckDB's memory limit
-                # is database-wide rather than cursor-local, so configuring it
-                # once avoids request races caused by SET/RESET statements.
-                "memory_limit": DUCKDB_MEMORY_LIMIT,
-                "threads": str(DUCKDB_THREADS),
-            },
-        )
+        _conn = _connect_readonly()
     return _conn
+
+
+from database_pool import DuckDBConnectionPool
+
+database_pool = DuckDBConnectionPool(
+    _connect_readonly,
+    size=DUCKDB_POOL_SIZE,
+    acquire_timeout_seconds=DUCKDB_POOL_ACQUIRE_SECONDS,
+)
 
 
 @asynccontextmanager
@@ -57,12 +72,15 @@ async def lifespan(app: FastAPI):
     if not os.path.exists(DB_PATH):
         raise RuntimeError(f"Database not found: {DB_PATH}")
     get_conn()
-    yield
-    # Shutdown
-    global _conn
-    if _conn:
-        _conn.close()
-        _conn = None
+    try:
+        database_pool.start()
+        yield
+    finally:
+        database_pool.close()
+        global _conn
+        if _conn:
+            _conn.close()
+            _conn = None
 
 
 app = FastAPI(
@@ -156,6 +174,31 @@ app.include_router(get_operations_router(get_conn), dependencies=_secured)
 from release_info import ReleaseCacheMiddleware, get_release_router, make_release_resolver
 release_resolver = make_release_resolver(DB_PATH)
 app.include_router(get_release_router(release_resolver), dependencies=_secured)
+
+from database_pool import DatabasePoolMiddleware
+
+_DATABASE_ROUTE_PREFIXES = ("/profiles", "/practices", "/radar", "/explorer")
+_DATABASE_ROUTE_EXCLUSIONS = {"/profiles/exemplars", "/explorer/showcases"}
+
+
+def _is_pooled_database_path(path: str) -> bool:
+    return path not in _DATABASE_ROUTE_EXCLUSIONS and any(
+        path == prefix or path.startswith(prefix + "/")
+        for prefix in _DATABASE_ROUTE_PREFIXES
+    )
+
+
+# Added before ReleaseCacheMiddleware, so an ETag hit can return 304 without
+# leasing a database connection. RequestContextMiddleware remains outermost.
+app.add_middleware(
+    DatabasePoolMiddleware,
+    pool=database_pool,
+    is_database_path=_is_pooled_database_path,
+    is_authorized=lambda request: resolve_api_key_name(
+        request.headers.get(API_KEY_HEADER)
+    )
+    is not None,
+)
 
 app.add_middleware(
     ReleaseCacheMiddleware,

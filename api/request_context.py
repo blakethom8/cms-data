@@ -93,7 +93,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         finally:
             logger.info(
                 "%s %s -> %s key=%s request_id=%s caller_supplied_id=%s "
-                "release=%s duration_ms=%.1f",
+                "release=%s duration_ms=%.1f pool_wait_ms=%s pool_result=%s",
                 request.method,
                 request.url.path,
                 status,
@@ -102,6 +102,12 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 "yes" if echoed else "no",
                 self._release_id(),
                 (time.perf_counter() - started) * 1000,
+                (
+                    f"{request.state.pool_wait_ms:.2f}"
+                    if hasattr(request.state, "pool_wait_ms")
+                    else "-"
+                ),
+                getattr(request.state, "pool_result", "not_applicable"),
             )
 
         response.headers[REQUEST_ID_HEADER] = request_id

@@ -46,6 +46,8 @@ CMS_QUERY_CONSUMERS=command-center
 MAX_QUERY_SECONDS=15
 DUCKDB_MEMORY_LIMIT=2GB
 DUCKDB_THREADS=4
+DUCKDB_POOL_SIZE=4
+DUCKDB_POOL_ACQUIRE_SECONDS=2
 MAX_QUERY_SQL_CHARS=20000
 MAX_QUERY_RESPONSE_BYTES=1000000
 ```
@@ -54,6 +56,9 @@ MAX_QUERY_RESPONSE_BYTES=1000000
 - `MAX_QUERY_SECONDS` interrupts runaway operator work; the default is 15 seconds.
 - `DUCKDB_MEMORY_LIMIT` and `DUCKDB_THREADS` bound the serving process as a whole. DuckDB applies
   these settings database-wide, so they are configured once when the read-only connection opens.
+- `DUCKDB_POOL_SIZE` bounds concurrent database-only route execution. Each leased read-only
+  connection has one request owner, and `DUCKDB_POOL_ACQUIRE_SECONDS` bounds queue wait before a
+  controlled 503 response.
 - Provider Search keys authenticate typed endpoints but are not SQL operators.
 - The Command Center key remains server-side. It must not be embedded in static HTML or returned to
   the browser.

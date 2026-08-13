@@ -649,12 +649,12 @@ def get_practices_router(get_conn):
         return specialty_catalog
 
     @router.get("/specialties", response_model=SpecialtyListResponse)
-    async def specialties():
+    def specialties():
         """Return the cached normalized provider-specialty catalog."""
         return SpecialtyListResponse(specialties=list(get_specialty_catalog()))
 
     @router.get("/capabilities")
-    async def capabilities():
+    def capabilities():
         """Describe the bounded v2 practices contract for proxy readiness checks."""
         # The proxy treats this endpoint as a deploy/readiness gate. Do not
         # advertise v2 until its required specialty catalog can be queried.
@@ -672,7 +672,7 @@ def get_practices_router(get_conn):
         }
 
     @router.get("/search", response_model=PracticeSearchResponse)
-    async def search(
+    def search(
         specialty: Optional[str] = None,
         specialties: Optional[str] = None,
         city: Optional[str] = None,
@@ -1106,7 +1106,7 @@ def get_practices_router(get_conn):
         )
 
     @router.get("/providers", response_model=ProviderRosterResponse)
-    async def providers(
+    def providers(
         street: str,
         zip: str,
         org_pac_id: Optional[str] = None,
@@ -1355,7 +1355,7 @@ def get_practices_router(get_conn):
         )
 
     @router.get("/site-profile", response_model=SiteProfileResponse)
-    async def site_profile(
+    def site_profile(
         street: str,
         zip: str,
         org_pac_id: Optional[str] = None,
