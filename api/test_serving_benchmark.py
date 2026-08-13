@@ -1,6 +1,7 @@
 import json
 import sys
 from collections import Counter
+from email.message import Message
 from pathlib import Path
 
 import pytest
@@ -66,6 +67,23 @@ def test_summary_records_latency_throughput_bytes_and_failure_behavior() -> None
     assert summary["failures"] == 1
     assert summary["status_counts"] == {"200": 2, "503": 1}
     assert summary["latency_ms"] == {"p50": 20.0, "p95": 30.0, "p99": 30.0, "max": 30.0}
+    assert summary["pool_wait_ms"] == {
+        "samples": 0,
+        "p50": None,
+        "p95": None,
+        "p99": None,
+        "max": None,
+    }
+
+
+def test_pool_wait_parser_reads_only_the_named_server_timing_metric() -> None:
+    headers = Message()
+    headers["Server-Timing"] = "cache;dur=2.1, duckdb_pool;dur=18.42"
+
+    assert benchmark._pool_wait_ms(headers) == 18.42
+
+    headers.replace_header("Server-Timing", "cache;dur=2.1")
+    assert benchmark._pool_wait_ms(headers) is None
 
 
 def test_base_url_never_accepts_embedded_credentials() -> None:
@@ -105,5 +123,7 @@ def test_benchmark_is_deterministic_and_never_serializes_the_key(monkeypatch) ->
     assert calls[:2] == ["profile", "radar"]
     assert Counter(calls) == {"profile": 5, "radar": 3}
     assert [level["concurrency"] for level in evidence["levels"]] == [1, 2]
-    assert all(level["pool_wait_ms"] is None for level in evidence["levels"])
+    assert all(
+        level["pool_wait_ms"]["samples"] == 0 for level in evidence["levels"]
+    )
     assert "operator-secret" not in json.dumps(evidence)

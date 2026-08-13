@@ -48,5 +48,17 @@ is never written to evidence.
 
 Run at least three trials per candidate and retain the median trial alongside the deployment or
 rehearsal record. Compare p50/p95/p99, throughput, CPU, RSS peak, status counts, and response bytes.
-Once the bounded connection pool exists, add its measured queue wait to this schema rather than
-deriving it from total request latency.
+The bounded connection pool emits its acquisition wait through the `Server-Timing` response header.
+The harness records p50/p95/p99/max wait separately from total request latency. Baseline evidence
+from a server without the pool has zero wait samples; never reinterpret that absence as zero wait.
+
+## Interpretation contract
+
+Concurrency comparisons are not before/after deployment latency claims. A concurrency-1 result is
+the isolated response time on the same release; higher-concurrency results include time spent
+waiting behind simultaneous work. If throughput remains flat while latency rises, describe the
+result as queueing or head-of-line blocking—not as the endpoint becoming intrinsically slower.
+
+Every implementation comparison must use the same release data, workload SHA-256, route weights,
+request count, timeout, and concurrency levels. Report failures and overload responses alongside
+latency; a candidate does not improve performance by dropping work invisibly.

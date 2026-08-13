@@ -447,7 +447,7 @@ def get_profiles_router(get_conn):
         return EXEMPLARS
 
     @router.get("/search", response_model=list[SearchHit])
-    async def search(q: str, city: Optional[str] = None, state: Optional[str] = None,
+    def search(q: str, city: Optional[str] = None, state: Optional[str] = None,
                      limit: int = 15):
         """Find doctors by name (last or 'first last'), optional city/state.
 
@@ -475,12 +475,12 @@ def get_profiles_router(get_conn):
     @router.get(
         "/hospital-affiliations", response_model=HospitalAffiliationsResponse
     )
-    async def hospital_affiliations(npis: str):
+    def hospital_affiliations(npis: str):
         """Return facility affiliations for at most 50 comma-separated NPIs."""
         return _hospital_affiliations_response(get_conn(), npis)
 
     @router.get("/{npi}")
-    async def profile(npi: str):
+    def profile(npi: str):
         npi = _npi(npi)
         conn = get_conn()
         out: dict = {"npi": npi}

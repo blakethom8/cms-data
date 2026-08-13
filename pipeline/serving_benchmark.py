@@ -7,6 +7,7 @@ import concurrent.futures
 import hashlib
 import json
 import os
+import re
 import threading
 import time
 import urllib.error
@@ -34,6 +35,16 @@ class RequestSample:
     elapsed_ms: float
     response_bytes: int
     error: str | None
+    pool_wait_ms: float | None = None
+
+
+_POOL_TIMING_PATTERN = re.compile(r"(?:^|,)\s*duckdb_pool;dur=([0-9]+(?:\.[0-9]+)?)")
+
+
+def _pool_wait_ms(headers) -> float | None:
+    value = headers.get("Server-Timing", "")
+    match = _POOL_TIMING_PATTERN.search(value)
+    return float(match.group(1)) if match else None
 
 
 def _utc_now() -> str:
@@ -100,6 +111,7 @@ def _request_once(
     status_code: int | None = None
     response_bytes = 0
     error_text: str | None = None
+    pool_wait_ms: float | None = None
     http_request = urllib.request.Request(
         f"{base_url}{request.path}",
         headers={"Accept": "application/json", "X-API-Key": api_key},
@@ -109,10 +121,12 @@ def _request_once(
         with urllib.request.urlopen(http_request, timeout=timeout_seconds) as response:
             status_code = response.status
             response_bytes = len(response.read())
+            pool_wait_ms = _pool_wait_ms(response.headers)
     except urllib.error.HTTPError as error:
         status_code = error.code
         response_bytes = len(error.read())
         error_text = f"HTTP {error.code}"
+        pool_wait_ms = _pool_wait_ms(error.headers)
     except (OSError, TimeoutError) as error:
         error_text = _safe_error(error)
     return RequestSample(
@@ -121,6 +135,7 @@ def _request_once(
         elapsed_ms=(time.perf_counter() - started) * 1000,
         response_bytes=response_bytes,
         error=error_text,
+        pool_wait_ms=pool_wait_ms,
     )
 
 
@@ -134,6 +149,9 @@ def _percentile(values: list[float], percentile: float) -> float | None:
 
 def summarize_samples(samples: list[RequestSample], elapsed_seconds: float) -> dict:
     latencies = [sample.elapsed_ms for sample in samples]
+    pool_waits = [
+        sample.pool_wait_ms for sample in samples if sample.pool_wait_ms is not None
+    ]
     status_counts: dict[str, int] = {}
     error_count = 0
     for sample in samples:
@@ -152,6 +170,13 @@ def summarize_samples(samples: list[RequestSample], elapsed_seconds: float) -> d
             "p95": _percentile(latencies, 0.95),
             "p99": _percentile(latencies, 0.99),
             "max": round(max(latencies), 2) if latencies else None,
+        },
+        "pool_wait_ms": {
+            "samples": len(pool_waits),
+            "p50": _percentile(pool_waits, 0.50),
+            "p95": _percentile(pool_waits, 0.95),
+            "p99": _percentile(pool_waits, 0.99),
+            "max": round(max(pool_waits), 2) if pool_waits else None,
         },
     }
 
@@ -240,9 +265,6 @@ def run_level(
         {
             "concurrency": concurrency,
             "server_process": sampler.summary(elapsed_seconds),
-            # The baseline server has no explicit pool yet. Do not report
-            # request latency as pool wait or invent a zero measurement.
-            "pool_wait_ms": None,
             "by_request": {
                 request.name: summarize_samples(
                     [sample for sample in samples if sample.name == request.name],

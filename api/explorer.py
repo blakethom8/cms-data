@@ -746,7 +746,7 @@ def get_explorer_router(get_conn):
     router = APIRouter(prefix="/explorer", tags=["Data Explorer"])
 
     @router.get("/catalog", response_model=list[CatalogEntry])
-    async def catalog():
+    def catalog():
         conn = get_conn()
         out = []
         for entry in CATALOG:
@@ -762,7 +762,7 @@ def get_explorer_router(get_conn):
         return out
 
     @router.get("/columns/{key}", response_model=ColumnsResponse)
-    async def columns(key: str):
+    def columns(key: str):
         """Full column list (name + type) for one catalog dataset."""
         entry = next((e for e in CATALOG if e["key"] == key), None)
         if not entry:
@@ -774,7 +774,7 @@ def get_explorer_router(get_conn):
         )
 
     @router.get("/sample/{key}", response_model=TableData)
-    async def sample(
+    def sample(
         key: str,
         city: str = "Los Angeles",
         state: str = "CA",
@@ -790,7 +790,7 @@ def get_explorer_router(get_conn):
             raise HTTPException(status_code=400, detail=f"Sample query failed: {e}")
 
     @router.get("/sample-all/{key}", response_model=TableData)
-    async def sample_all(key: str, limit: int = Query(50, ge=1, le=200)):
+    def sample_all(key: str, limit: int = Query(50, ge=1, le=200)):
         """Return bounded raw rows containing every physical column for a catalog table."""
         entry = next((entry for entry in CATALOG if entry["key"] == key), None)
         if not entry:
@@ -802,7 +802,7 @@ def get_explorer_router(get_conn):
             raise HTTPException(status_code=400, detail=f"All-column sample query failed: {e}")
 
     @router.get("/showcase/{key}", response_model=ShowcaseResult)
-    async def showcase(key: str, city: str = "Los Angeles", state: str = "CA"):
+    def showcase(key: str, city: str = "Los Angeles", state: str = "CA"):
         sc = SHOWCASES.get(key)
         if not sc:
             raise HTTPException(status_code=404, detail=f"Unknown showcase '{key}'")
@@ -823,7 +823,7 @@ def get_explorer_router(get_conn):
         ]
 
     @router.get("/provider-evidence", response_model=ProviderEvidenceResponse)
-    async def provider_evidence(
+    def provider_evidence(
         npis: str = ",".join(DEFAULT_PROVIDER_EVIDENCE_NPIS),
         limit: int = Query(10, ge=1, le=25),
     ):
