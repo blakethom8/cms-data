@@ -145,7 +145,9 @@ a valid staging candidate before a later weekly archive exists. Reconciliation i
 periods beginning on or after that monthly baseline, in source-period order. Earlier weeklies are
 superseded by the baseline and must not be replayed over it. A monthly-only candidate therefore has
 one baseline release-ledger row, zero weekly rows, and zero baseline-generated events; it still runs
-the complete comparison gates and remains unpromoted.
+the complete comparison gates and remains unpromoted. Once that monthly baseline is selected, the
+freshness monitor treats a latest weekly period ending on or before the installed monthly period as
+covered rather than stale; the monitor reason records that family-level coverage explicitly.
 
 The CMS data-platform operator owns the daily 07:15 UTC polling and staging-reconciliation cadence
 defined by `cms-nppes-radar-reconciliation.timer`. Publisher-version no-ops are successful runs.

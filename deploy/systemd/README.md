@@ -65,8 +65,10 @@ non-secret shape.
 At a monthly rollover, the new monthly file is a complete baseline. The service may build a
 monthly-only candidate when no weekly period begins on or after that baseline. Older weekly files
 are superseded and are not replayed. A later run adds consecutive eligible weeklies in publisher
-period order. A publisher-version no-op exits successfully; a failed acquisition, validation, build,
-or comparison leaves production unchanged and is visible in the unit result and journal.
+period order. After monthly promotion, the freshness monitor reports an older latest-weekly period
+as covered when its end date is on or before the installed monthly period. A publisher-version no-op
+exits successfully; a failed acquisition, validation, build, or comparison leaves production
+unchanged and is visible in the unit result and journal.
 
 Installation or enablement is a production change and requires the runbook's explicit approval.
 After approval, install the service, timer, and environment file, then verify the first run without
