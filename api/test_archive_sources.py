@@ -139,6 +139,86 @@ def _nppes_csv(
     return stream.getvalue().encode()
 
 
+def test_nppes_monthly_baseline_is_valid_without_a_later_weekly(
+    tmp_path: Path,
+) -> None:
+    data_root = tmp_path / "data"
+    monthly = _stage_archive(
+        data_root,
+        "nppes_monthly_v2",
+        "monthly-only-run",
+        "2026-08-10",
+        {
+            "npidata_pfile_20050523-20260809.csv": _nppes_csv(
+                [
+                    {
+                        "NPI": "1111111111",
+                        "Provider First Name": "August",
+                        "Provider Last Name (Legal Name)": "Baseline",
+                    }
+                ]
+            )
+        },
+    )
+    connection = duckdb.connect(":memory:")
+    connection.execute((REPOSITORY_ROOT / "schema/ddl.sql").read_text(encoding="utf-8"))
+
+    counts, details = load_nppes_sources(
+        connection,
+        data_root=data_root,
+        monthly_run_id=monthly.run_id,
+        weekly_run_ids=(),
+    )
+
+    assert counts["raw_nppes"] == 1
+    assert details["weekly"] is None
+    assert details["weeklies"] == []
+    assert details["reconciliation"]["weekly_release_rows"] == 0
+    assert connection.execute(
+        "SELECT count(*) FROM nppes_radar_releases"
+    ).fetchone() == (1,)
+    connection.close()
+
+
+def test_nppes_monthly_baseline_rejects_a_superseded_weekly(
+    tmp_path: Path,
+) -> None:
+    data_root = tmp_path / "data"
+    monthly = _stage_archive(
+        data_root,
+        "nppes_monthly_v2",
+        "august-monthly",
+        "2026-08-10",
+        {
+            "npidata_pfile_20050523-20260809.csv": _nppes_csv(
+                [{"NPI": "1111111111"}]
+            )
+        },
+    )
+    old_weekly = _stage_archive(
+        data_root,
+        "nppes_weekly_incremental_v2",
+        "old-weekly",
+        "2026-08-03/2026-08-09",
+        {
+            "npidata_pfile_20260803-20260809.csv": _nppes_csv(
+                [{"NPI": "2222222222"}]
+            )
+        },
+    )
+    connection = duckdb.connect(":memory:")
+    connection.execute((REPOSITORY_ROOT / "schema/ddl.sql").read_text(encoding="utf-8"))
+
+    with pytest.raises(ReleaseError, match="not contiguous"):
+        load_nppes_sources(
+            connection,
+            data_root=data_root,
+            monthly_run_id=monthly.run_id,
+            weekly_run_ids=(old_weekly.run_id,),
+        )
+    connection.close()
+
+
 @pytest.mark.parametrize(
     "gender_column", ("Provider Gender Code", "Provider Sex Code")
 )

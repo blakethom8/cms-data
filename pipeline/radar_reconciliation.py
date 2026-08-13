@@ -26,7 +26,7 @@ def _period(value: str) -> tuple[date, date]:
 
 
 def select_reconciliation_runs(data_root: Path) -> tuple[str, ...]:
-    """Select latest validated platform inputs plus weeklies after the monthly base."""
+    """Select the latest monthly baseline plus any eligible later weeklies."""
     manifests = [
         manifest
         for manifest in ManifestStore(data_root / "manifests.json").load().manifests
@@ -40,10 +40,9 @@ def select_reconciliation_runs(data_root: Path) -> tuple[str, ...]:
         ]
         for source_id in {"nppes_monthly_v2", "nppes_weekly_incremental_v2"}
     }
-    missing = sorted(source_id for source_id, rows in grouped.items() if not rows)
-    if missing:
+    if not grouped["nppes_monthly_v2"]:
         raise ReleaseError(
-            "Radar reconciliation lacks validated source runs: " + ", ".join(missing)
+            "Radar reconciliation lacks validated source runs: nppes_monthly_v2"
         )
 
     def latest(rows: list[RunManifest]) -> RunManifest:
@@ -74,10 +73,6 @@ def select_reconciliation_runs(data_root: Path) -> tuple[str, ...]:
         weekly_by_version.values(),
         key=lambda manifest: (*_period(manifest.source_data_period), manifest.run_id),
     )
-    if not weeklies:
-        raise ReleaseError(
-            "Radar reconciliation has no weekly release at or after the monthly baseline"
-        )
     return (selected["nppes_monthly_v2"].run_id,) + tuple(
         manifest.run_id for manifest in weeklies
     )

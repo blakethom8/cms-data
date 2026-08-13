@@ -140,6 +140,18 @@ fresh authenticated smoke evidence and retained verified deployment
 ZIP 20852 returned 628 events and `source_fresh_through: 2026-08-02`, proving freshness is served
 from the release ledger. No T2 blockers remain; T3 and T4 are now unblocked in track order.
 
+Monthly rollover rule: the newest validated monthly archive is a complete baseline and may produce
+a valid staging candidate before a later weekly archive exists. Reconciliation includes only weekly
+periods beginning on or after that monthly baseline, in source-period order. Earlier weeklies are
+superseded by the baseline and must not be replayed over it. A monthly-only candidate therefore has
+one baseline release-ledger row, zero weekly rows, and zero baseline-generated events; it still runs
+the complete comparison gates and remains unpromoted.
+
+The CMS data-platform operator owns the daily 07:15 UTC polling and staging-reconciliation cadence
+defined by `cms-nppes-radar-reconciliation.timer`. Publisher-version no-ops are successful runs.
+Candidate promotion is deliberately manual and remains owned by the approval-gated production
+runbook; the timer never selects a production bundle or restarts the API.
+
 ### T3 — Contract addition: city/state scope
 
 Product requirement from provider-search (ad-hoc "search a city" mode when a rep has no saved

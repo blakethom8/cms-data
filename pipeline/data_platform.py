@@ -395,7 +395,7 @@ def _parser() -> argparse.ArgumentParser:
         help="Build a targeted NPPES Radar staging candidate",
     )
     build_radar.add_argument("--monthly-run-id", required=True)
-    build_radar.add_argument("--weekly-run-id", action="append", required=True)
+    build_radar.add_argument("--weekly-run-id", action="append", default=[])
     build_radar.add_argument("--backup-manifest", required=True, type=Path)
     build_radar.add_argument(
         "--data-root", type=Path, default=DEFAULT_MANIFEST_PATH.parent
