@@ -176,6 +176,20 @@ rollback bundle.
 Immediately before changes, reconfirm the live PID, current database path/SHA-256, rollback artifact
 hashes, candidate artifact hashes, free disk, and clean production journal. Any mismatch stops.
 
+Run the retention and capacity preview from the selected immutable bundle, supplying the prepared
+candidate's byte size. Exit 1 blocks promotion because the rollback floor or projected disk gate is
+not satisfied; exit 2 means the preview itself could not prove a safe result. The command is
+read-only and has no delete mode.
+
+```bash
+cd /srv/cms-data-platform/production/release-current/code
+/srv/cms-data-platform/production/release-current/runtime/bin/python \
+  -m pipeline.retention preview \
+  --platform-root /srv/cms-data-platform \
+  --candidate-bytes CANDIDATE_WAREHOUSE_BYTES \
+  --json
+```
+
 Archive checksummed copies of the current systemd unit, environment-file metadata, and all drop-ins.
 Inspect `systemctl cat cms-api.service`; remove or neutralize only the known obsolete AACT drop-in
 after confirming the checked-in unit loads `/etc/aact/reader.env` directly. Install the checked-in
