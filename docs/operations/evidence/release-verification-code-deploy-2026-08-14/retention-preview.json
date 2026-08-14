@@ -1,0 +1,739 @@
+{
+  "disk": {
+    "free_bytes": 42186903552,
+    "state": "critical",
+    "thresholds_percent": {
+      "critical": 80.0,
+      "promotion_block": 85.0,
+      "warning": 70.0
+    },
+    "total_bytes": 362633863168,
+    "used_bytes": 305655889920,
+    "used_percent": 84.29
+  },
+  "generated_at": "2026-08-14T17:31:29+00:00",
+  "items": [
+    {
+      "allocated_bytes": 24576,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production/releases/legacy-20260721T203535Z-1bc81fd0de",
+      "reason": "outside the active + previous validated deployment floor",
+      "references": [
+        "legacy-20260721T203535Z-1bc81fd0de"
+      ]
+    },
+    {
+      "allocated_bytes": 24576,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production/releases/deployment-20260721T204507Z-f9a096c988",
+      "reason": "outside the active + previous validated deployment floor",
+      "references": [
+        "deployment-20260721T204507Z-f9a096c988"
+      ]
+    },
+    {
+      "allocated_bytes": 28672,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production/releases/deployment-20260721T205924Z-c1a7af9f06",
+      "reason": "outside the active + previous validated deployment floor",
+      "references": [
+        "deployment-20260721T205924Z-c1a7af9f06"
+      ]
+    },
+    {
+      "allocated_bytes": 102400,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production/releases/deployment-20260722T023325Z-2b7a4e38b6",
+      "reason": "outside the active + previous validated deployment floor",
+      "references": [
+        "deployment-20260722T023325Z-2b7a4e38b6"
+      ]
+    },
+    {
+      "allocated_bytes": 77824,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production/releases/deployment-20260722T164651Z-28b6f71534",
+      "reason": "outside the active + previous validated deployment floor",
+      "references": [
+        "deployment-20260722T164651Z-28b6f71534"
+      ]
+    },
+    {
+      "allocated_bytes": 77824,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production/releases/deployment-20260722T170151Z-b70ec1cf08",
+      "reason": "outside the active + previous validated deployment floor",
+      "references": [
+        "deployment-20260722T170151Z-b70ec1cf08"
+      ]
+    },
+    {
+      "allocated_bytes": 77824,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production/releases/deployment-20260722T171152Z-19e6025979",
+      "reason": "outside the active + previous validated deployment floor",
+      "references": [
+        "deployment-20260722T171152Z-19e6025979"
+      ]
+    },
+    {
+      "allocated_bytes": 86016,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production/releases/deployment-20260722T185312Z-63e2b2c0e2",
+      "reason": "outside the active + previous validated deployment floor",
+      "references": [
+        "deployment-20260722T185312Z-63e2b2c0e2"
+      ]
+    },
+    {
+      "allocated_bytes": 86016,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production/releases/deployment-20260722T201844Z-868450f91e",
+      "reason": "outside the active + previous validated deployment floor",
+      "references": [
+        "deployment-20260722T201844Z-868450f91e"
+      ]
+    },
+    {
+      "allocated_bytes": 28672,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production/releases/deployment-20260722T224705Z-e852780678",
+      "reason": "outside the active + previous validated deployment floor",
+      "references": [
+        "deployment-20260722T224705Z-e852780678"
+      ]
+    },
+    {
+      "allocated_bytes": 81920,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production/releases/deployment-20260723T002222Z-31da868819",
+      "reason": "outside the active + previous validated deployment floor",
+      "references": [
+        "deployment-20260723T002222Z-31da868819"
+      ]
+    },
+    {
+      "allocated_bytes": 73728,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production/releases/deployment-20260723T004113Z-2f24e8d935",
+      "reason": "outside the active + previous validated deployment floor",
+      "references": [
+        "deployment-20260723T004113Z-2f24e8d935"
+      ]
+    },
+    {
+      "allocated_bytes": 57344,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production/releases/deployment-20260804T163418Z-2ad954a774",
+      "reason": "outside the active + previous validated deployment floor",
+      "references": [
+        "deployment-20260804T163418Z-2ad954a774"
+      ]
+    },
+    {
+      "allocated_bytes": 61440,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production/releases/deployment-20260811T023712Z-b68e0ca9c3",
+      "reason": "outside the active + previous validated deployment floor",
+      "references": [
+        "deployment-20260811T023712Z-b68e0ca9c3"
+      ]
+    },
+    {
+      "allocated_bytes": 24576,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production/releases/deployment-20260811T031052Z-73cea84b1b",
+      "reason": "outside the active + previous validated deployment floor",
+      "references": [
+        "deployment-20260811T031052Z-73cea84b1b"
+      ]
+    },
+    {
+      "allocated_bytes": 61440,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production/releases/deployment-20260811T041229Z-8eee0d7afd",
+      "reason": "outside the active + previous validated deployment floor",
+      "references": [
+        "deployment-20260811T041229Z-8eee0d7afd"
+      ]
+    },
+    {
+      "allocated_bytes": 61440,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production/releases/deployment-20260811T050116Z-3eb99c92bf",
+      "reason": "outside the active + previous validated deployment floor",
+      "references": [
+        "deployment-20260811T050116Z-3eb99c92bf"
+      ]
+    },
+    {
+      "allocated_bytes": 61440,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production/releases/deployment-20260811T135930Z-2c3fb4878d",
+      "reason": "outside the active + previous validated deployment floor",
+      "references": [
+        "deployment-20260811T135930Z-2c3fb4878d"
+      ]
+    },
+    {
+      "allocated_bytes": 16384,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production/releases/deployment-20260811T140024Z-0f0d1daad1",
+      "reason": "outside the active + previous validated deployment floor",
+      "references": [
+        "deployment-20260811T140024Z-0f0d1daad1"
+      ]
+    },
+    {
+      "allocated_bytes": 61440,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production/releases/deployment-20260811T141921Z-b26c3f3d25",
+      "reason": "outside the active + previous validated deployment floor",
+      "references": [
+        "deployment-20260811T141921Z-b26c3f3d25"
+      ]
+    },
+    {
+      "allocated_bytes": 61440,
+      "disposition": "protected",
+      "path": "/srv/cms-data-platform/production/releases/deployment-20260811T145509Z-187674a921",
+      "reason": "active deployment or validated rollback predecessor",
+      "references": [
+        "deployment-20260811T145509Z-187674a921"
+      ]
+    },
+    {
+      "allocated_bytes": 61440,
+      "disposition": "protected",
+      "path": "/srv/cms-data-platform/production/releases/deployment-20260811T155814Z-6baa26aa69",
+      "reason": "active deployment or validated rollback predecessor",
+      "references": [
+        "deployment-20260811T155814Z-6baa26aa69"
+      ]
+    },
+    {
+      "allocated_bytes": 77824,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production/releases/deployment-20260814T002255Z-11131e3630",
+      "reason": "outside the active + previous validated deployment floor",
+      "references": [
+        "deployment-20260814T002255Z-11131e3630"
+      ]
+    },
+    {
+      "allocated_bytes": 282624,
+      "disposition": "protected",
+      "path": "/srv/cms-data-platform/production/releases/deployment-20260814T160153Z-45ab9d2d38",
+      "reason": "active deployment or validated rollback predecessor",
+      "references": [
+        "deployment-20260814T160153Z-45ab9d2d38"
+      ]
+    },
+    {
+      "allocated_bytes": 143360,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production/releases/deployment-20260814T172445Z-3cd965d04e",
+      "reason": "outside the active + previous validated deployment floor",
+      "references": [
+        "deployment-20260814T172445Z-3cd965d04e"
+      ]
+    },
+    {
+      "allocated_bytes": 3690496,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production-artifacts/code/089e51ade3ed99017157acb6bd4056f20dafafdb",
+      "reason": "referenced only by deployments outside the rollback-retention set",
+      "references": [
+        "deployment-20260722T224705Z-e852780678"
+      ]
+    },
+    {
+      "allocated_bytes": 5156864,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production-artifacts/code/18bfc9f88c168af4a48cd1271761f1e589972d8b",
+      "reason": "not referenced by any deployment in the production ledger",
+      "references": []
+    },
+    {
+      "allocated_bytes": 5156864,
+      "disposition": "protected",
+      "path": "/srv/cms-data-platform/production-artifacts/code/18bfc9f88c168af4a48cd1271761f1e589972d8b-provider-v3-1",
+      "reason": "referenced by the active rollback-retention set",
+      "references": [
+        "deployment-20260811T145509Z-187674a921"
+      ]
+    },
+    {
+      "allocated_bytes": 4907008,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production-artifacts/code/1b15cca1872d23a71bed005bd4e3ade4e33ab0c8-command-center-search1",
+      "reason": "referenced only by deployments outside the rollback-retention set",
+      "references": [
+        "deployment-20260811T141921Z-b26c3f3d25"
+      ]
+    },
+    {
+      "allocated_bytes": 3391488,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production-artifacts/code/1e06a338cf3cd2ee7f6bc584aa9651162db8b169",
+      "reason": "referenced only by deployments outside the rollback-retention set",
+      "references": [
+        "deployment-20260722T023325Z-2b7a4e38b6"
+      ]
+    },
+    {
+      "allocated_bytes": 3891200,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production-artifacts/code/3a2a81c-command-center-catalog-freshness-1",
+      "reason": "not referenced by any deployment in the production ledger",
+      "references": []
+    },
+    {
+      "allocated_bytes": 5074944,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production-artifacts/code/3c3e761afcfb6aa8c5190e53985adfd50f8e0a51",
+      "reason": "referenced only by deployments outside the rollback-retention set",
+      "references": [
+        "deployment-20260811T023712Z-b68e0ca9c3"
+      ]
+    },
+    {
+      "allocated_bytes": 4042752,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production-artifacts/code/3f3ff40939537c3040cdeb5fdb4c156da07348e0",
+      "reason": "referenced only by deployments outside the rollback-retention set",
+      "references": [
+        "deployment-20260723T004113Z-2f24e8d935"
+      ]
+    },
+    {
+      "allocated_bytes": 3715072,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production-artifacts/code/5d90d47c926f31d256daf9a0f006b32f0455dc8f",
+      "reason": "not referenced by any deployment in the production ledger",
+      "references": []
+    },
+    {
+      "allocated_bytes": 5586944,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production-artifacts/code/5d9572f2e177b8f4c853d4c10dcc72a5636de9ce-bounded-executor",
+      "reason": "referenced only by deployments outside the rollback-retention set",
+      "references": [
+        "deployment-20260814T002255Z-11131e3630"
+      ]
+    },
+    {
+      "allocated_bytes": 5705728,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production-artifacts/code/7285b4bab8969bcbd3cd4b00415149f15756bc8d",
+      "reason": "referenced only by deployments outside the rollback-retention set",
+      "references": [
+        "deployment-20260811T041229Z-8eee0d7afd"
+      ]
+    },
+    {
+      "allocated_bytes": 3592192,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production-artifacts/code/7285b4bab8969bcbd3cd4b00415149f15756bc8d-safe-recovery2",
+      "reason": "not referenced by any deployment in the production ledger",
+      "references": []
+    },
+    {
+      "allocated_bytes": 4829184,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production-artifacts/code/7285b4bab8969bcbd3cd4b00415149f15756bc8d-safe-recovery3",
+      "reason": "not referenced by any deployment in the production ledger",
+      "references": []
+    },
+    {
+      "allocated_bytes": 4829184,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production-artifacts/code/7285b4bab8969bcbd3cd4b00415149f15756bc8d-safe-recovery4",
+      "reason": "not referenced by any deployment in the production ledger",
+      "references": []
+    },
+    {
+      "allocated_bytes": 4829184,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production-artifacts/code/7285b4bab8969bcbd3cd4b00415149f15756bc8d-safe-recovery5",
+      "reason": "referenced only by deployments outside the rollback-retention set",
+      "references": [
+        "deployment-20260811T135930Z-2c3fb4878d",
+        "deployment-20260811T140024Z-0f0d1daad1"
+      ]
+    },
+    {
+      "allocated_bytes": 5062656,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production-artifacts/code/7285b4bab8969bcbd3cd4b00415149f15756bc8d-safe-rehearsal1",
+      "reason": "referenced only by deployments outside the rollback-retention set",
+      "references": [
+        "deployment-20260811T050116Z-3eb99c92bf"
+      ]
+    },
+    {
+      "allocated_bytes": 3436544,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production-artifacts/code/7863bee414f87bf3fe370efbaf244bd088f04870",
+      "reason": "referenced only by deployments outside the rollback-retention set",
+      "references": [
+        "deployment-20260722T164651Z-28b6f71534"
+      ]
+    },
+    {
+      "allocated_bytes": 6467584,
+      "disposition": "protected",
+      "path": "/srv/cms-data-platform/production-artifacts/code/7fb735cdf0dac96dd26201277564be2740810170-s2-managed-dac-1",
+      "reason": "referenced by the active rollback-retention set",
+      "references": [
+        "deployment-20260814T160153Z-45ab9d2d38"
+      ]
+    },
+    {
+      "allocated_bytes": 2260992,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production-artifacts/code/8985e8a5a71d97c5e55d0a03c492da6b6259aa4d",
+      "reason": "not referenced by any deployment in the production ledger",
+      "references": []
+    },
+    {
+      "allocated_bytes": 3440640,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production-artifacts/code/8e48100b16972bff920b205b23b9ba826289c846",
+      "reason": "referenced only by deployments outside the rollback-retention set",
+      "references": [
+        "deployment-20260722T170151Z-b70ec1cf08"
+      ]
+    },
+    {
+      "allocated_bytes": 4468736,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production-artifacts/code/8f7ddc466a1a1c8f44ce115fa75048cac08f30fc",
+      "reason": "not referenced by any deployment in the production ledger",
+      "references": []
+    },
+    {
+      "allocated_bytes": 3485696,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production-artifacts/code/b65e418340167771daef61de77e8a9baa0a52e7b",
+      "reason": "referenced only by deployments outside the rollback-retention set",
+      "references": [
+        "deployment-20260722T185312Z-63e2b2c0e2"
+      ]
+    },
+    {
+      "allocated_bytes": 6770688,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production-artifacts/code/b80d56510757770f1f6f6d90492053948567b08b-release-verification-1",
+      "reason": "referenced only by deployments outside the rollback-retention set",
+      "references": [
+        "deployment-20260814T172445Z-3cd965d04e"
+      ]
+    },
+    {
+      "allocated_bytes": 3514368,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production-artifacts/code/bc9a2b03406434d556809ef897328e704670a5df",
+      "reason": "referenced only by deployments outside the rollback-retention set",
+      "references": [
+        "deployment-20260722T201844Z-868450f91e"
+      ]
+    },
+    {
+      "allocated_bytes": 3870720,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production-artifacts/code/bcd338fa-command-center-1",
+      "reason": "not referenced by any deployment in the production ledger",
+      "references": []
+    },
+    {
+      "allocated_bytes": 5218304,
+      "disposition": "protected",
+      "path": "/srv/cms-data-platform/production-artifacts/code/bcd338fa8670caa2c533ff47aa551b77077503d4-operations-evidence-1",
+      "reason": "referenced by the active rollback-retention set",
+      "references": [
+        "deployment-20260811T155814Z-6baa26aa69"
+      ]
+    },
+    {
+      "allocated_bytes": 2592768,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production-artifacts/code/c6f929bce621a0a4e541b09ea245b1ccbf6828c3",
+      "reason": "referenced only by deployments outside the rollback-retention set",
+      "references": [
+        "deployment-20260721T204507Z-f9a096c988",
+        "deployment-20260721T205924Z-c1a7af9f06"
+      ]
+    },
+    {
+      "allocated_bytes": 4042752,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production-artifacts/code/cd3b1f75f510822c0cd8070ca291c33b7c2558e7",
+      "reason": "referenced only by deployments outside the rollback-retention set",
+      "references": [
+        "deployment-20260723T002222Z-31da868819"
+      ]
+    },
+    {
+      "allocated_bytes": 3444736,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production-artifacts/code/d043f8ce1dc4fe6e21a3d66ae29baeccea87df7f",
+      "reason": "referenced only by deployments outside the rollback-retention set",
+      "references": [
+        "deployment-20260722T171152Z-19e6025979"
+      ]
+    },
+    {
+      "allocated_bytes": 4182016,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production-artifacts/code/ef457f669bbc986f15cdb9862e17620caa518e78-bounded-executor-rehearsal",
+      "reason": "not referenced by any deployment in the production ledger",
+      "references": []
+    },
+    {
+      "allocated_bytes": 4288512,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production-artifacts/code/f081f8c1f0a695da782ebcc9bc0fa6edc219f51a",
+      "reason": "referenced only by deployments outside the rollback-retention set",
+      "references": [
+        "deployment-20260804T163418Z-2ad954a774"
+      ]
+    },
+    {
+      "allocated_bytes": 4304896,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production-artifacts/code/fa4bcdd78ffc3ac3c60b2d63f7187035258a7417",
+      "reason": "referenced only by deployments outside the rollback-retention set",
+      "references": [
+        "deployment-20260811T031052Z-73cea84b1b"
+      ]
+    },
+    {
+      "allocated_bytes": 937984,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production-artifacts/code/legacy-code-20260721-live",
+      "reason": "referenced only by deployments outside the rollback-retention set",
+      "references": [
+        "legacy-20260721T203535Z-1bc81fd0de"
+      ]
+    },
+    {
+      "allocated_bytes": 487968768,
+      "disposition": "protected",
+      "path": "/srv/cms-data-platform/production-artifacts/runtimes/runtime-candidate-8985e8a-c26024b3",
+      "reason": "referenced by the active rollback-retention set",
+      "references": [
+        "deployment-20260721T204507Z-f9a096c988",
+        "deployment-20260721T205924Z-c1a7af9f06",
+        "deployment-20260722T023325Z-2b7a4e38b6",
+        "deployment-20260722T164651Z-28b6f71534",
+        "deployment-20260722T170151Z-b70ec1cf08",
+        "deployment-20260722T171152Z-19e6025979",
+        "deployment-20260722T185312Z-63e2b2c0e2",
+        "deployment-20260722T201844Z-868450f91e",
+        "deployment-20260722T224705Z-e852780678",
+        "deployment-20260723T002222Z-31da868819",
+        "deployment-20260723T004113Z-2f24e8d935",
+        "deployment-20260804T163418Z-2ad954a774",
+        "deployment-20260811T023712Z-b68e0ca9c3",
+        "deployment-20260811T031052Z-73cea84b1b",
+        "deployment-20260811T041229Z-8eee0d7afd",
+        "deployment-20260811T050116Z-3eb99c92bf",
+        "deployment-20260811T135930Z-2c3fb4878d",
+        "deployment-20260811T140024Z-0f0d1daad1",
+        "deployment-20260811T141921Z-b26c3f3d25",
+        "deployment-20260811T145509Z-187674a921",
+        "deployment-20260811T155814Z-6baa26aa69",
+        "deployment-20260814T002255Z-11131e3630",
+        "deployment-20260814T160153Z-45ab9d2d38",
+        "deployment-20260814T172445Z-3cd965d04e"
+      ]
+    },
+    {
+      "allocated_bytes": 487919616,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production-artifacts/runtimes/runtime-live-c26024b3",
+      "reason": "referenced only by deployments outside the rollback-retention set",
+      "references": [
+        "legacy-20260721T203535Z-1bc81fd0de"
+      ]
+    },
+    {
+      "allocated_bytes": 6427267072,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production-artifacts/warehouses/legacy-68778a1b",
+      "reason": "referenced only by deployments outside the rollback-retention set",
+      "references": [
+        "legacy-20260721T203535Z-1bc81fd0de"
+      ]
+    },
+    {
+      "allocated_bytes": 6519279616,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production-artifacts/warehouses/warehouse-20260720T235355Z-684f3cd62d",
+      "reason": "referenced only by deployments outside the rollback-retention set",
+      "references": [
+        "deployment-20260721T204507Z-f9a096c988",
+        "deployment-20260721T205924Z-c1a7af9f06"
+      ]
+    },
+    {
+      "allocated_bytes": 20093358080,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production-artifacts/warehouses/warehouse-20260722T010607Z-ce61bf5add",
+      "reason": "referenced only by deployments outside the rollback-retention set",
+      "references": [
+        "deployment-20260722T023325Z-2b7a4e38b6",
+        "deployment-20260722T164651Z-28b6f71534",
+        "deployment-20260722T170151Z-b70ec1cf08",
+        "deployment-20260722T171152Z-19e6025979",
+        "deployment-20260722T185312Z-63e2b2c0e2",
+        "deployment-20260722T201844Z-868450f91e",
+        "deployment-20260722T224705Z-e852780678"
+      ]
+    },
+    {
+      "allocated_bytes": 19228606464,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/production-artifacts/warehouses/warehouse-20260723T000948Z-24c46c1cda",
+      "reason": "referenced only by deployments outside the rollback-retention set",
+      "references": [
+        "deployment-20260723T002222Z-31da868819",
+        "deployment-20260723T004113Z-2f24e8d935",
+        "deployment-20260804T163418Z-2ad954a774"
+      ]
+    },
+    {
+      "allocated_bytes": 20569673728,
+      "disposition": "protected",
+      "path": "/srv/cms-data-platform/production-artifacts/warehouses/warehouse-20260811T021837Z-f44c147e30",
+      "reason": "referenced by the active rollback-retention set",
+      "references": [
+        "deployment-20260811T023712Z-b68e0ca9c3",
+        "deployment-20260811T031052Z-73cea84b1b",
+        "deployment-20260811T041229Z-8eee0d7afd",
+        "deployment-20260811T050116Z-3eb99c92bf",
+        "deployment-20260811T135930Z-2c3fb4878d",
+        "deployment-20260811T140024Z-0f0d1daad1",
+        "deployment-20260811T141921Z-b26c3f3d25",
+        "deployment-20260811T145509Z-187674a921",
+        "deployment-20260811T155814Z-6baa26aa69",
+        "deployment-20260814T002255Z-11131e3630"
+      ]
+    },
+    {
+      "allocated_bytes": 20951355392,
+      "disposition": "protected",
+      "path": "/srv/cms-data-platform/production-artifacts/warehouses/warehouse-20260814T025428Z-5dac630227",
+      "reason": "referenced by the active rollback-retention set",
+      "references": [
+        "deployment-20260814T160153Z-45ab9d2d38",
+        "deployment-20260814T172445Z-3cd965d04e"
+      ]
+    },
+    {
+      "allocated_bytes": 42536947712,
+      "disposition": "review_candidate",
+      "path": "/srv/cms-data-platform/refresh-20260721",
+      "reason": "refresh workspace; confirm no active job and preserve required evidence",
+      "references": []
+    },
+    {
+      "allocated_bytes": 8192,
+      "disposition": "manual_review_only",
+      "path": "/srv/cms-data-platform/data/releases/warehouse-20260720T231532Z-5720af87e9",
+      "reason": "staging release; validate manifest and promotion provenance before cleanup",
+      "references": []
+    },
+    {
+      "allocated_bytes": 8192,
+      "disposition": "manual_review_only",
+      "path": "/srv/cms-data-platform/data/releases/warehouse-20260720T234355Z-3714de5ed1",
+      "reason": "staging release; validate manifest and promotion provenance before cleanup",
+      "references": []
+    },
+    {
+      "allocated_bytes": 8192,
+      "disposition": "manual_review_only",
+      "path": "/srv/cms-data-platform/data/releases/warehouse-20260720T234541Z-249349167d",
+      "reason": "staging release; validate manifest and promotion provenance before cleanup",
+      "references": []
+    },
+    {
+      "allocated_bytes": 6519287808,
+      "disposition": "manual_review_only",
+      "path": "/srv/cms-data-platform/data/releases/warehouse-20260720T235355Z-684f3cd62d",
+      "reason": "staging release; validate manifest and promotion provenance before cleanup",
+      "references": []
+    },
+    {
+      "allocated_bytes": 8192,
+      "disposition": "manual_review_only",
+      "path": "/srv/cms-data-platform/data/releases/warehouse-20260811T015641Z-98534c5fba",
+      "reason": "staging release; validate manifest and promotion provenance before cleanup",
+      "references": []
+    },
+    {
+      "allocated_bytes": 16384,
+      "disposition": "manual_review_only",
+      "path": "/srv/cms-data-platform/data/releases/warehouse-20260811T020659Z-5f0138b3a1",
+      "reason": "staging release; validate manifest and promotion provenance before cleanup",
+      "references": []
+    },
+    {
+      "allocated_bytes": 20569686016,
+      "disposition": "protected",
+      "path": "/srv/cms-data-platform/data/releases/warehouse-20260811T021837Z-f44c147e30",
+      "reason": "warehouse release belongs to the active rollback-retention set",
+      "references": []
+    },
+    {
+      "allocated_bytes": 20951375872,
+      "disposition": "protected",
+      "path": "/srv/cms-data-platform/data/releases/warehouse-20260814T025428Z-5dac630227",
+      "reason": "warehouse release belongs to the active rollback-retention set",
+      "references": []
+    },
+    {
+      "allocated_bytes": 5947752448,
+      "disposition": "protected",
+      "path": "/srv/cms-data-platform/backups/20260720T225600Z-active-baseline",
+      "reason": "verified baseline; retain until off-host recovery policy and restore proof exist",
+      "references": []
+    },
+    {
+      "allocated_bytes": 20091269120,
+      "disposition": "protected",
+      "path": "/srv/cms-data-platform/backups/20260811T015700Z-radar-serving-baseline",
+      "reason": "verified baseline; retain until off-host recovery policy and restore proof exist",
+      "references": []
+    }
+  ],
+  "platform_root": "/srv/cms-data-platform",
+  "production_root": "/srv/cms-data-platform/production",
+  "promotion_capacity_gate": {
+    "allowed": true,
+    "projected_used_percent": 84.29,
+    "reason": "capacity and rollback floor satisfy the configured gate",
+    "required_candidate_bytes": 0
+  },
+  "read_only": true,
+  "rollback_policy": {
+    "floor_met": true,
+    "keep_active": 1,
+    "keep_previous_validated": 2,
+    "problems": [],
+    "protected_deployment_ids": [
+      "deployment-20260814T160153Z-45ab9d2d38",
+      "deployment-20260811T155814Z-6baa26aa69",
+      "deployment-20260811T145509Z-187674a921"
+    ]
+  },
+  "schema_version": 1,
+  "summary": {
+    "confirmed_reclaimable_bytes": 0,
+    "note": "candidate bytes are allocated under review paths, not guaranteed reclaimable",
+    "review_candidate_allocated_bytes": 95418122240,
+    "review_candidate_count": 58
+  }
+}

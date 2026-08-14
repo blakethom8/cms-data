@@ -1,0 +1,56 @@
+{
+  "checks": {
+    "data_conditional": true,
+    "data_etag": true,
+    "data_status": true,
+    "release_conditional_is_fresh": true,
+    "release_has_no_etag": true,
+    "release_identity": true,
+    "release_no_store": true,
+    "release_status": true,
+    "release_unverified_in_rehearsal": true
+  },
+  "data_conditional_status": 304,
+  "data_etag": "\"deployment-20260814T172445Z-3cd965d04e:3\"",
+  "deployment_id": "deployment-20260814T172445Z-3cd965d04e",
+  "release": {
+    "build": {
+      "checksum": "bf7d2381c8c9a683497a7dcc5d64c87ccfb3359fe5ee77d61e74ca3bffb1fa02",
+      "pipeline_ref": "bc7b114187071691f55bb18bf182c3a3477a78bd",
+      "warehouse_release_id": "warehouse-20260814T025428Z-5dac630227"
+    },
+    "compatibility": "current",
+    "promoted_at": null,
+    "release_id": "deployment-20260814T172445Z-3cd965d04e",
+    "representation_version": 3,
+    "source_vintages": {
+      "aact_clinical_trials_snapshot": "2026-07-21",
+      "cms_dac_national": "2026-07-31",
+      "cms_dme_by_referring_provider": "2023-01-01/2023-12-31",
+      "cms_hospital_enrollments": "2026-05-01/2026-05-31",
+      "cms_order_and_referring": "2026-07-12/2026-07-18",
+      "cms_part_d_by_provider": "2024-01-01/2024-12-31",
+      "cms_part_d_by_provider_and_drug": "2024-01-01/2024-12-31",
+      "cms_pecos_practice_location": "2026-01-01/2026-03-31",
+      "cms_pecos_public_provider_enrollment": "2026-01-01/2026-03-31",
+      "cms_pecos_reassignment": "2026-01-01/2026-03-31",
+      "cms_physician_by_provider": "2024-01-01/2024-12-31",
+      "cms_physician_by_provider_and_service": "2024-01-01/2024-12-31",
+      "cms_qpp_experience": "2024-01-01/2024-12-31",
+      "cms_revalidation_group_reassignment": "2026-07-01/2026-07-31",
+      "nppes_monthly_v2": "2026-07-13",
+      "nppes_weekly_incremental_v2": "2026-07-27/2026-08-02",
+      "open_payments_general": "2025-01-01/2025-12-31",
+      "open_payments_ownership": "2025-01-01/2025-12-31",
+      "open_payments_research": "2025-01-01/2025-12-31"
+    },
+    "verified_at": null
+  },
+  "release_conditional_status": 200,
+  "release_headers": {
+    "cache_control": "no-store",
+    "etag": null
+  },
+  "schema_version": 1,
+  "state": "passed"
+}

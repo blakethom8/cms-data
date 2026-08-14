@@ -1,0 +1,18 @@
+{
+  "candidate_changed_table_counts": {
+    "raw_dac_national": 3388151,
+    "serving_practice_provider_sites": 3212860
+  },
+  "derivation": {
+    "rule": "canonical query-authorized invariant smoke counts; candidate changed tables are validated by sealed release/comparison and direct read-only count evidence",
+    "supersedes_expected_table_counts_sha256": "ecf66862699ae07bdfaf5f6e0fc16b4a05e915db8ef41316a044815878b96070"
+  },
+  "schema_version": 1,
+  "smoke_table_counts": {
+    "core_providers": 7395713,
+    "nppes_radar_events": 69374,
+    "nppes_radar_provider_state": 7406196,
+    "nppes_radar_releases": 4,
+    "raw_nppes": 7404601
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "rollback_available": true,
+  "selected_deployment_id": "deployment-20260814T172445Z-3cd965d04e",
+  "smoke_evidence": "/srv/cms-data-platform/production/evidence/deployment-20260814T172445Z-3cd965d04e/smoke.json",
+  "state": "promoted"
+}
