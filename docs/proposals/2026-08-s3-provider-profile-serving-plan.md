@@ -62,6 +62,9 @@ The builder command is:
   --baseline-warehouse-release-id <validated-release-id> \
   --backup-manifest <verified-backup-manifest.json> \
   --data-year <year> \
+  --reassignment-run-id <verified-managed-run-id> \
+  --claims-service-run-id <verified-managed-run-id> \
+  --claims-drug-run-id <verified-managed-run-id> \
   --code-commit <full-40-character-commit> \
   --environment staging \
   --json
@@ -141,8 +144,11 @@ The combined staging command is:
 
 It builds all six tables in one transaction and uses
 `serving_provider_profile_complete_additive_v1`, which permits exactly those six tables to differ
-from the verified baseline and fingerprints every invariant table. The production manager does not
-authorize that policy. No candidate, preparation, or cutover has occurred for this slice.
+from the verified baseline and fingerprints every invariant table. When an older baseline omitted
+the reassignment or claims-detail source IDs, each explicit managed run is revalidated against its
+retained artifact and the baseline raw table's sole run, period, and row count before the candidate
+can inherit it. The production manager does not authorize this policy. No successful candidate,
+preparation, or cutover has occurred for this slice.
 
 ## S3.3 — explicit authorization and cutover
 
