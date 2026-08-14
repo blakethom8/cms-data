@@ -70,6 +70,48 @@ CREATE INDEX IF NOT EXISTS idx_practice_locations_group ON practice_locations(gr
 
 
 ------------------------------------------------------------
+-- S2 serving table: CMS-enrollment practice search
+-- Grain: one normalized DAC site × organization/solo key × provider NPI
+------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS serving_practice_provider_sites (
+    site_key                  VARCHAR(64) NOT NULL,
+    addr_key                  VARCHAR NOT NULL,
+    group_key                 VARCHAR NOT NULL,
+    npi                       VARCHAR(10) NOT NULL,
+    org_pac_id                VARCHAR,
+    practice_name             VARCHAR(255),
+    group_size_national       INTEGER,
+    address                   VARCHAR(255) NOT NULL,
+    city                      VARCHAR(100) NOT NULL,
+    state                     VARCHAR(2) NOT NULL,
+    zip5                      VARCHAR(5) NOT NULL,
+    phone                     VARCHAR(30),
+    specialties               VARCHAR[] NOT NULL,
+    first_name                VARCHAR(100),
+    last_name                 VARCHAR(255),
+    latitude                  DOUBLE,
+    longitude                 DOUBLE,
+    partb_payments            DOUBLE,
+    partd_drug_cost           DOUBLE,
+    dac_source_data_periods   VARCHAR[] NOT NULL,
+    dac_source_run_ids        VARCHAR[] NOT NULL,
+    partb_source_data_periods VARCHAR[] NOT NULL,
+    partb_source_run_ids      VARCHAR[] NOT NULL,
+    partd_source_data_periods VARCHAR[] NOT NULL,
+    partd_source_run_ids      VARCHAR[] NOT NULL,
+    data_year                 INTEGER NOT NULL,
+    PRIMARY KEY (site_key, npi)
+);
+
+CREATE INDEX IF NOT EXISTS idx_serving_practice_sites_state
+    ON serving_practice_provider_sites(state);
+CREATE INDEX IF NOT EXISTS idx_serving_practice_sites_zip5
+    ON serving_practice_provider_sites(zip5);
+CREATE INDEX IF NOT EXISTS idx_serving_practice_sites_npi
+    ON serving_practice_provider_sites(npi);
+
+
+------------------------------------------------------------
 -- Tables 2b/2c: PECOS benefit-reassignment relationships
 -- Sources: PPEF enrollment + reassignment + practice location
 ------------------------------------------------------------

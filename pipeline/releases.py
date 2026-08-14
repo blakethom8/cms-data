@@ -32,7 +32,7 @@ from .manifests import (
     RunManifest,
     ValidationState,
 )
-from .mart_contracts import validate_mart_contracts
+from .mart_contracts import MART_CONTRACT_BY_TABLE, validate_mart_contracts
 
 WAREHOUSE_RELEASE_SCHEMA_VERSION = 2
 SUPPORTED_WAREHOUSE_RELEASE_SCHEMA_VERSIONS = frozenset({1, 2})
@@ -79,6 +79,9 @@ PPEF_CHANGED_TABLES = frozenset(
         "pecos_provider_organizations",
         "pecos_enrollment_practice_locations",
     }
+)
+SERVING_PRACTICE_CHANGED_TABLES = frozenset(
+    {"serving_practice_provider_sites"}
 )
 RADAR_SOURCE_IDS = frozenset(
     {"nppes_monthly_v2", "nppes_weekly_incremental_v2"}
@@ -1789,6 +1792,155 @@ def build_ppef_warehouse_release(
     )
 
 
+def build_serving_practice_warehouse_release(
+    *,
+    data_root: Path,
+    baseline_warehouse_release_id: str,
+    backup_manifest_path: Path,
+    data_year: int,
+    code_commit: str | None = None,
+    memory_limit_gb: int = 12,
+    threads: int = 1,
+) -> BuildResult:
+    """Build the practice-search serving mart on an immutable baseline copy.
+
+    This targeted scope acquires no new source data. It therefore inherits the
+    exact source-run identity and source periods from a named, validated
+    baseline release whose content digest must match the verified backup.
+    """
+    _validate_targeted_build_resources(memory_limit_gb, threads)
+    if data_year < 2000 or data_year > 2100:
+        raise ReleaseError("Serving mart data year must be between 2000 and 2100")
+    baseline, baseline_sha, baseline_bytes = _load_backup_manifest(backup_manifest_path)
+    commit = code_commit or pipeline_commit()
+    if commit is None:
+        raise ReleaseError("A full pipeline Git commit is required to build a release")
+    release_store_path = _release_store_path(data_root)
+    document = WarehouseReleaseStore(release_store_path).load()
+    baseline_release = _find_release(document, baseline_warehouse_release_id)
+    if baseline_release.validation_state != ValidationState.PASSED:
+        raise ReleaseError("Serving mart baseline release has not passed validation")
+    if baseline_release.sha256 != baseline_sha:
+        raise ReleaseError(
+            "Serving mart backup SHA-256 does not match the named baseline release"
+        )
+    source_periods = baseline_release.validation_details.get("source_periods")
+    if not isinstance(source_periods, dict):
+        raise ReleaseError("Serving mart baseline lacks source-period provenance")
+    required_period_sources = MART_CONTRACT_BY_TABLE[
+        "serving_practice_provider_sites"
+    ].source_ids
+    if any(
+        not isinstance(source_periods.get(source_id), str)
+        or not source_periods[source_id].strip()
+        for source_id in required_period_sources
+    ):
+        raise ReleaseError("Serving mart baseline lacks required Part B/Part D periods")
+
+    identity = hashlib.sha256(
+        f"serving_practice_provider_sites\0{baseline_warehouse_release_id}".encode()
+    ).hexdigest()
+    warehouse_release_id = make_warehouse_release_id(identity, commit)
+    release_dir = data_root / "releases" / warehouse_release_id
+    database_path = release_dir / "warehouse.duckdb"
+    partial_path = release_dir / "warehouse.duckdb.partial"
+    spill_directory = data_root / "staging" / "duckdb-spill" / warehouse_release_id
+
+    with _exclusive_lock(data_root / "locks" / "build.lock"):
+        release_dir.mkdir(parents=True, exist_ok=False)
+        release = WarehouseRelease(
+            warehouse_release_id=warehouse_release_id,
+            created_at=utc_now(),
+            source_run_ids=baseline_release.source_run_ids,
+            pipeline_code_commit=commit,
+            baseline_path=str(baseline),
+            baseline_sha256=baseline_sha,
+            database_path=str(database_path.relative_to(data_root)),
+            duckdb_version=duckdb.__version__,
+        )
+        document.releases.append(release)
+        _save_release_document(data_root, document)
+        try:
+            _copy_verified_baseline(
+                baseline,
+                partial_path,
+                expected_sha256=baseline_sha,
+                expected_bytes=baseline_bytes,
+            )
+            connection = duckdb.connect(str(partial_path), read_only=False)
+            try:
+                _configure_targeted_build_resources(
+                    connection,
+                    memory_limit_gb=memory_limit_gb,
+                    threads=threads,
+                    spill_directory=spill_directory,
+                )
+                from .transform import build_serving_practice_provider_sites
+
+                connection.execute("BEGIN TRANSACTION")
+                try:
+                    row_count = build_serving_practice_provider_sites(
+                        connection, data_year
+                    )
+                    contract_validation = validate_mart_contracts(
+                        connection,
+                        source_periods=source_periods,
+                        contracts=(
+                            MART_CONTRACT_BY_TABLE[
+                                "serving_practice_provider_sites"
+                            ],
+                        ),
+                    )
+                    connection.execute("COMMIT")
+                except Exception:
+                    connection.execute("ROLLBACK")
+                    raise
+                table_counts = {"serving_practice_provider_sites": row_count}
+                release.validation_details = {
+                    "release_scope": "targeted_additive",
+                    "comparison_policy": "serving_practice_additive_v1",
+                    "baseline_warehouse_release_id": baseline_warehouse_release_id,
+                    "source_periods": dict(sorted(source_periods.items())),
+                    "changed_tables": sorted(SERVING_PRACTICE_CHANGED_TABLES),
+                    "serving_mart_counts": table_counts,
+                    "mart_contract_validation": contract_validation,
+                    "resource_limits": {
+                        "memory_limit_gb": memory_limit_gb,
+                        "threads": threads,
+                        "spill_directory": str(spill_directory),
+                        "preserve_insertion_order": False,
+                    },
+                }
+                connection.execute("CHECKPOINT")
+            finally:
+                connection.close()
+
+            release.byte_size = partial_path.stat().st_size
+            release.sha256 = sha256_file(partial_path)
+            release.table_counts = table_counts
+            release.validation_state = ValidationState.PASSED
+            release.validation_timestamp = utc_now()
+            os.replace(partial_path, database_path)
+            os.chmod(database_path, 0o440)
+            _save_release_document(data_root, document)
+            try:
+                spill_directory.rmdir()
+            except OSError:
+                pass
+        except Exception as error:
+            release.validation_state = ValidationState.FAILED
+            release.error_summary = safe_error(error)
+            _save_release_document(data_root, document)
+            raise ReleaseError(release.error_summary) from error
+
+    return BuildResult(
+        release=release,
+        database_path=database_path,
+        release_manifest_path=_release_manifest_path(data_root, warehouse_release_id),
+        release_store_path=release_store_path,
+    )
+
+
 def build_full_platform_warehouse_release(
     *,
     data_root: Path,
@@ -2095,10 +2247,75 @@ def _database_table_counts(
     return counts
 
 
+def _table_logical_fingerprint(
+    connection: duckdb.DuckDBPyConnection, table: str
+) -> dict[str, object]:
+    """Return an order-independent logical signature for comparison evidence."""
+    columns = connection.execute(
+        """
+        SELECT column_name, data_type, is_nullable, column_default
+        FROM information_schema.columns
+        WHERE table_schema = 'main' AND table_name = ?
+        ORDER BY ordinal_position
+        """,
+        [table],
+    ).fetchall()
+    schema_sha256 = hashlib.sha256(
+        json.dumps(columns, separators=(",", ":"), default=str).encode()
+    ).hexdigest()
+    quoted = table.replace('"', '""')
+    row = connection.execute(
+        f"""
+        SELECT count(*),
+               coalesce(sum(hash(t)::HUGEINT), 0),
+               coalesce(bit_xor(hash(t)), 0),
+               coalesce(min(hash(t)), 0),
+               coalesce(max(hash(t)), 0)
+        FROM "{quoted}" t
+        """
+    ).fetchone()
+    return {
+        "schema_sha256": schema_sha256,
+        "row_count": int(row[0]),
+        "row_hash_sum": str(row[1]),
+        "row_hash_xor": str(row[2]),
+        "row_hash_min": str(row[3]),
+        "row_hash_max": str(row[4]),
+    }
+
+
 def _comparison_policy(
     release: WarehouseRelease,
 ) -> tuple[str, frozenset[str], dict[str, int]]:
     """Select the exact source-owned table set for a release comparison."""
+    if release.validation_details.get("comparison_policy") == "serving_practice_additive_v1":
+        changed_tables = release.validation_details.get("changed_tables")
+        evidence = release.validation_details.get("serving_mart_counts")
+        baseline_release_id = release.validation_details.get(
+            "baseline_warehouse_release_id"
+        )
+        declared_changed_tables = (
+            set(changed_tables) if isinstance(changed_tables, list) else set()
+        )
+        if declared_changed_tables != set(SERVING_PRACTICE_CHANGED_TABLES):
+            raise ReleaseError("Serving mart release has an invalid changed-table allowlist")
+        if not isinstance(baseline_release_id, str) or not baseline_release_id:
+            raise ReleaseError("Serving mart release lacks its baseline release identity")
+        if not isinstance(evidence, dict) or set(evidence) != set(
+            SERVING_PRACTICE_CHANGED_TABLES
+        ):
+            raise ReleaseError("Serving mart release lacks exact row-count evidence")
+        try:
+            expected_counts = {table: int(count) for table, count in evidence.items()}
+        except (TypeError, ValueError) as error:
+            raise ReleaseError("Serving mart row-count evidence is invalid") from error
+        if any(count <= 0 for count in expected_counts.values()):
+            raise ReleaseError("Serving mart row-count evidence must be positive")
+        return (
+            "serving_practice_additive_v1",
+            SERVING_PRACTICE_CHANGED_TABLES,
+            expected_counts,
+        )
     source_periods = release.validation_details.get("source_periods")
     source_ids = set(source_periods) if isinstance(source_periods, dict) else set()
     if source_ids == RADAR_SOURCE_IDS:
@@ -2177,6 +2394,23 @@ def compare_warehouse_release(
         try:
             baseline_counts = _database_table_counts(baseline_connection)
             candidate_counts = _database_table_counts(candidate_connection)
+            table_names = set(baseline_counts) | set(candidate_counts)
+            invariant_tables = sorted(table_names - allowed_changed_tables)
+            common_invariant_tables = sorted(
+                set(baseline_counts) & set(candidate_counts) & set(invariant_tables)
+            )
+            if policy_name == "serving_practice_additive_v1":
+                baseline_fingerprints = {
+                    table: _table_logical_fingerprint(baseline_connection, table)
+                    for table in common_invariant_tables
+                }
+                candidate_fingerprints = {
+                    table: _table_logical_fingerprint(candidate_connection, table)
+                    for table in common_invariant_tables
+                }
+            else:
+                baseline_fingerprints = {}
+                candidate_fingerprints = {}
             representatives = candidate_connection.execute(
                 """
                 SELECT npi, hospital_npi, hospital_name, hospital_state,
@@ -2195,16 +2429,20 @@ def compare_warehouse_release(
         if candidate_identity != (candidate.stat().st_size, candidate.stat().st_mtime_ns):
             raise ReleaseError("Comparison candidate changed during its read-only inspection")
 
-        table_names = set(baseline_counts) | set(candidate_counts)
-        invariant_tables = sorted(table_names - allowed_changed_tables)
         unexpected_differences = [
             {
                 "table": table,
                 "baseline_rows": baseline_counts.get(table),
                 "candidate_rows": candidate_counts.get(table),
+                "reason": (
+                    "row_count"
+                    if baseline_counts.get(table) != candidate_counts.get(table)
+                    else "logical_fingerprint"
+                ),
             }
             for table in invariant_tables
             if baseline_counts.get(table) != candidate_counts.get(table)
+            or baseline_fingerprints.get(table) != candidate_fingerprints.get(table)
         ]
         changed_tables = {
             table: {
@@ -2259,6 +2497,7 @@ def compare_warehouse_release(
                 "byte_size": candidate.stat().st_size,
             },
             "unchanged_table_count": len(invariant_tables),
+            "invariant_logical_fingerprints_checked": len(baseline_fingerprints),
             "changed_tables": changed_tables,
             "required_candidate_counts": required_counts,
             "unexpected_differences": unexpected_differences,

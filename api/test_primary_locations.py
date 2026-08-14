@@ -1,10 +1,17 @@
 """NPPES-primary location attribution contracts for Medicare exploration."""
 
+import sys
+from pathlib import Path
+
 import duckdb
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPOSITORY_ROOT))
+
 from practices import get_practices_router
+from pipeline.transform import build_serving_practice_provider_sites
 
 
 def _database() -> duckdb.DuckDBPyConnection:
@@ -310,10 +317,34 @@ def _database() -> duckdb.DuckDBPyConnection:
     return connection
 
 
-def _client(connection: duckdb.DuckDBPyConnection) -> TestClient:
+def _client(
+    connection: duckdb.DuckDBPyConnection, *, cms_backend: str = "raw"
+) -> TestClient:
     app = FastAPI()
-    app.include_router(get_practices_router(lambda: connection))
+    app.include_router(
+        get_practices_router(
+            lambda: connection, cms_enrollment_search_backend=cms_backend
+        )
+    )
     return TestClient(app)
+
+
+def _build_serving_mart(connection: duckdb.DuckDBPyConnection) -> None:
+    connection.execute(
+        """
+        ALTER TABLE raw_dac_national ADD COLUMN source_run_id VARCHAR DEFAULT 'dac-run';
+        ALTER TABLE raw_dac_national ADD COLUMN source_data_period VARCHAR DEFAULT '2026-07';
+        ALTER TABLE raw_physician_by_provider ADD COLUMN source_run_id VARCHAR
+            DEFAULT 'partb-run';
+        ALTER TABLE raw_physician_by_provider ADD COLUMN source_data_period VARCHAR
+            DEFAULT '2024';
+        ALTER TABLE raw_part_d_by_provider ADD COLUMN source_run_id VARCHAR
+            DEFAULT 'partd-run';
+        ALTER TABLE raw_part_d_by_provider ADD COLUMN source_data_period VARCHAR
+            DEFAULT '2024';
+        """
+    )
+    build_serving_practice_provider_sites(connection, 2026)
 
 
 def test_specialties_uses_normalized_core_provider_catalog_and_caches_it():
@@ -579,6 +610,41 @@ def test_exact_radius_filters_bbox_corner_before_limit_for_both_location_bases()
         "100 PRIMARY ST"
     }
     assert all(item["distance_miles"] <= 5 for item in enrollment.json()["results"])
+
+
+def test_cms_serving_mart_is_byte_exact_with_raw_search_oracle():
+    connection = _database()
+    _build_serving_mart(connection)
+    raw = _client(connection, cms_backend="raw")
+    mart = _client(connection, cms_backend="mart")
+    cases = [
+        {"specialty": "Cardiology", "state": "CO"},
+        {
+            "specialties": "Cardiology,Dermatology",
+            "zips": "80202,80203",
+        },
+        {
+            "specialty": "Cardiology",
+            "lat": 39.74,
+            "lng": -104.99,
+            "radius_miles": 5,
+            "limit": 1,
+        },
+        {"specialty": "Cardiology", "zip": "99999"},
+    ]
+
+    for params in cases:
+        raw_response = raw.get(
+            "/practices/search",
+            params={**params, "location_basis": "cms_enrollment"},
+        )
+        mart_response = mart.get(
+            "/practices/search",
+            params={**params, "location_basis": "cms_enrollment"},
+        )
+
+        assert mart_response.status_code == raw_response.status_code == 200
+        assert mart_response.content == raw_response.content
 
 
 def test_proximity_requires_paired_coordinates_and_a_positive_bounded_radius():

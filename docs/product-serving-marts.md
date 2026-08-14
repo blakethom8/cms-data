@@ -1,11 +1,12 @@
 # Product serving marts
 
-> **Last reviewed: 2026-08-13** · **Status: S2 contract reference**
+> **Last reviewed: 2026-08-14** · **Status: S2 contract reference**
 
-The warehouse keeps raw publisher-shaped evidence separate from curated marts. The twelve registered
-marts below are source-oriented foundations; they are not automatically authorized replacements for
-request-time API logic. A route can switch to a mart only after response parity and a material p95 or
-resource improvement are proven under the S2 acceptance gates.
+The warehouse keeps raw publisher-shaped evidence separate from curated marts. The twelve
+source-oriented foundations below are joined by the first registered route-specific serving mart.
+Registration does not automatically authorize replacement of request-time API logic. A route can
+switch only after response parity and a material p95 or resource improvement are proven under the
+S2 acceptance gates.
 
 The executable source of truth is `pipeline/mart_contracts.py`. Release builds validate physical
 grain, required values, NPI domains, parent relationships, and source-manifest coverage. The
@@ -27,6 +28,22 @@ running row scans in the serving process.
 | `kol_summary` | One qualifying all-year summary per `npi` | Open Payments manifest; most recent program year is derived | Not yet authorized for industry serving |
 | `nppes_radar_provider_state` | One reconciled current state row per `npi` | Row release/period plus release manifest | Radar providers |
 | `nppes_radar_events` | One immutable event per `event_id` | Row release/period plus release manifest | Radar providers |
+
+The first route-specific contract is `serving_practice_provider_sites`, at one normalized DAC site
+and organization-or-solo key per NPI. It retains ordered specialty values, national Part B and Part
+D totals, geocodes, and row-level DAC source period/run IDs. Part B and Part D use managed release
+manifest provenance. The legacy DAC dependency is named honestly and must carry valid row
+provenance; it is not represented as a managed manifest source. The table remains unauthorized for
+production serving until isolated parity and performance gates pass.
+
+The targeted offline builder is `python -m pipeline.data_platform
+build-serving-practice-release`. It requires a named validated baseline release, a verified backup
+manifest with the same SHA-256, and the mart data year. The candidate inherits the baseline's exact
+source-run IDs and managed Part B/Part D periods, applies bounded DuckDB memory/thread settings,
+validates only the new mart contract, and seals a new database without promotion. Its comparison
+policy allowlists only `serving_practice_provider_sites`; every other table is checked with row
+counts, schema digests, and order-independent logical row fingerprints so equal counts cannot mask
+drift.
 
 ## Validation states
 

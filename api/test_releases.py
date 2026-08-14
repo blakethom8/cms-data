@@ -28,13 +28,18 @@ from pipeline.releases import (
     FULL_PLATFORM_WAREHOUSE_SOURCE_IDS,
     HOSPITAL_COLUMN_MAP,
     PPEF_CHANGED_TABLES,
+    SERVING_PRACTICE_CHANGED_TABLES,
     ReleaseError,
     WAREHOUSE_RELEASE_SCHEMA_VERSION,
+    WarehouseRelease,
+    WarehouseReleaseDocument,
     WarehouseReleaseStore,
     _rebuild_hospital_affiliations,
+    _table_logical_fingerprint,
     _validate_ppef_relationships,
     build_full_cms_warehouse_release,
     build_ppef_warehouse_release,
+    build_serving_practice_warehouse_release,
     build_warehouse_release,
     compare_warehouse_release,
     promote_staging_release,
@@ -503,6 +508,168 @@ def test_targeted_ppef_release_rejects_enrollment_period_mismatch(tmp_path: Path
             memory_limit_gb=1,
             threads=1,
         )
+
+
+def _serving_practice_baseline(tmp_path: Path) -> tuple[Path, Path, str]:
+    data_root = tmp_path / "serving-data"
+    baseline = tmp_path / "serving-baseline.duckdb"
+    connection = duckdb.connect(str(baseline))
+    try:
+        connection.execute(
+            '''
+            CREATE TABLE raw_dac_national (
+                "NPI" VARCHAR, "Provider First Name" VARCHAR,
+                "Provider Last Name" VARCHAR, pri_spec VARCHAR,
+                "Facility Name" VARCHAR, org_pac_id VARCHAR,
+                num_org_mem INTEGER, adr_ln_1 VARCHAR, "ZIP Code" VARCHAR,
+                "City/Town" VARCHAR, "State" VARCHAR,
+                "Telephone Number" VARCHAR, source_run_id VARCHAR,
+                source_data_period VARCHAR
+            );
+            INSERT INTO raw_dac_national VALUES
+                ('1234567890', 'Jamie', 'Rivera', 'Cardiology',
+                 'Cardio Group', 'PAC-1', 20, '10 MAIN ST', '90001',
+                 'Los Angeles', 'CA', '111', 'dac-run', '2026-07');
+
+            CREATE TABLE raw_physician_by_provider (
+                "Rndrng_NPI" VARCHAR, "Tot_Mdcr_Pymt_Amt" DOUBLE,
+                source_run_id VARCHAR, source_data_period VARCHAR
+            );
+            INSERT INTO raw_physician_by_provider VALUES
+                ('1234567890', 125.25, 'partb-run', '2024');
+
+            CREATE TABLE raw_part_d_by_provider (
+                "PRSCRBR_NPI" VARCHAR, "Tot_Drug_Cst" DOUBLE,
+                source_run_id VARCHAR, source_data_period VARCHAR
+            );
+            INSERT INTO raw_part_d_by_provider VALUES
+                ('1234567890', 50.75, 'partd-run', '2024');
+
+            CREATE TABLE address_geocode (addr_key VARCHAR, lat DOUBLE, lng DOUBLE);
+            INSERT INTO address_geocode VALUES ('10 MAIN ST|90001', 34.1, -118.2);
+
+            CREATE TABLE core_providers (npi VARCHAR);
+            INSERT INTO core_providers VALUES ('1234567890');
+            CREATE TABLE practice_locations (location_id VARCHAR);
+            INSERT INTO practice_locations VALUES ('location-1');
+            CREATE TABLE raw_hospital_enrollments (npi VARCHAR);
+            INSERT INTO raw_hospital_enrollments VALUES ('1999999999');
+            CREATE TABLE hospital_affiliations (
+                npi VARCHAR, hospital_npi VARCHAR, hospital_name VARCHAR,
+                hospital_state VARCHAR, affiliation_source VARCHAR,
+                confidence_level VARCHAR
+            );
+            INSERT INTO hospital_affiliations VALUES
+                ('1234567890', '1999999999', 'Example Hospital', 'CA',
+                 'fixture', 'high');
+            CREATE TABLE baseline_marker (value VARCHAR);
+            INSERT INTO baseline_marker VALUES ('preserved');
+            CHECKPOINT;
+            '''
+        )
+    finally:
+        connection.close()
+    digest = sha256_file(baseline)
+    backup_manifest = tmp_path / "serving-backup-manifest.json"
+    backup_manifest.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "backup_path": str(baseline),
+                "backup_identity": {"byte_size": baseline.stat().st_size},
+                "sha256": digest,
+                "validation": {"read_only_open": "passed"},
+            }
+        )
+    )
+    baseline_release_id = "warehouse-20260801T000000Z-baseline"
+    WarehouseReleaseStore(data_root / "warehouse-releases.json").save(
+        WarehouseReleaseDocument(
+            releases=[
+                WarehouseRelease(
+                    warehouse_release_id=baseline_release_id,
+                    created_at="2026-08-01T00:00:00Z",
+                    source_run_ids=("partb-run", "partd-run"),
+                    pipeline_code_commit=CODE_COMMIT,
+                    baseline_path=str(baseline),
+                    baseline_sha256=digest,
+                    database_path="releases/baseline/warehouse.duckdb",
+                    byte_size=baseline.stat().st_size,
+                    sha256=digest,
+                    validation_details={
+                        "source_periods": {
+                            "cms_physician_by_provider": "2024",
+                            "cms_part_d_by_provider": "2024",
+                        }
+                    },
+                    validation_state=ValidationState.PASSED,
+                )
+            ]
+        )
+    )
+    return data_root, backup_manifest, baseline_release_id
+
+
+def test_targeted_serving_practice_release_inherits_baseline_provenance(
+    tmp_path: Path,
+) -> None:
+    data_root, backup_manifest, baseline_release_id = _serving_practice_baseline(
+        tmp_path
+    )
+
+    result = build_serving_practice_warehouse_release(
+        data_root=data_root,
+        baseline_warehouse_release_id=baseline_release_id,
+        backup_manifest_path=backup_manifest,
+        data_year=2026,
+        code_commit=CODE_COMMIT,
+        memory_limit_gb=1,
+        threads=1,
+    )
+    comparison = compare_warehouse_release(
+        data_root=data_root,
+        warehouse_release_id=result.release.warehouse_release_id,
+        backup_manifest_path=backup_manifest,
+    )
+
+    assert comparison["state"] == "passed"
+    assert comparison["comparison_policy"] == "serving_practice_additive_v1"
+    assert comparison["unexpected_differences"] == []
+    assert set(comparison["changed_tables"]) == SERVING_PRACTICE_CHANGED_TABLES
+    assert result.release.source_run_ids == ("partb-run", "partd-run")
+    assert result.release.table_counts == {"serving_practice_provider_sites": 1}
+    details = result.release.validation_details
+    assert details["baseline_warehouse_release_id"] == baseline_release_id
+    assert details["mart_contract_validation"]["passed"] is True
+    candidate = duckdb.connect(str(result.database_path), read_only=True)
+    try:
+        assert candidate.execute(
+            "SELECT value FROM baseline_marker"
+        ).fetchone()[0] == "preserved"
+        assert candidate.execute(
+            "SELECT specialties FROM serving_practice_provider_sites"
+        ).fetchone()[0] == ["Cardiology"]
+    finally:
+        candidate.close()
+
+
+def test_logical_fingerprint_detects_equal_count_content_drift() -> None:
+    left = duckdb.connect(":memory:")
+    right = duckdb.connect(":memory:")
+    try:
+        left.execute("CREATE TABLE evidence (npi VARCHAR, value INTEGER)")
+        right.execute("CREATE TABLE evidence (npi VARCHAR, value INTEGER)")
+        left.execute("INSERT INTO evidence VALUES ('1234567890', 1)")
+        right.execute("INSERT INTO evidence VALUES ('1234567890', 2)")
+
+        left_fingerprint = _table_logical_fingerprint(left, "evidence")
+        right_fingerprint = _table_logical_fingerprint(right, "evidence")
+    finally:
+        right.close()
+        left.close()
+
+    assert left_fingerprint["row_count"] == right_fingerprint["row_count"] == 1
+    assert left_fingerprint != right_fingerprint
 
 
 def test_build_release_copies_baseline_loads_source_and_records_provenance(
