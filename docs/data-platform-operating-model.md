@@ -64,6 +64,31 @@ was reached. Every source must pass these common gates before it can enter a pro
    evidence; a verified predecessor remains available; selection changes only `release-current`;
    and the bounded smoke/automatic rollback path is ready.
 
+### Retained-source reconciliation
+
+A retained source may be missing from the current staging manifest store even though its raw rows
+and run/period columns are present in an immutable selected warehouse. Do not repair that condition
+by editing a warehouse release manifest. Use `adopt-validated-source-run` only when all of the
+following independent evidence exists:
+
+- the original per-run acquisition manifest is passed and remains in its original `not_promoted`
+  state;
+- deployment-scoped production evidence proves the same immutable run was actively installed;
+- the retained source is an explicit regular file and reproduces the manifest's size, SHA-256,
+  encoding, schema fingerprint, source row count, and invalid-identifier count; and
+- the operator supplies the exact expected source ID and run ID.
+
+Adoption is staging-only. It copies the bytes into `runs/<source-id>/<run-id>/source.csv`, seals the
+artifact read-only, writes the per-run manifest, and adds the exact acquisition manifest to the
+managed store under a lock. It is idempotent and fails on any existing path or manifest conflict.
+It does not build, promote, prepare, authorize, or alter production.
+
+A targeted builder may use an adopted run to reconcile missing release-level provenance only after
+it revalidates the managed artifact and proves that the baseline raw table contains exactly that
+run, source period, and manifest row count. The candidate must add the run and period to its own
+release evidence and record the reconciliation explicitly. A disagreement is a hard stop requiring
+a new full reconciliation candidate or operator investigation.
+
 ### Candidate scope policy
 
 Every promotion produces a complete, immutable DuckDB candidate, but a complete candidate does

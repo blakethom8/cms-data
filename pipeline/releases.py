@@ -2185,6 +2185,7 @@ def build_provider_profile_core_warehouse_release(
     baseline_warehouse_release_id: str,
     backup_manifest_path: Path,
     data_year: int,
+    reassignment_run_id: str | None = None,
     code_commit: str | None = None,
     memory_limit_gb: int = 12,
     threads: int = 1,
@@ -2216,10 +2217,71 @@ def build_provider_profile_core_warehouse_release(
         raise ReleaseError(
             "Provider-profile serving backup SHA-256 does not match the named baseline release"
         )
-    source_periods = baseline_release.validation_details.get("source_periods")
-    if not isinstance(source_periods, dict):
+    baseline_source_periods = baseline_release.validation_details.get("source_periods")
+    if not isinstance(baseline_source_periods, dict):
         raise ReleaseError(
             "Provider-profile serving baseline lacks source-period provenance"
+        )
+    source_periods = dict(baseline_source_periods)
+    source_run_ids = baseline_release.source_run_ids
+    reconciled_source_runs: list[dict[str, object]] = []
+    if reassignment_run_id is not None:
+        from .candidate_sources import verified_cms_runs
+
+        verified = verified_cms_runs(data_root, (reassignment_run_id,))
+        manifest = verified[0][0]
+        if manifest.source_id != "cms_revalidation_group_reassignment":
+            raise ReleaseError(
+                "Provider-profile reassignment run has the wrong source: "
+                f"{manifest.source_id}"
+            )
+        try:
+            baseline_connection = duckdb.connect(str(baseline), read_only=True)
+            try:
+                raw_provenance = baseline_connection.execute(
+                    """
+                    SELECT source_run_id, source_data_period, count(*)
+                    FROM raw_reassignment
+                    GROUP BY source_run_id, source_data_period
+                    ORDER BY source_run_id, source_data_period
+                    """
+                ).fetchall()
+            finally:
+                baseline_connection.close()
+        except duckdb.Error as error:
+            raise ReleaseError(
+                "Provider-profile baseline raw_reassignment provenance is unreadable"
+            ) from error
+        expected_rows = manifest.row_counts.get("source_rows")
+        expected_provenance = (
+            manifest.run_id,
+            manifest.source_data_period,
+            expected_rows,
+        )
+        if raw_provenance != [expected_provenance]:
+            raise ReleaseError(
+                "Provider-profile baseline raw_reassignment provenance does not "
+                "match the verified source manifest"
+            )
+        existing_period = source_periods.get(manifest.source_id)
+        if existing_period is not None and existing_period != manifest.source_data_period:
+            raise ReleaseError(
+                "Provider-profile baseline reassignment source period conflicts "
+                "with the verified source manifest"
+            )
+        source_periods[manifest.source_id] = manifest.source_data_period
+        source_run_ids = tuple(
+            dict.fromkeys((*source_run_ids, manifest.run_id))
+        )
+        reconciled_source_runs.append(
+            {
+                "source_id": manifest.source_id,
+                "run_id": manifest.run_id,
+                "source_data_period": manifest.source_data_period,
+                "raw_table": "raw_reassignment",
+                "raw_row_count": expected_rows,
+                "artifact_sha256": manifest.sha256,
+            }
         )
     contract_tables = tuple(sorted(PROVIDER_PROFILE_CORE_CHANGED_TABLES))
     required_period_sources = {
@@ -2260,7 +2322,7 @@ def build_provider_profile_core_warehouse_release(
     identity = hashlib.sha256(
         (
             "serving_provider_profile_core_tables\0"
-            f"{baseline_warehouse_release_id}"
+            f"{baseline_warehouse_release_id}\0{reassignment_run_id or ''}"
         ).encode()
     ).hexdigest()
     warehouse_release_id = make_warehouse_release_id(identity, commit)
@@ -2274,7 +2336,7 @@ def build_provider_profile_core_warehouse_release(
         release = WarehouseRelease(
             warehouse_release_id=warehouse_release_id,
             created_at=utc_now(),
-            source_run_ids=baseline_release.source_run_ids,
+            source_run_ids=source_run_ids,
             pipeline_code_commit=commit,
             baseline_path=str(baseline),
             baseline_sha256=baseline_sha,
@@ -2330,6 +2392,7 @@ def build_provider_profile_core_warehouse_release(
                     "source_periods": dict(sorted(source_periods.items())),
                     "changed_tables": sorted(PROVIDER_PROFILE_CORE_CHANGED_TABLES),
                     "serving_mart_counts": dict(sorted(table_counts.items())),
+                    "reconciled_source_runs": reconciled_source_runs,
                     **(
                         {
                             "smoke_table_counts": dict(

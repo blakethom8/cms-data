@@ -1,7 +1,9 @@
 # S3 provider-profile production-data preflight — 2026-08-14
 
-> **Decision:** source readiness passes, but capacity blocks candidate allocation. Production was
-> not changed. No staging candidate, production artifact, deployment, or route switch was created.
+> **Decision update:** source readiness passes and the approved exact cleanup removed the capacity
+> block. Candidate allocation is now paused on explicit reassignment-source provenance
+> reconciliation. Production traffic, the selected deployment, and its warehouse were not changed.
+> No staging candidate, production artifact, deployment, or route switch was created.
 
 ## Starting identity
 
@@ -13,7 +15,7 @@ deployment remained `deployment-20260814T201311Z-0325c353c9`, serving warehouse
 reported passed artifact integrity, a matching pointer and ledger, zero blocking transactions, no
 transition sentinel, and a healthy verified control plane.
 
-## Capacity gate
+## Initial capacity gate
 
 The official read-only retention preview reported:
 
@@ -60,8 +62,9 @@ raw API query resolves those values with DuckDB `any_value`, while the initial s
 used `max`. That could change the `reassignment_size` response for otherwise identical groups.
 
 The follow-up parity fix restores the raw oracle's aggregation for DAC group size and reassignment
-size and adds a duplicate-value fixture. This fix must merge and pass CI before a candidate build.
-Production remains on the raw profile backend regardless.
+size and adds a duplicate-value fixture. PR #67 merged that fix as
+`d2d08c484884deb7ce3d9433e4ff83b3849aacce`; its CI and the local full suite passed. Production
+remains on the raw profile backend regardless.
 
 ## Reviewed capacity-recovery candidates
 
@@ -86,14 +89,52 @@ duplicated provider-profile mart growth. This is only a planning estimate: after
 staging candidate, its exact byte size must be used for a fresh production-copy preview. A failed
 preview still stops preparation.
 
+## Approved cleanup outcome
+
+The named three-artifact set was subsequently approved, quarantined by exact path, health-checked,
+and removed. No active or rollback-floor warehouse was included. Before deletion, each artifact was
+proved unopen and either checksum-identical to a retained staging database or rebuildable from the
+retained July source snapshots and release evidence.
+
+The cleanup reclaimed approximately 47,182,209,024 filesystem bytes. The post-cleanup filesystem
+reported 256,145,379,328 used bytes and 91,697,414,144 available bytes. The official retention
+preview passed the active-plus-two rollback floor and reported 70.63% use. One baseline-sized
+candidate projects 76.57%; two baseline-sized copies project 82.50%, both below the 85% promotion
+block. The selected deployment remained `deployment-20260814T201311Z-0325c353c9`; its service PID,
+restart count, integrity check, and health endpoint remained stable.
+
+## Reassignment provenance reconciliation
+
+The selected staging release records complete NPPES and DAC periods but omits
+`cms_revalidation_group_reassignment` from both `source_periods` and `source_run_ids`, even though
+its `raw_reassignment` table contains exactly one run and period:
+
+- run `20260721T220859Z-0353abdb`;
+- period `2026-07-01/2026-07-31`; and
+- 3,361,139 rows.
+
+The original passed acquisition manifest and its 534,858,072-byte retained `source.csv` remain in
+the July refresh workspace. The artifact SHA-256 is
+`6b1443ae43a35855a3119fc5732b24c279320da60a43910e185bd65e5b514aed`. The selected production
+deployment's immutable source-manifest evidence independently records that same run as active.
+
+The safe recovery path is therefore adoption, not release-metadata editing. The staging-only
+`adopt-validated-source-run` command requires the original passed manifest, matching active
+production evidence, the exact expected source/run identifiers, and source bytes that reproduce the
+manifest's size, checksum, encoding, schema fingerprint, row count, and invalid-identifier count.
+It copies the artifact into an immutable managed run path and is idempotent. The provider-profile
+builder's optional `--reassignment-run-id` then revalidates that managed artifact and requires the
+baseline raw table's sole run, period, and row count to match before it can fill the missing release
+provenance. The candidate records the reconciliation in `reconciled_source_runs`.
+
 ## Next safe sequence
 
-1. Merge the raw-oracle aggregation fix and rerun the full suite.
-2. Obtain explicit approval for the named three-artifact cleanup, or add storage instead.
-3. Quarantine only the approved artifacts, verify production identity and health, then remove them
-   and record exact reclaimed filesystem bytes.
-4. Re-run the zero-byte and baseline-size capacity previews.
-5. Build one isolated provider-profile candidate from the selected staging release.
-6. Validate its exact three-table scope, contracts, invariant fingerprints, actual size, raw/mart
+1. Merge and deploy the tested source-adoption/reconciliation code to the staging operator path.
+2. Adopt only run `20260721T220859Z-0353abdb` using the retained acquisition manifest, retained
+   source bytes, and selected production deployment evidence.
+3. Re-run source verification and create a fresh verified backup manifest for the selected staging
+   baseline.
+4. Build one isolated provider-profile candidate with the explicit reassignment run.
+5. Validate its exact three-table scope, contracts, invariant fingerprints, actual size, raw/mart
    parity, query plans, and concurrency results.
-7. Stop before production preparation, policy authorization, or cutover and present the evidence.
+6. Stop before production preparation, policy authorization, or cutover and present the evidence.
