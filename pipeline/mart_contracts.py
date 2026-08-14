@@ -147,6 +147,105 @@ MART_CONTRACTS: tuple[MartSpec, ...] = (
         ),
     ),
     MartSpec(
+        table="serving_practice_nppes_provider_sites",
+        transform_ids=("build_serving_practice_nppes_tables",),
+        grain="one deterministic primary NPPES site per Medicare-participating provider NPI",
+        key_columns=("npi",),
+        upstream_tables=(
+            "raw_nppes",
+            "raw_physician_by_provider",
+            "raw_part_d_by_provider",
+            "address_geocode",
+        ),
+        source_ids=(
+            "nppes_monthly_v2",
+            "nppes_weekly_incremental_v2",
+            "cms_physician_by_provider",
+            "cms_part_d_by_provider",
+        ),
+        required_columns=(
+            "npi",
+            "addr_key",
+            "addr_norm",
+            "address",
+            "city",
+            "state",
+            "zip5",
+            "specialties",
+            "nppes_source_data_period",
+            "nppes_source_run_id",
+            "partb_source_data_periods",
+            "partb_source_run_ids",
+            "partd_source_data_periods",
+            "partd_source_run_ids",
+            "data_year",
+        ),
+        source_period_policy=(
+            "selected NPPES row and Part B/Part D values retain row run/period identity; "
+            "all contributing sources require release-manifest periods"
+        ),
+        provenance_scope="row_and_release_manifest",
+        kind="serving",
+        npi_parent_table=None,
+        authorized_routes=("/practices/search",),
+        row_validations=(
+            (
+                "invalid_state_or_zip",
+                "NOT regexp_full_match(state, '^[A-Z]{2}$') OR "
+                "NOT regexp_full_match(zip5, '^[0-9]{5}$')",
+            ),
+            ("empty_specialties", "len(specialties) = 0"),
+            (
+                "partb_value_without_provenance",
+                "partb_payments IS NOT NULL AND "
+                "(len(partb_source_data_periods) = 0 OR len(partb_source_run_ids) = 0)",
+            ),
+            (
+                "partd_value_without_provenance",
+                "partd_drug_cost IS NOT NULL AND "
+                "(len(partd_source_data_periods) = 0 OR len(partd_source_run_ids) = 0)",
+            ),
+        ),
+    ),
+    MartSpec(
+        table="serving_practice_nppes_org_memberships",
+        transform_ids=("build_serving_practice_nppes_tables",),
+        grain="one provider NPI by NPPES primary site and CMS organization context",
+        key_columns=("addr_key", "npi", "org_pac_id"),
+        upstream_tables=(
+            "serving_practice_nppes_provider_sites",
+            "raw_dac_national",
+        ),
+        source_ids=(
+            "nppes_monthly_v2",
+            "nppes_weekly_incremental_v2",
+            "cms_dac_national",
+        ),
+        required_columns=(
+            "addr_key",
+            "npi",
+            "org_pac_id",
+            "primary_address_match",
+            "dac_source_data_periods",
+            "dac_source_run_ids",
+            "data_year",
+        ),
+        source_period_policy=(
+            "membership retains DAC row run/period identity and the parent site retains "
+            "selected NPPES identity"
+        ),
+        provenance_scope="row_and_release_manifest",
+        kind="serving",
+        npi_parent_table="serving_practice_nppes_provider_sites",
+        authorized_routes=("/practices/search",),
+        row_validations=(
+            (
+                "missing_dac_provenance",
+                "len(dac_source_data_periods) = 0 OR len(dac_source_run_ids) = 0",
+            ),
+        ),
+    ),
+    MartSpec(
         table="utilization_metrics",
         transform_ids=("build_utilization_metrics",),
         grain="one provider NPI by metric year",

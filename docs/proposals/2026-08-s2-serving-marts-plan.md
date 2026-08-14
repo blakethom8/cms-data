@@ -1,7 +1,8 @@
 # S2 release-built serving marts plan
 
 > Status: S2.1-S2.4 complete; the explicitly approved production cutover completed successfully on
-> 2026-08-14 and the first practice-search serving mart is live
+> 2026-08-14 and the first practice-search serving mart is live. S2.5 NPPES-primary implementation
+> is complete and awaiting an isolated candidate; it is not a production cutover.
 >
 > Production state: code-only deployment `deployment-20260814T172445Z-3cd965d04e` is selected and
 > verified; S2 deployment `deployment-20260814T160153Z-45ab9d2d38` remains the rollback-ready
@@ -182,6 +183,29 @@ Proceed one measured slice at a time:
 5. Market ZIP/specialty/provider-site rollups, preserving distinct-NPI attribution so multi-door
    providers are never double counted.
 
+### S2.5 — NPPES-primary practice search
+
+The measured NPPES-primary state case is the next slice: its canonical plan took 497 ms and scanned
+193.2 million rows. It preserves the existing `/practices/search` contract and raw implementation,
+which makes parity independently testable without Provider Search RPC changes.
+
+The implementation uses two grains rather than flattening organization membership into provider
+rows:
+
+- `serving_practice_nppes_provider_sites`: one deterministic active NPPES address per Medicare NPI,
+  with ordered specialty values, national Part B/Part D measures, geocode, and NPPES/claims
+  run-period identity; and
+- `serving_practice_nppes_org_memberships`: one `addr_key × npi × org_pac_id` row with the DAC
+  organization context and run-period identity.
+
+Keeping membership separate prevents providers with several organization associations from
+duplicating national claims totals. The route's `auto` capability requires both table contracts and
+falls back to raw when either is absent or incomplete. Byte-exact fixture parity covers state,
+multi-specialty/multi-ZIP, proximity/limit, empty results, raw fallback, and a mart-only query after
+raw dependencies are made unavailable. An isolated production-data release builder, complete
+parity corpus, operator profiles, concurrency benchmark, capacity preview, and explicit cutover
+decision remain required. No production state changes in S2.5.
+
 Radar already uses release-built state/event tables and receives another mart only if its measured
 plan justifies one. Provider fuzzy search remains separate because precomputation must preserve its
 ranking and discovery-universe semantics.
@@ -194,6 +218,10 @@ ranking and discovery-universe semantics.
 - PR S2.3: practice serving-mart DDL, transform, lineage, targeted release policy, and parity oracle.
 - PR S2.4: isolated warehouse candidate, comparison evidence, exact-bundle smoke, and route-switch
   recommendation.
+- PR S2.5: NPPES-primary provider-site and organization-membership contracts, transforms, raw/mart
+  selector, and fixture parity.
+- PR S2.6: targeted additive release policy, isolated production-data candidate, parity and
+  performance evidence, capacity preview, and route-switch recommendation.
 
 Every PR is independently testable and reversible. No S2 PR authorizes a production cutover.
 

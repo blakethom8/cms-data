@@ -38,6 +38,7 @@ PopulationScope = Literal["selected_specialties", "all_specialties"]
 OrganizationScope = Literal["cms_address_pac", "nppes_primary_address"]
 SiteClassification = Literal["solo", "shared_unaffiliated", "organization_context"]
 CmsEnrollmentSearchBackend = Literal["raw", "mart", "auto"]
+NppesPrimarySearchBackend = Literal["raw", "mart", "auto"]
 CMS_PRACTICE_MART_QUERY_COLUMNS = frozenset(
     {
         "npi",
@@ -59,6 +60,36 @@ CMS_PRACTICE_MART_QUERY_COLUMNS = frozenset(
         "partd_drug_cost",
     }
 )
+NPPES_PRACTICE_MART_QUERY_COLUMNS = {
+    "serving_practice_nppes_provider_sites": frozenset(
+        {
+            "npi",
+            "addr_key",
+            "address",
+            "city",
+            "state",
+            "zip5",
+            "phone",
+            "first_name",
+            "last_name",
+            "specialties",
+            "latitude",
+            "longitude",
+            "partb_payments",
+            "partd_drug_cost",
+        }
+    ),
+    "serving_practice_nppes_org_memberships": frozenset(
+        {
+            "addr_key",
+            "npi",
+            "org_pac_id",
+            "practice_name",
+            "group_size_national",
+            "primary_address_match",
+        }
+    ),
+}
 
 # Search term -> pri_spec ILIKE patterns (CMS uses granular specialty labels).
 SPECIALTY_MAP: dict[str, list[str]] = {
@@ -621,7 +652,9 @@ def _site_profile_for_roster(
 
 
 def get_practices_router(
-    get_conn, cms_enrollment_search_backend: CmsEnrollmentSearchBackend | None = None
+    get_conn,
+    cms_enrollment_search_backend: CmsEnrollmentSearchBackend | None = None,
+    nppes_primary_search_backend: NppesPrimarySearchBackend | None = None,
 ):
     # Each application instance must close over its own connection factory. A
     # module-global router retains the first factory when tests or workers build
@@ -632,8 +665,14 @@ def get_practices_router(
     )
     if selected_cms_backend not in {"raw", "mart", "auto"}:
         raise ValueError("CMS_PRACTICE_SEARCH_BACKEND must be raw, mart, or auto")
+    selected_nppes_backend = nppes_primary_search_backend or os.getenv(
+        "NPPES_PRACTICE_SEARCH_BACKEND", "auto"
+    )
+    if selected_nppes_backend not in {"raw", "mart", "auto"}:
+        raise ValueError("NPPES_PRACTICE_SEARCH_BACKEND must be raw, mart, or auto")
     specialty_catalog: tuple[str, ...] | None = None
     cms_mart_available: bool | None = None
+    nppes_mart_available: bool | None = None
 
     def resolve_cms_backend() -> Literal["raw", "mart"]:
         """Select the mart only for an immutable warehouse that contains it.
@@ -663,6 +702,38 @@ def get_practices_router(
                 available_columns
             )
         return "mart" if cms_mart_available else "raw"
+
+    def resolve_nppes_backend() -> Literal["raw", "mart"]:
+        """Select both NPPES serving tables as one deployment-local capability."""
+        nonlocal nppes_mart_available
+        if selected_nppes_backend != "auto":
+            return selected_nppes_backend
+        if nppes_mart_available is None:
+            available: dict[str, set[str]] = {
+                table: set() for table in NPPES_PRACTICE_MART_QUERY_COLUMNS
+            }
+            rows = (
+                get_conn()
+                .execute(
+                    """
+                    select table_name, column_name
+                    from information_schema.columns
+                    where table_schema = 'main'
+                      and table_name in (
+                        'serving_practice_nppes_provider_sites',
+                        'serving_practice_nppes_org_memberships'
+                      )
+                    """
+                )
+                .fetchall()
+            )
+            for table, column in rows:
+                available[str(table)].add(str(column))
+            nppes_mart_available = all(
+                required.issubset(available[table])
+                for table, required in NPPES_PRACTICE_MART_QUERY_COLUMNS.items()
+            )
+        return "mart" if nppes_mart_available else "raw"
 
     def get_specialty_catalog() -> tuple[str, ...]:
         """Load and cache the normalized specialty catalog for this router."""
@@ -760,6 +831,9 @@ def get_practices_router(
         use_cms_mart = (
             location_basis == "cms_enrollment" and resolve_cms_backend() == "mart"
         )
+        use_nppes_mart = (
+            location_basis == "nppes_primary" and resolve_nppes_backend() == "mart"
+        )
 
         loc_clauses: list[str] = []
         loc_params: list = []
@@ -768,9 +842,9 @@ def get_practices_router(
             assert lat is not None and lng is not None
             dlat = radius_miles / 69.0
             dlng = radius_miles / (69.0 * max(0.1, abs(math.cos(math.radians(lat)))))
-            geo_alias = "m" if use_cms_mart else "ge"
-            geo_lat = "latitude" if use_cms_mart else "lat"
-            geo_lng = "longitude" if use_cms_mart else "lng"
+            geo_alias = "n" if use_nppes_mart else ("m" if use_cms_mart else "ge")
+            geo_lat = "latitude" if use_cms_mart or use_nppes_mart else "lat"
+            geo_lng = "longitude" if use_cms_mart or use_nppes_mart else "lng"
             loc_clauses.append(
                 f"{geo_alias}.{geo_lat} between ? and ? and "
                 f"{geo_alias}.{geo_lng} between ? and ?"
@@ -814,7 +888,7 @@ def get_practices_router(
         distance_filter = ""
         if proximity:
             assert lat is not None and lng is not None
-            distance_alias = "s" if use_cms_mart else "ge"
+            distance_alias = "s" if use_cms_mart or use_nppes_mart else "ge"
             distance_expression = f"""
                 case when {distance_alias}.lat is null or {distance_alias}.lng is null then null else
                     3959.0 * 2.0 * asin(sqrt(least(1.0, greatest(0.0,
@@ -826,6 +900,162 @@ def get_practices_router(
             """
             distance_params = [lat, lat, lng, radius_miles]
             distance_filter = "where distance_miles <= ?"
+
+        def nppes_search_response(rows: list[tuple]) -> PracticeSearchResponse:
+            results: list[PracticeResult] = []
+            for row in rows:
+                providers_here = int(row[8])
+                contexts = [
+                    OrganizationContext.model_validate(context)
+                    for context in (row[14] or [])
+                ]
+                unaffiliated = providers_here - int(row[15] or 0)
+                classification = classify_site(
+                    providers_here, unaffiliated, len(contexts)
+                )
+                results.append(
+                    PracticeResult(
+                        site_id=site_identifier(
+                            "nppes_primary", str(row[1]), str(row[4])
+                        ),
+                        requested_specialties=requested_specialties,
+                        organization_scope="nppes_primary_address",
+                        organization_contexts=contexts,
+                        unaffiliated_provider_count=unaffiliated,
+                        site_classification=classification,
+                        roster_npi_count=providers_here,
+                        address=row[1],
+                        city=row[2],
+                        state=row[3],
+                        zip5=row[4],
+                        phone=row[5],
+                        lat=row[6],
+                        lng=row[7],
+                        providers_here=providers_here,
+                        specialties=[value for value in (row[9] or []) if value],
+                        distance_miles=(
+                            round(row[10], 2) if row[10] is not None else None
+                        ),
+                        partb_payments=row[11],
+                        partd_drug_cost=row[12],
+                        solo_provider_name=(
+                            ((row[13] or "").strip() or None)
+                            if classification == "solo"
+                            else None
+                        ),
+                        location_basis="nppes_primary",
+                    )
+                )
+            total_available = int(rows[0][16]) if rows else 0
+            return PracticeSearchResponse(
+                specialty=requested_specialties[0],
+                requested_specialties=requested_specialties,
+                matched_patterns=patterns,
+                location=", ".join(loc_desc) or "anywhere",
+                total=total_available,
+                returned_count=len(results),
+                truncated=len(results) < total_available,
+                results=results,
+                location_basis="nppes_primary",
+            )
+
+        if location_basis == "nppes_primary" and use_nppes_mart:
+            mart_spec_pred = " OR ".join(
+                ["candidate_specialty ILIKE ?"] * len(patterns)
+            )
+            sql = f"""
+            with matched as materialized (
+                select n.*,
+                       list_filter(
+                           n.specialties,
+                           candidate_specialty -> {mart_spec_pred}
+                       ) matched_specialties
+                from serving_practice_nppes_provider_sites n
+            ),
+            attributed as materialized (
+                select n.npi, n.addr_key, n.address, n.city, n.state, n.zip5,
+                       n.phone, n.first_name, n.last_name,
+                       list_extract(n.matched_specialties, 1) spec,
+                       n.partb_payments, n.partd_drug_cost,
+                       n.latitude lat, n.longitude lng
+                from matched n
+                where len(n.matched_specialties) > 0
+                  and ({" and ".join(loc_clauses)})
+            ),
+            sites as (
+                select addr_key,
+                       min(address) address,
+                       min(city) city,
+                       min(state) state,
+                       min(zip5) zip5,
+                       min(phone) phone,
+                       count(*) providers_here,
+                       list(distinct spec order by spec) specialties,
+                       round(sum(partb_payments), 2) partb_payments,
+                       round(sum(partd_drug_cost), 2) partd_drug_cost,
+                       min(trim(coalesce(first_name, '') || ' ' ||
+                                coalesce(last_name, ''))) solo_name,
+                       min(lat) lat,
+                       min(lng) lng
+                from attributed
+                group by addr_key
+            ),
+            org_memberships as (
+                select m.addr_key, m.npi, m.org_pac_id, m.practice_name,
+                       m.group_size_national, m.primary_address_match
+                from serving_practice_nppes_org_memberships m
+                join attributed a on a.addr_key = m.addr_key and a.npi = m.npi
+            ),
+            org_stats as (
+                select addr_key, org_pac_id,
+                       min(practice_name) practice_name,
+                       count(distinct npi) affiliated_provider_count,
+                       count(distinct case when primary_address_match then npi end)
+                           primary_address_match_count,
+                       max(group_size_national) group_size_national
+                from org_memberships
+                group by 1, 2
+            ),
+            org_rollup as (
+                select s.addr_key,
+                       list(struct_pack(
+                           org_pac_id := s.org_pac_id,
+                           practice_name := s.practice_name,
+                           affiliated_provider_count := s.affiliated_provider_count,
+                           primary_address_match_count := s.primary_address_match_count,
+                           group_size_national := s.group_size_national
+                       ) order by s.primary_address_match_count desc,
+                                  s.affiliated_provider_count desc,
+                                  s.group_size_national desc nulls last,
+                                  s.org_pac_id) organization_contexts,
+                       t.affiliated_npis
+                from org_stats s
+                join (
+                    select addr_key, count(distinct npi) affiliated_npis
+                    from org_memberships group by 1
+                ) t on s.addr_key = t.addr_key
+                group by s.addr_key, t.affiliated_npis
+            ),
+            located as (
+                select s.*,
+                       {distance_expression} distance_miles,
+                       o.organization_contexts,
+                       coalesce(o.affiliated_npis, 0) affiliated_npis
+                from sites s
+                left join org_rollup o on s.addr_key = o.addr_key
+            )
+            select addr_key, address, city, state, zip5, phone, lat, lng,
+                   providers_here, specialties, distance_miles, partb_payments,
+                   partd_drug_cost, solo_name, organization_contexts, affiliated_npis,
+                   count(*) over() total_count
+            from located
+            {distance_filter}
+            order by {"distance_miles, addr_key" if proximity else "providers_here desc, addr_key"}
+            limit {limit}
+            """
+            params = [*patterns, *loc_params, *distance_params]
+            rows = get_conn().execute(sql, params).fetchall()
+            return nppes_search_response(rows)
 
         if location_basis == "nppes_primary":
             spec_pred = " OR ".join(['p."Rndrng_Prvdr_Type" ILIKE ?'] * len(patterns))
@@ -973,62 +1203,7 @@ def get_practices_router(
             """
             params = [*patterns, *loc_params, *distance_params]
             rows = get_conn().execute(sql, params).fetchall()
-            results: list[PracticeResult] = []
-            for row in rows:
-                providers_here = int(row[8])
-                contexts = [
-                    OrganizationContext.model_validate(context)
-                    for context in (row[14] or [])
-                ]
-                unaffiliated = providers_here - int(row[15] or 0)
-                classification = classify_site(
-                    providers_here, unaffiliated, len(contexts)
-                )
-                results.append(
-                    PracticeResult(
-                        site_id=site_identifier(
-                            "nppes_primary", str(row[1]), str(row[4])
-                        ),
-                        requested_specialties=requested_specialties,
-                        organization_scope="nppes_primary_address",
-                        organization_contexts=contexts,
-                        unaffiliated_provider_count=unaffiliated,
-                        site_classification=classification,
-                        roster_npi_count=providers_here,
-                        address=row[1],
-                        city=row[2],
-                        state=row[3],
-                        zip5=row[4],
-                        phone=row[5],
-                        lat=row[6],
-                        lng=row[7],
-                        providers_here=providers_here,
-                        specialties=[value for value in (row[9] or []) if value],
-                        distance_miles=(
-                            round(row[10], 2) if row[10] is not None else None
-                        ),
-                        partb_payments=row[11],
-                        partd_drug_cost=row[12],
-                        solo_provider_name=(
-                            ((row[13] or "").strip() or None)
-                            if classification == "solo"
-                            else None
-                        ),
-                        location_basis="nppes_primary",
-                    )
-                )
-            total_available = int(rows[0][16]) if rows else 0
-            return PracticeSearchResponse(
-                specialty=requested_specialties[0],
-                requested_specialties=requested_specialties,
-                matched_patterns=patterns,
-                location=", ".join(loc_desc) or "anywhere",
-                total=total_available,
-                returned_count=len(results),
-                truncated=len(results) < total_available,
-                results=results,
-                location_basis="nppes_primary",
-            )
+            return nppes_search_response(rows)
 
         if use_cms_mart:
             mart_spec_pred = " OR ".join(

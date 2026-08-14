@@ -80,6 +80,7 @@ SOURCE_REGISTRY: dict[str, SourceSpec] = {
             (
                 "raw_dac_national",
                 "serving_practice_provider_sites",
+                "serving_practice_nppes_org_memberships",
                 "provider_address_evidence",
                 "provider_organization_evidence",
                 "provider_hospital_evidence",
@@ -98,6 +99,7 @@ SOURCE_REGISTRY: dict[str, SourceSpec] = {
                 "core_providers",
                 "utilization_metrics",
                 "serving_practice_provider_sites",
+                "serving_practice_nppes_provider_sites",
             ),
             CMS_ATTRIBUTION,
         ),
@@ -121,7 +123,11 @@ SOURCE_REGISTRY: dict[str, SourceSpec] = {
             "14d8e8a9-7e9b-4370-a044-bf97c46b4b44",
             Cadence.ANNUAL,
             "Calendar-year Part D claims, costs, and beneficiary measures by prescriber.",
-            ("utilization_metrics", "serving_practice_provider_sites"),
+            (
+                "utilization_metrics",
+                "serving_practice_provider_sites",
+                "serving_practice_nppes_provider_sites",
+            ),
             CMS_ATTRIBUTION,
         ),
         SourceSpec(
@@ -234,6 +240,8 @@ SOURCE_REGISTRY: dict[str, SourceSpec] = {
             (
                 "raw_nppes",
                 "core_providers",
+                "serving_practice_nppes_provider_sites",
+                "serving_practice_nppes_org_memberships",
                 "nppes_radar_provider_state",
                 "nppes_radar_events",
             ),
@@ -250,6 +258,8 @@ SOURCE_REGISTRY: dict[str, SourceSpec] = {
             (
                 "raw_nppes",
                 "core_providers",
+                "serving_practice_nppes_provider_sites",
+                "serving_practice_nppes_org_memberships",
                 "nppes_radar_provider_state",
                 "nppes_radar_events",
             ),
