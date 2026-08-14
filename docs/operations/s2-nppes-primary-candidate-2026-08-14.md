@@ -111,10 +111,12 @@ block, and exits nonzero. Therefore:
 
 The route code itself is ready for an eventual deployment-local `auto` switch. Both serving tables
 must be present and complete or the existing raw implementation remains the fallback. The API
-contract and Provider Search RPCs do not change. Before preparing a deployment, the production
-manager must also receive a narrowly tested authorization for the exact
-`serving_practice_nppes_additive_v1` two-table policy; the staging builder deliberately does not
-grant that authority.
+contract and Provider Search RPCs do not change. The follow-on production-manager change accepts
+`serving_practice_nppes_additive_v1` only when the release has the exact two-table additive scope,
+matching positive counts, complete invariant-fingerprint evidence, passed validation for both
+marts, and zero row or membership-parent failures. This code authorization does not copy an
+artifact, prepare a deployment, or authorize selection; the corresponding sealed operations
+package is not installed while capacity blocks preparation.
 
 ## Handoff
 
@@ -124,10 +126,11 @@ The next safe sequence is:
    deletions outside the rollback floor, or expand the volume;
 2. require enough headroom for the distinct production copy and normal operating growth rather
    than targeting the 85% boundary;
-3. add and test the exact two-table production-manager policy authorization, rerun the exact-byte
-   capacity gate, and confirm production identity and health;
-4. only then copy and prepare an immutable deployment, run full isolated smoke and rollback dry-runs, and
-   request separate authorization for selection.
+3. ~~Add and test the exact two-table production-manager policy authorization.~~ Completed in code;
+   its sealed operations package remains uninstalled.
+4. rerun the exact-byte capacity gate and confirm production identity and health; and
+5. only then install the reviewed operations package, copy and prepare an immutable deployment, run
+   full isolated smoke and rollback dry-runs, and request separate authorization for selection.
 
 Machine-readable evidence is committed under
 [`evidence/s2-nppes-primary-2026-08-14`](evidence/s2-nppes-primary-2026-08-14/) and sealed on the

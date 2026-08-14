@@ -63,7 +63,10 @@ bounded DuckDB resources. A sealed source archive supplies its explicit full Git
 `--code-commit`; an absent, abbreviated, or malformed identity fails before allocation. Its
 `serving_practice_nppes_additive_v1` comparison policy permits only
 those two tables to differ and applies schema plus order-independent logical fingerprints to every
-other table. The production manager deliberately does not accept this policy yet.
+other table. The production manager accepts it only with the exact two-table additive scope,
+matching positive counts, complete invariant-fingerprint evidence, passed validation for both
+marts, and zero row or parent-orphan failures. That code authorization does not prepare or select a
+deployment.
 
 The additive offline builder is `python -m pipeline.data_platform
 build-serving-practice-release`. It requires a named validated baseline release, a verified backup

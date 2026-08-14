@@ -491,6 +491,7 @@ def _validate_warehouse_release(
         "ppef_additive_v1",
         "nppes_radar_targeted_v1",
         "serving_practice_managed_dac_v1",
+        "serving_practice_nppes_additive_v1",
     }:
         raise ProductionError("Warehouse comparison has an unsupported policy")
     if comparison_policy == "serving_practice_managed_dac_v1":
@@ -569,6 +570,127 @@ def _validate_warehouse_release(
             or any(row_validation_failures.values())
         ):
             raise ProductionError("Managed DAC serving-mart validation is invalid")
+    if comparison_policy == "serving_practice_nppes_additive_v1":
+        expected_changed_tables = {
+            "serving_practice_nppes_provider_sites",
+            "serving_practice_nppes_org_memberships",
+        }
+        changed_tables = comparison.get("changed_tables")
+        table_counts = release.get("table_counts")
+        validation_details = release.get("validation_details")
+        release_changed_tables = (
+            validation_details.get("changed_tables")
+            if isinstance(validation_details, dict)
+            else None
+        )
+        if (
+            not isinstance(changed_tables, dict)
+            or set(changed_tables) != expected_changed_tables
+        ):
+            raise ProductionError("NPPES practice comparison changed-table scope is invalid")
+        if (
+            not isinstance(table_counts, dict)
+            or set(table_counts) != expected_changed_tables
+        ):
+            raise ProductionError("NPPES practice release table-count scope is invalid")
+        if not isinstance(validation_details, dict) or (
+            validation_details.get("comparison_policy") != comparison_policy
+            or validation_details.get("release_scope") != "targeted_additive"
+            or not isinstance(release_changed_tables, list)
+            or set(release_changed_tables) != expected_changed_tables
+        ):
+            raise ProductionError("NPPES practice release validation scope is invalid")
+        for table in expected_changed_tables:
+            changed_table = changed_tables[table]
+            candidate_rows = (
+                changed_table.get("candidate_rows")
+                if isinstance(changed_table, dict)
+                else None
+            )
+            if (
+                not isinstance(changed_table, dict)
+                or changed_table.get("baseline_rows") is not None
+                or type(candidate_rows) is not int
+                or candidate_rows <= 0
+                or table_counts.get(table) != candidate_rows
+            ):
+                raise ProductionError("NPPES practice candidate table counts are invalid")
+        invariant_count = comparison.get("invariant_logical_fingerprints_checked")
+        if (
+            type(invariant_count) is not int
+            or invariant_count <= 0
+            or comparison.get("unchanged_table_count") != invariant_count
+        ):
+            raise ProductionError("NPPES practice invariant-table evidence is invalid")
+        mart_validation = validation_details.get("mart_contract_validation")
+        marts = (
+            mart_validation.get("marts")
+            if isinstance(mart_validation, dict)
+            else None
+        )
+        mart_by_table = (
+            {
+                mart.get("table"): mart
+                for mart in marts
+                if isinstance(mart, dict) and isinstance(mart.get("table"), str)
+            }
+            if isinstance(marts, list)
+            else {}
+        )
+        if (
+            not isinstance(mart_validation, dict)
+            or mart_validation.get("passed") is not True
+            or mart_validation.get("registered_count") != 2
+            or mart_validation.get("available_count") != 2
+            or mart_validation.get("schema_valid_count") != 2
+            or mart_validation.get("data_valid_count") != 2
+            or mart_validation.get("serving_authorized_count") != 2
+            or not isinstance(marts, list)
+            or len(marts) != 2
+            or set(mart_by_table) != expected_changed_tables
+        ):
+            raise ProductionError("NPPES practice serving-mart validation is invalid")
+        expected_key_columns = {
+            "serving_practice_nppes_provider_sites": ["npi"],
+            "serving_practice_nppes_org_memberships": [
+                "addr_key",
+                "npi",
+                "org_pac_id",
+            ],
+        }
+        expected_failure_keys = {
+            "serving_practice_nppes_provider_sites": {
+                "empty_specialties",
+                "invalid_state_or_zip",
+                "partb_value_without_provenance",
+                "partd_value_without_provenance",
+            },
+            "serving_practice_nppes_org_memberships": {
+                "missing_dac_provenance",
+            },
+        }
+        for table in expected_changed_tables:
+            mart = mart_by_table[table]
+            row_validation_failures = mart.get("row_validation_failures")
+            if (
+                mart.get("schema_valid") is not True
+                or mart.get("data_valid") is not True
+                or mart.get("serving_authorized") is not True
+                or mart.get("issues") != []
+                or mart.get("row_count") != table_counts[table]
+                or mart.get("key_columns") != expected_key_columns[table]
+                or mart.get("duplicate_key_groups") != 0
+                or mart.get("invalid_npis") != 0
+                or mart.get("required_null_rows") != 0
+                or not isinstance(row_validation_failures, dict)
+                or set(row_validation_failures) != expected_failure_keys[table]
+                or any(row_validation_failures.values())
+                or (
+                    table == "serving_practice_nppes_org_memberships"
+                    and mart.get("orphan_npis") != 0
+                )
+            ):
+                raise ProductionError("NPPES practice serving-mart validation is invalid")
     comparison_candidate = comparison.get("candidate")
     if not isinstance(comparison_candidate, dict):
         raise ProductionError("Warehouse comparison candidate is missing or malformed")

@@ -214,8 +214,10 @@ baseline and matching verified backup, inherits its source and smoke identity, r
 declared NPPES/DAC/claims periods, and transactionally builds only the two NPPES serving tables.
 The `serving_practice_nppes_additive_v1` comparison rejects any other changed-table declaration,
 requires positive exact row-count evidence for both tables, and computes logical fingerprints for
-every invariant table. It is staging-only and intentionally absent from the production manager
-allowlist. The isolated release `warehouse-20260814T183948Z-e5ff46dce9` passed both mart contracts,
+every invariant table. The production manager now recognizes it only with the exact two-table
+scope, positive matching counts, complete invariant-fingerprint evidence, both passed mart
+contracts, and zero row or parent-orphan failures. The isolated release
+`warehouse-20260814T183948Z-e5ff46dce9` passed both mart contracts,
 42 invariant fingerprints, focused exact parity, paired operator plans, and three-trial concurrency
 tests. Mart p95 was 80.0–88.3% lower across concurrency 1–12 with zero failures. The distinct
 production copy projects 90.85% disk use and is blocked; see the
