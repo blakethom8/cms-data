@@ -1032,28 +1032,28 @@ def build_serving_provider_profile_core_tables(
         INSERT INTO serving_provider_profile_groups
         WITH dac AS (
             SELECT CAST("NPI" AS VARCHAR) npi,
-                   nullif(trim(CAST(org_pac_id AS VARCHAR)), '') group_id,
+                   CAST(org_pac_id AS VARCHAR) group_id,
                    any_value("Facility Name") group_name,
-                   max(try_cast(num_org_mem AS INTEGER)) group_size,
+                   any_value(num_org_mem) group_size,
                    count(distinct upper(trim(adr_ln_1))) n_addresses,
                    list(distinct source_data_period order by source_data_period)
                        source_data_periods,
                    list(distinct source_run_id order by source_run_id) source_run_ids
             FROM raw_dac_national
-            WHERE nullif(trim(CAST(org_pac_id AS VARCHAR)), '') IS NOT NULL
+            WHERE org_pac_id IS NOT NULL
             GROUP BY 1, 2
         ),
         reassign AS (
             SELECT CAST("Individual NPI" AS VARCHAR) npi,
-                   nullif(trim(CAST("Group PAC ID" AS VARCHAR)), '') group_id,
+                   CAST("Group PAC ID" AS VARCHAR) group_id,
                    any_value("Group Legal Business Name") group_name,
-                   max(try_cast("Group Reassignments and Physician Assistants" AS BIGINT))
+                   any_value("Group Reassignments and Physician Assistants")
                        reassignment_size,
                    list(distinct source_data_period order by source_data_period)
                        source_data_periods,
                    list(distinct source_run_id order by source_run_id) source_run_ids
             FROM raw_reassignment
-            WHERE nullif(trim(CAST("Group PAC ID" AS VARCHAR)), '') IS NOT NULL
+            WHERE "Group PAC ID" IS NOT NULL
             GROUP BY 1, 2
         )
         SELECT coalesce(d.npi, r.npi) npi,
