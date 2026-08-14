@@ -954,6 +954,53 @@ def _stage_reassignment(data_root: Path) -> RunManifest:
     return manifest
 
 
+def _stage_claim_detail_source(data_root: Path, source_id: str) -> RunManifest:
+    run_ids = {
+        "cms_physician_by_provider_and_service": "partb-service-run",
+        "cms_part_d_by_provider_and_drug": "partd-drug-run",
+    }
+    run_id = run_ids[source_id]
+    columns = CMS_CSV_PROFILES[source_id].required_columns
+    values = {column: "1" for column in columns}
+    values[CMS_CSV_PROFILES[source_id].identifier_column] = "1234567890"
+    stream = io.StringIO(newline="")
+    writer = csv.writer(stream, lineterminator="\n")
+    writer.writerow(columns)
+    writer.writerow([values[column] for column in columns])
+    artifact = data_root / "runs" / source_id / run_id / "source.csv"
+    artifact.parent.mkdir(parents=True, exist_ok=True)
+    artifact.write_bytes(stream.getvalue().encode())
+    inspection = inspect_cms_csv(artifact, profile=CMS_CSV_PROFILES[source_id])
+    manifest = RunManifest(
+        run_id=run_id,
+        release_id=f"{source_id}-2024-fixture",
+        source_id=source_id,
+        publisher=SOURCE_REGISTRY[source_id].publisher.value,
+        publisher_version=f"cms-resource:{source_id}-fixture",
+        source_data_period="2024",
+        publisher_release_timestamp="2026-05-21T00:00:00+00:00",
+        discovery_timestamp="2026-07-21T22:00:00+00:00",
+        retrieval_timestamp="2026-07-21T22:10:00+00:00",
+        source_url="https://data.cms.gov/example/source.csv",
+        byte_size=inspection.byte_size,
+        sha256=inspection.sha256,
+        schema_fingerprint=inspection.schema_fingerprint,
+        source_encoding=inspection.source_encoding,
+        row_counts={
+            "source_rows": inspection.row_count,
+            "invalid_identifier_rows": inspection.invalid_identifier_rows,
+        },
+        pipeline_code_commit=CODE_COMMIT,
+        validation_state=ValidationState.PASSED,
+        validation_timestamp="2026-07-21T22:20:00+00:00",
+    )
+    store = ManifestStore(data_root / "manifests.json")
+    document = store.load()
+    document.manifests.append(manifest)
+    store.save(document)
+    return manifest
+
+
 def test_targeted_serving_practice_release_inherits_baseline_provenance(
     tmp_path: Path,
 ) -> None:
@@ -1276,6 +1323,100 @@ def test_complete_provider_profile_release_adds_exact_six_table_scope(
             data_root=data_root,
             warehouse_release_id=result.release.warehouse_release_id,
             backup_manifest_path=backup_manifest,
+        )
+
+
+def test_complete_provider_profile_release_reconciles_claim_detail_runs(
+    tmp_path: Path,
+) -> None:
+    data_root, backup_manifest, baseline_release_id = (
+        _provider_profile_core_baseline(tmp_path)
+    )
+    service_manifest = _stage_claim_detail_source(
+        data_root, "cms_physician_by_provider_and_service"
+    )
+    drug_manifest = _stage_claim_detail_source(
+        data_root, "cms_part_d_by_provider_and_drug"
+    )
+    store = WarehouseReleaseStore(data_root / "warehouse-releases.json")
+    document = store.load()
+    baseline_release = document.releases[0]
+    for manifest in (service_manifest, drug_manifest):
+        del baseline_release.validation_details["source_periods"][manifest.source_id]
+    baseline_release.source_run_ids = tuple(
+        run_id
+        for run_id in baseline_release.source_run_ids
+        if run_id not in {service_manifest.run_id, drug_manifest.run_id}
+    )
+    store.save(document)
+
+    result = build_provider_profile_warehouse_release(
+        data_root=data_root,
+        baseline_warehouse_release_id=baseline_release_id,
+        backup_manifest_path=backup_manifest,
+        data_year=2026,
+        claims_service_run_id=service_manifest.run_id,
+        claims_drug_run_id=drug_manifest.run_id,
+        code_commit=CODE_COMMIT,
+        memory_limit_gb=1,
+        threads=1,
+    )
+
+    details = result.release.validation_details
+    assert details["source_periods"][service_manifest.source_id] == "2024"
+    assert details["source_periods"][drug_manifest.source_id] == "2024"
+    assert service_manifest.run_id in result.release.source_run_ids
+    assert drug_manifest.run_id in result.release.source_run_ids
+    reconciled = {
+        item["source_id"]: item for item in details["reconciled_source_runs"]
+    }
+    assert reconciled[service_manifest.source_id] == {
+        "source_id": service_manifest.source_id,
+        "run_id": service_manifest.run_id,
+        "source_data_period": "2024",
+        "raw_table": "raw_physician_by_provider_and_service",
+        "raw_row_count": 1,
+        "artifact_sha256": service_manifest.sha256,
+    }
+    assert reconciled[drug_manifest.source_id] == {
+        "source_id": drug_manifest.source_id,
+        "run_id": drug_manifest.run_id,
+        "source_data_period": "2024",
+        "raw_table": "raw_part_d_by_provider_and_drug",
+        "raw_row_count": 1,
+        "artifact_sha256": drug_manifest.sha256,
+    }
+
+
+def test_complete_provider_profile_release_rejects_wrong_claim_detail_source(
+    tmp_path: Path,
+) -> None:
+    data_root, backup_manifest, baseline_release_id = (
+        _provider_profile_core_baseline(tmp_path)
+    )
+    drug_manifest = _stage_claim_detail_source(
+        data_root, "cms_part_d_by_provider_and_drug"
+    )
+    store = WarehouseReleaseStore(data_root / "warehouse-releases.json")
+    document = store.load()
+    del document.releases[0].validation_details["source_periods"][
+        "cms_physician_by_provider_and_service"
+    ]
+    store.save(document)
+
+    with pytest.raises(
+        ReleaseError,
+        match="claims service run has the wrong source",
+    ):
+        build_provider_profile_warehouse_release(
+            data_root=data_root,
+            baseline_warehouse_release_id=baseline_release_id,
+            backup_manifest_path=backup_manifest,
+            data_year=2026,
+            claims_service_run_id=drug_manifest.run_id,
+            code_commit=CODE_COMMIT,
+            memory_limit_gb=1,
+            threads=1,
         )
 
 

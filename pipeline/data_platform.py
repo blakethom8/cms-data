@@ -591,6 +591,20 @@ def _parser() -> argparse.ArgumentParser:
         ),
     )
     build_profile.add_argument(
+        "--claims-service-run-id",
+        help=(
+            "Verified managed provider-and-service run used to reconcile "
+            "missing baseline claims-detail provenance"
+        ),
+    )
+    build_profile.add_argument(
+        "--claims-drug-run-id",
+        help=(
+            "Verified managed provider-and-drug run used to reconcile "
+            "missing baseline claims-detail provenance"
+        ),
+    )
+    build_profile.add_argument(
         "--code-commit",
         help="Exact 40-character Git commit for a sealed source archive",
     )
@@ -897,6 +911,8 @@ def main(argv: list[str] | None = None) -> int:
                     backup_manifest_path=args.backup_manifest,
                     data_year=args.data_year,
                     reassignment_run_id=args.reassignment_run_id,
+                    claims_service_run_id=args.claims_service_run_id,
+                    claims_drug_run_id=args.claims_drug_run_id,
                     code_commit=args.code_commit,
                     memory_limit_gb=args.memory_limit_gb,
                     threads=args.threads,

@@ -2196,6 +2196,8 @@ def build_provider_profile_core_warehouse_release(
     backup_manifest_path: Path,
     data_year: int,
     reassignment_run_id: str | None = None,
+    claims_service_run_id: str | None = None,
+    claims_drug_run_id: str | None = None,
     code_commit: str | None = None,
     memory_limit_gb: int = 12,
     threads: int = 1,
@@ -2239,23 +2241,55 @@ def build_provider_profile_core_warehouse_release(
     source_periods = dict(baseline_source_periods)
     source_run_ids = baseline_release.source_run_ids
     reconciled_source_runs: list[dict[str, object]] = []
-    if reassignment_run_id is not None:
+    reconciliation_specs = [
+        (
+            reassignment_run_id,
+            "cms_revalidation_group_reassignment",
+            "raw_reassignment",
+            "reassignment",
+        )
+    ]
+    if _include_claims:
+        reconciliation_specs.extend(
+            [
+                (
+                    claims_service_run_id,
+                    "cms_physician_by_provider_and_service",
+                    "raw_physician_by_provider_and_service",
+                    "claims service",
+                ),
+                (
+                    claims_drug_run_id,
+                    "cms_part_d_by_provider_and_drug",
+                    "raw_part_d_by_provider_and_drug",
+                    "claims drug",
+                ),
+            ]
+        )
+    elif claims_service_run_id is not None or claims_drug_run_id is not None:
+        raise ReleaseError(
+            "Claims detail runs require the complete provider-profile builder"
+        )
+
+    for run_id, expected_source_id, raw_table, source_label in reconciliation_specs:
+        if run_id is None:
+            continue
         from .candidate_sources import verified_cms_runs
 
-        verified = verified_cms_runs(data_root, (reassignment_run_id,))
+        verified = verified_cms_runs(data_root, (run_id,))
         manifest = verified[0][0]
-        if manifest.source_id != "cms_revalidation_group_reassignment":
+        if manifest.source_id != expected_source_id:
             raise ReleaseError(
-                "Provider-profile reassignment run has the wrong source: "
+                f"Provider-profile {source_label} run has the wrong source: "
                 f"{manifest.source_id}"
             )
         try:
             baseline_connection = duckdb.connect(str(baseline), read_only=True)
             try:
                 raw_provenance = baseline_connection.execute(
-                    """
+                    f"""
                     SELECT source_run_id, source_data_period, count(*)
-                    FROM raw_reassignment
+                    FROM {raw_table}
                     GROUP BY source_run_id, source_data_period
                     ORDER BY source_run_id, source_data_period
                     """
@@ -2264,7 +2298,7 @@ def build_provider_profile_core_warehouse_release(
                 baseline_connection.close()
         except duckdb.Error as error:
             raise ReleaseError(
-                "Provider-profile baseline raw_reassignment provenance is unreadable"
+                f"Provider-profile baseline {raw_table} provenance is unreadable"
             ) from error
         expected_rows = manifest.row_counts.get("source_rows")
         expected_provenance = (
@@ -2274,25 +2308,23 @@ def build_provider_profile_core_warehouse_release(
         )
         if raw_provenance != [expected_provenance]:
             raise ReleaseError(
-                "Provider-profile baseline raw_reassignment provenance does not "
+                f"Provider-profile baseline {raw_table} provenance does not "
                 "match the verified source manifest"
             )
         existing_period = source_periods.get(manifest.source_id)
         if existing_period is not None and existing_period != manifest.source_data_period:
             raise ReleaseError(
-                "Provider-profile baseline reassignment source period conflicts "
+                f"Provider-profile baseline {source_label} source period conflicts "
                 "with the verified source manifest"
             )
         source_periods[manifest.source_id] = manifest.source_data_period
-        source_run_ids = tuple(
-            dict.fromkeys((*source_run_ids, manifest.run_id))
-        )
+        source_run_ids = tuple(dict.fromkeys((*source_run_ids, manifest.run_id)))
         reconciled_source_runs.append(
             {
                 "source_id": manifest.source_id,
                 "run_id": manifest.run_id,
                 "source_data_period": manifest.source_data_period,
-                "raw_table": "raw_reassignment",
+                "raw_table": raw_table,
                 "raw_row_count": expected_rows,
                 "artifact_sha256": manifest.sha256,
             }
@@ -2347,6 +2379,7 @@ def build_provider_profile_core_warehouse_release(
         (
             identity_prefix
             + f"{baseline_warehouse_release_id}\0{reassignment_run_id or ''}"
+            + f"\0{claims_service_run_id or ''}\0{claims_drug_run_id or ''}"
         ).encode()
     ).hexdigest()
     warehouse_release_id = make_warehouse_release_id(identity, commit)
@@ -2481,6 +2514,8 @@ def build_provider_profile_warehouse_release(
     backup_manifest_path: Path,
     data_year: int,
     reassignment_run_id: str | None = None,
+    claims_service_run_id: str | None = None,
+    claims_drug_run_id: str | None = None,
     code_commit: str | None = None,
     memory_limit_gb: int = 12,
     threads: int = 1,
@@ -2492,6 +2527,8 @@ def build_provider_profile_warehouse_release(
         backup_manifest_path=backup_manifest_path,
         data_year=data_year,
         reassignment_run_id=reassignment_run_id,
+        claims_service_run_id=claims_service_run_id,
+        claims_drug_run_id=claims_drug_run_id,
         code_commit=code_commit,
         memory_limit_gb=memory_limit_gb,
         threads=threads,
