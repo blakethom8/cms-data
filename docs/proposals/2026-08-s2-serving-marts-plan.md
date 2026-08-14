@@ -224,7 +224,10 @@ Part B and Part D raw tables carry managed run, release, period, and ingestion f
 `raw_dac_national` table carries none. No historical manifest records an exact DAC publisher period
 or resource identity, so the missing values cannot be reconstructed honestly. S2.4 therefore first
 registers the official CMS Provider Data Catalog dataset `mj5m-pzi6`, validates its exact 31-column
-CSV contract, and acquires it as an immutable managed run. The isolated candidate will replace only
-that raw DAC table, build `serving_practice_provider_sites` from DAC and the baseline's exact Part B
-and Part D rows, and compare raw versus mart responses within the same candidate. This prerequisite
-does not select a warehouse, change a route, or authorize cutover.
+CSV contract, and acquires it as an immutable managed run. The
+`build-managed-dac-serving-practice-release` command replaces only that raw DAC table, derives exact
+Part B and Part D run-period pairs from baseline rows, builds `serving_practice_provider_sites`, and
+protects every other table with logical fingerprints. Its comparison policy is deliberately absent
+from the production manager allowlist. The isolated production-data run must still compare raw
+versus mart responses within the same candidate; none of this selects a warehouse, changes a route,
+or authorizes cutover.

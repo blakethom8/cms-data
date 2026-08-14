@@ -37,15 +37,16 @@ managed DAC acquisition and its `raw_dac_national` table lacks those provenance 
 not eligible as an S2 candidate input. The table remains unauthorized for production serving until
 a newly acquired DAC run is loaded into an isolated candidate and parity and performance gates pass.
 
-The targeted offline builder is `python -m pipeline.data_platform
+The additive offline builder is `python -m pipeline.data_platform
 build-serving-practice-release`. It requires a named validated baseline release, a verified backup
-manifest with the same SHA-256, and the mart data year. The original additive form inherits the
-baseline's exact source-run IDs and periods, applies bounded DuckDB memory/thread settings,
-validates only the new mart contract, and seals a new database without promotion. Production proof
-now requires a follow-up targeted form that replaces only `raw_dac_national` from one exact managed
-run before building the mart. Its comparison policy must allowlist only that raw table and
-`serving_practice_provider_sites`; every other table remains protected by row counts, schema
-digests, and order-independent logical row fingerprints so equal counts cannot mask drift.
+manifest with the same SHA-256, and the mart data year. The production-proof form is
+`build-managed-dac-serving-practice-release`; it additionally requires one exact validated DAC run,
+derives the baseline Part B and Part D run-period pairs from their rows, replaces only
+`raw_dac_national`, and then builds the mart. Its `serving_practice_managed_dac_v1` comparison policy
+allowlists only that raw table and `serving_practice_provider_sites`; every other table is protected
+by row counts, schema digests, and order-independent logical row fingerprints so equal counts cannot
+mask drift. The production release manager intentionally rejects this policy until the S2 gates pass
+and cutover is separately authorized.
 
 ## Validation states
 

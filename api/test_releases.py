@@ -29,15 +29,18 @@ from pipeline.releases import (
     HOSPITAL_COLUMN_MAP,
     PPEF_CHANGED_TABLES,
     SERVING_PRACTICE_CHANGED_TABLES,
+    SERVING_PRACTICE_MANAGED_DAC_CHANGED_TABLES,
     ReleaseError,
     WAREHOUSE_RELEASE_SCHEMA_VERSION,
     WarehouseRelease,
     WarehouseReleaseDocument,
     WarehouseReleaseStore,
     _rebuild_hospital_affiliations,
+    _single_table_source_provenance,
     _table_logical_fingerprint,
     _validate_ppef_relationships,
     build_full_cms_warehouse_release,
+    build_managed_dac_serving_practice_warehouse_release,
     build_ppef_warehouse_release,
     build_serving_practice_warehouse_release,
     build_warehouse_release,
@@ -611,6 +614,64 @@ def _serving_practice_baseline(tmp_path: Path) -> tuple[Path, Path, str]:
     return data_root, backup_manifest, baseline_release_id
 
 
+def _stage_managed_dac(data_root: Path) -> RunManifest:
+    source_id = "cms_dac_national"
+    run_id = "20260814T030000Z-dac"
+    columns = CMS_CSV_PROFILES[source_id].required_columns
+    values = {
+        "NPI": "1234567890",
+        "Ind_PAC_ID": "PAC-I-NEW",
+        "Ind_enrl_ID": "ENROLL-I-NEW",
+        "Provider Last Name": "Rivera",
+        "Provider First Name": "Jamie",
+        "pri_spec": "Neurology",
+        "Facility Name": "Neuro Group",
+        "org_pac_id": "PAC-NEW",
+        "num_org_mem": "35",
+        "adr_ln_1": "10 MAIN ST",
+        "City/Town": "Los Angeles",
+        "State": "CA",
+        "ZIP Code": "90001",
+        "Telephone Number": "222",
+        "adrs_id": "ADDR-NEW",
+    }
+    stream = io.StringIO(newline="")
+    writer = csv.writer(stream, lineterminator="\n")
+    writer.writerow(columns)
+    writer.writerow([values.get(column, "") for column in columns])
+    artifact = data_root / "runs" / source_id / run_id / "source.csv"
+    artifact.parent.mkdir(parents=True)
+    artifact.write_bytes(stream.getvalue().encode())
+    inspection = inspect_cms_csv(artifact, profile=CMS_CSV_PROFILES[source_id])
+    manifest = RunManifest(
+        run_id=run_id,
+        release_id="cms_dac_national-2026-08-13-fixture",
+        source_id=source_id,
+        publisher=SOURCE_REGISTRY[source_id].publisher.value,
+        publisher_version=(
+            "cms-provider-data:mj5m-pzi6:2026-08-13:fixture-resource"
+        ),
+        source_data_period="2026-07-31",
+        publisher_release_timestamp="2026-08-13T00:00:00+00:00",
+        discovery_timestamp="2026-08-14T02:00:00+00:00",
+        retrieval_timestamp="2026-08-14T03:00:00+00:00",
+        source_url="https://data.cms.gov/provider-data/resources/fixture/source.csv",
+        byte_size=inspection.byte_size,
+        sha256=inspection.sha256,
+        schema_fingerprint=inspection.schema_fingerprint,
+        source_encoding=inspection.source_encoding,
+        row_counts={"source_rows": inspection.row_count},
+        pipeline_code_commit=CODE_COMMIT,
+        validation_state=ValidationState.PASSED,
+        validation_timestamp="2026-08-14T03:10:00+00:00",
+    )
+    store = ManifestStore(data_root / "manifests.json")
+    document = store.load()
+    document.manifests.append(manifest)
+    store.save(document)
+    return manifest
+
+
 def test_targeted_serving_practice_release_inherits_baseline_provenance(
     tmp_path: Path,
 ) -> None:
@@ -652,6 +713,99 @@ def test_targeted_serving_practice_release_inherits_baseline_provenance(
         ).fetchone()[0] == ["Cardiology"]
     finally:
         candidate.close()
+
+
+def test_managed_dac_serving_release_replaces_only_dac_and_builds_mart(
+    tmp_path: Path,
+) -> None:
+    data_root, backup_manifest, baseline_release_id = _serving_practice_baseline(
+        tmp_path
+    )
+    store = WarehouseReleaseStore(data_root / "warehouse-releases.json")
+    document = store.load()
+    document.releases[0].source_run_ids = ("nppes-run",)
+    document.releases[0].validation_details["source_periods"] = {
+        "nppes_monthly_v2": "2026-08"
+    }
+    store.save(document)
+    dac_manifest = _stage_managed_dac(data_root)
+
+    result = build_managed_dac_serving_practice_warehouse_release(
+        data_root=data_root,
+        baseline_warehouse_release_id=baseline_release_id,
+        dac_source_run_id=dac_manifest.run_id,
+        backup_manifest_path=backup_manifest,
+        data_year=2026,
+        code_commit=CODE_COMMIT,
+        memory_limit_gb=1,
+        threads=1,
+    )
+    comparison = compare_warehouse_release(
+        data_root=data_root,
+        warehouse_release_id=result.release.warehouse_release_id,
+        backup_manifest_path=backup_manifest,
+    )
+
+    assert comparison["state"] == "passed"
+    assert comparison["comparison_policy"] == "serving_practice_managed_dac_v1"
+    assert comparison["unexpected_differences"] == []
+    assert set(comparison["changed_tables"]) == (
+        SERVING_PRACTICE_MANAGED_DAC_CHANGED_TABLES
+    )
+    assert result.release.source_run_ids == (
+        dac_manifest.run_id,
+        "nppes-run",
+        "partb-run",
+        "partd-run",
+    )
+    assert result.release.table_counts == {
+        "raw_dac_national": 1,
+        "serving_practice_provider_sites": 1,
+    }
+    details = result.release.validation_details
+    assert details["source_periods"]["cms_dac_national"] == "2026-07-31"
+    assert details["source_periods"]["cms_physician_by_provider"] == "2024"
+    assert details["source_periods"]["cms_part_d_by_provider"] == "2024"
+    candidate = duckdb.connect(str(result.database_path), read_only=True)
+    try:
+        raw = candidate.execute(
+            '''
+            SELECT pri_spec, num_org_mem, source_run_id, source_release_id,
+                   source_data_period
+            FROM raw_dac_national
+            '''
+        ).fetchone()
+        mart = candidate.execute(
+            "SELECT specialties, practice_name, dac_source_run_ids "
+            "FROM serving_practice_provider_sites"
+        ).fetchone()
+        marker = candidate.execute("SELECT value FROM baseline_marker").fetchone()[0]
+    finally:
+        candidate.close()
+    assert raw == (
+        "Neurology",
+        35,
+        dac_manifest.run_id,
+        dac_manifest.release_id,
+        dac_manifest.source_data_period,
+    )
+    assert mart == (["Neurology"], "Neuro Group", [dac_manifest.run_id])
+    assert marker == "preserved"
+
+
+def test_managed_dac_serving_dependency_provenance_fails_closed() -> None:
+    connection = duckdb.connect(":memory:")
+    try:
+        connection.execute(
+            "CREATE TABLE raw_part_d_by_provider (source_data_period VARCHAR)"
+        )
+        connection.execute("INSERT INTO raw_part_d_by_provider VALUES ('2024')")
+        with pytest.raises(ReleaseError, match="lacks managed source provenance"):
+            _single_table_source_provenance(
+                connection, "raw_part_d_by_provider"
+            )
+    finally:
+        connection.close()
 
 
 def test_logical_fingerprint_detects_equal_count_content_drift() -> None:
