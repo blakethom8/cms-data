@@ -185,18 +185,25 @@ paths. Production still selects the verified predecessor on PID `3240475` with z
 control plane is healthy, the transition sentinel is absent, and `production-ops/current` was not
 changed.
 
-The independent production warehouse copy raises actual filesystem use to about 84.28%, which is
-below the 85% promotion threshold and already includes every candidate byte. The pre-copy gate had
-already proved the same final utilization. A new post-copy preview must therefore pass `0`
-additional candidate bytes after the retention hardening lands; passing 20,951,347,200 again would
-double-count an artifact that is already allocated.
+Promotion hardening merged through PR #52 as operations commit
+`d8567a340ffc1f665c39c01671273784ff224174`. It is installed as sealed package
+`production-ops/ops-d8567a340ffc1f665c39c01671273784ff224174-s2-hardening`, while
+`production-ops/current` deliberately remains on its predecessor until cutover approval. The
+corrected post-copy preview passed with SHA-256
+`5ac73e742fd6184da37b012179b34f53da8ac44aba498d5391bbeac3ba1efbda`: actual and projected use are
+84.29%, 42,195,087,360 bytes remain free, zero additional candidate bytes are required, and the
+active-plus-two rollback floor passes. Disk state is `critical` under the 80% warning threshold but
+remains below the separate 85% promotion block; there is insufficient headroom for another large
+warehouse candidate without a fresh retention review.
 
-The remaining boundary is explicit cutover approval. Before asking for it, land the promotion
-hardening, run the corrected post-copy capacity preview, install but do not select the immutable
-operations package, reconfirm all hashes and live state, and preserve the prepared predecessor link.
+The remaining boundary is explicit cutover approval. At that gate, reconfirm the live PID, selector,
+sentinel, hashes, capacity, and predecessor; atomically select the reviewed operations package only
+as part of the approved procedure; then run the one-shot cutover with the named smoke key. No
+selection, restart, or traffic change has occurred.
 
 ## Evidence
 
 Machine-readable acquisition, release, comparison, raw/mart diagnostics, six final benchmark
-trials, and the before/after retention previews are retained under
+trials, preparation rehearsal, fail-closed smoke attempts, serving contract, transition dry-runs,
+source status, and pre-cutover retention evidence are retained under
 [`evidence/s2-managed-dac-2026-08-14`](evidence/s2-managed-dac-2026-08-14/).

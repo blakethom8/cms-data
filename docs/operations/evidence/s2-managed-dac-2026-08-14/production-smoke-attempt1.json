@@ -1,0 +1,9 @@
+{
+  "base_url": "http://127.0.0.1:18080",
+  "checks": [],
+  "deployment_id": "deployment-20260814T160153Z-45ab9d2d38",
+  "error_summary": "Expected table-count evidence has no smoke_table_counts object",
+  "generated_at": "2026-08-14T16:05:57+00:00",
+  "schema_version": 1,
+  "state": "failed"
+}

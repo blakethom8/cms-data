@@ -1,0 +1,32 @@
+{
+  "configured_practice_backend": "auto",
+  "counts": {
+    "raw_dac_national": 3388151,
+    "serving_practice_provider_sites": 3212860
+  },
+  "deployment_id": "deployment-20260814T160153Z-45ab9d2d38",
+  "generated_at": "2026-08-14T16:10:36.710864+00:00",
+  "required_mart_columns_missing": [],
+  "required_mart_columns_present": [
+    "address",
+    "city",
+    "first_name",
+    "group_key",
+    "group_size_national",
+    "last_name",
+    "latitude",
+    "longitude",
+    "npi",
+    "org_pac_id",
+    "partb_payments",
+    "partd_drug_cost",
+    "phone",
+    "practice_name",
+    "specialties",
+    "state",
+    "zip5"
+  ],
+  "resolved_practice_backend": "mart",
+  "schema_version": 1,
+  "warehouse_path": "/srv/cms-data-platform/production/releases/deployment-20260814T160153Z-45ab9d2d38/warehouse"
+}
