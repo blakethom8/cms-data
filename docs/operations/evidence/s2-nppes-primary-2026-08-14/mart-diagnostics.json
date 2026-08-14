@@ -1,0 +1,230 @@
+{
+  "base_origin": "http://127.0.0.1:18082",
+  "case_count": 4,
+  "case_manifest_sha256": "a240acd11301afb82a663af6d011346d749c06264d7493e57ac53dd4c2151c9a",
+  "cases": [
+    {
+      "expected_status": 200,
+      "family": "practice-search",
+      "median_elapsed_ms": 146.61,
+      "name": "nppes-state",
+      "passed": true,
+      "path": "/practices/search?specialty=Cardiology&state=OH&limit=25&location_basis=nppes_primary",
+      "purpose": "Broad state search over deterministic NPPES primary sites",
+      "response_stable": true,
+      "trials": [
+        {
+          "elapsed_ms": 481.48,
+          "expected_status": 200,
+          "family": "practice-search",
+          "name": "nppes-state",
+          "passed": true,
+          "path": "/practices/search?specialty=Cardiology&state=OH&limit=25&location_basis=nppes_primary",
+          "purpose": "Broad state search over deterministic NPPES primary sites",
+          "response_bytes": 42251,
+          "response_sha256": "9bc5d941a1b708c55c7b395ad14ab1ce457ea6946c52a42b6ac4b894e0bc6d41",
+          "result_count": 25,
+          "status_code": 200
+        },
+        {
+          "elapsed_ms": 137.75,
+          "expected_status": 200,
+          "family": "practice-search",
+          "name": "nppes-state",
+          "passed": true,
+          "path": "/practices/search?specialty=Cardiology&state=OH&limit=25&location_basis=nppes_primary",
+          "purpose": "Broad state search over deterministic NPPES primary sites",
+          "response_bytes": 42251,
+          "response_sha256": "9bc5d941a1b708c55c7b395ad14ab1ce457ea6946c52a42b6ac4b894e0bc6d41",
+          "result_count": 25,
+          "status_code": 200
+        },
+        {
+          "elapsed_ms": 146.61,
+          "expected_status": 200,
+          "family": "practice-search",
+          "name": "nppes-state",
+          "passed": true,
+          "path": "/practices/search?specialty=Cardiology&state=OH&limit=25&location_basis=nppes_primary",
+          "purpose": "Broad state search over deterministic NPPES primary sites",
+          "response_bytes": 42251,
+          "response_sha256": "9bc5d941a1b708c55c7b395ad14ab1ce457ea6946c52a42b6ac4b894e0bc6d41",
+          "result_count": 25,
+          "status_code": 200
+        }
+      ]
+    },
+    {
+      "expected_status": 200,
+      "family": "practice-search",
+      "median_elapsed_ms": 250.4,
+      "name": "nppes-multi-zip-specialty",
+      "passed": true,
+      "path": "/practices/search?specialties=Cardiology%2CInternal%20Medicine&zips=44101%2C44102%2C44103&limit=100&location_basis=nppes_primary",
+      "purpose": "Bounded multi-specialty and multi-ZIP filtering",
+      "response_stable": true,
+      "trials": [
+        {
+          "elapsed_ms": 252.92,
+          "expected_status": 200,
+          "family": "practice-search",
+          "name": "nppes-multi-zip-specialty",
+          "passed": true,
+          "path": "/practices/search?specialties=Cardiology%2CInternal%20Medicine&zips=44101%2C44102%2C44103&limit=100&location_basis=nppes_primary",
+          "purpose": "Bounded multi-specialty and multi-ZIP filtering",
+          "response_bytes": 2425,
+          "response_sha256": "e6dde3a1dd425e6ee25f196952efef50d28c3ec66903c7798326330e375a5ca7",
+          "result_count": 2,
+          "status_code": 200
+        },
+        {
+          "elapsed_ms": 249.44,
+          "expected_status": 200,
+          "family": "practice-search",
+          "name": "nppes-multi-zip-specialty",
+          "passed": true,
+          "path": "/practices/search?specialties=Cardiology%2CInternal%20Medicine&zips=44101%2C44102%2C44103&limit=100&location_basis=nppes_primary",
+          "purpose": "Bounded multi-specialty and multi-ZIP filtering",
+          "response_bytes": 2425,
+          "response_sha256": "e6dde3a1dd425e6ee25f196952efef50d28c3ec66903c7798326330e375a5ca7",
+          "result_count": 2,
+          "status_code": 200
+        },
+        {
+          "elapsed_ms": 250.4,
+          "expected_status": 200,
+          "family": "practice-search",
+          "name": "nppes-multi-zip-specialty",
+          "passed": true,
+          "path": "/practices/search?specialties=Cardiology%2CInternal%20Medicine&zips=44101%2C44102%2C44103&limit=100&location_basis=nppes_primary",
+          "purpose": "Bounded multi-specialty and multi-ZIP filtering",
+          "response_bytes": 2425,
+          "response_sha256": "e6dde3a1dd425e6ee25f196952efef50d28c3ec66903c7798326330e375a5ca7",
+          "result_count": 2,
+          "status_code": 200
+        }
+      ]
+    },
+    {
+      "expected_status": 200,
+      "family": "practice-search",
+      "median_elapsed_ms": 102.31,
+      "name": "nppes-proximity",
+      "passed": true,
+      "path": "/practices/search?specialty=Cardiology&lat=41.4993&lng=-81.6944&radius_miles=10&limit=50&location_basis=nppes_primary",
+      "purpose": "Geocode boundary, exact radius, distance rounding, and ordering",
+      "response_stable": true,
+      "trials": [
+        {
+          "elapsed_ms": 102.31,
+          "expected_status": 200,
+          "family": "practice-search",
+          "name": "nppes-proximity",
+          "passed": true,
+          "path": "/practices/search?specialty=Cardiology&lat=41.4993&lng=-81.6944&radius_miles=10&limit=50&location_basis=nppes_primary",
+          "purpose": "Geocode boundary, exact radius, distance rounding, and ordering",
+          "response_bytes": 17789,
+          "response_sha256": "b9ebd60a9d1b67928a4ba3a8d53be23526cc8d4c77f2e620735add5a46b0ccdf",
+          "result_count": 12,
+          "status_code": 200
+        },
+        {
+          "elapsed_ms": 101.8,
+          "expected_status": 200,
+          "family": "practice-search",
+          "name": "nppes-proximity",
+          "passed": true,
+          "path": "/practices/search?specialty=Cardiology&lat=41.4993&lng=-81.6944&radius_miles=10&limit=50&location_basis=nppes_primary",
+          "purpose": "Geocode boundary, exact radius, distance rounding, and ordering",
+          "response_bytes": 17789,
+          "response_sha256": "b9ebd60a9d1b67928a4ba3a8d53be23526cc8d4c77f2e620735add5a46b0ccdf",
+          "result_count": 12,
+          "status_code": 200
+        },
+        {
+          "elapsed_ms": 103.6,
+          "expected_status": 200,
+          "family": "practice-search",
+          "name": "nppes-proximity",
+          "passed": true,
+          "path": "/practices/search?specialty=Cardiology&lat=41.4993&lng=-81.6944&radius_miles=10&limit=50&location_basis=nppes_primary",
+          "purpose": "Geocode boundary, exact radius, distance rounding, and ordering",
+          "response_bytes": 17789,
+          "response_sha256": "b9ebd60a9d1b67928a4ba3a8d53be23526cc8d4c77f2e620735add5a46b0ccdf",
+          "result_count": 12,
+          "status_code": 200
+        }
+      ]
+    },
+    {
+      "expected_status": 200,
+      "family": "practice-search",
+      "median_elapsed_ms": 13.75,
+      "name": "nppes-empty",
+      "passed": true,
+      "path": "/practices/search?specialty=Cardiology&zip=00000&limit=25&location_basis=nppes_primary",
+      "purpose": "Empty result and truncation semantics",
+      "response_stable": true,
+      "trials": [
+        {
+          "elapsed_ms": 13.1,
+          "expected_status": 200,
+          "family": "practice-search",
+          "name": "nppes-empty",
+          "passed": true,
+          "path": "/practices/search?specialty=Cardiology&zip=00000&limit=25&location_basis=nppes_primary",
+          "purpose": "Empty result and truncation semantics",
+          "response_bytes": 309,
+          "response_sha256": "001d4430ef14ba87719b2aaf8384771bf8517e380c735cf6acad49fddcecb8dd",
+          "result_count": 0,
+          "status_code": 200
+        },
+        {
+          "elapsed_ms": 17.08,
+          "expected_status": 200,
+          "family": "practice-search",
+          "name": "nppes-empty",
+          "passed": true,
+          "path": "/practices/search?specialty=Cardiology&zip=00000&limit=25&location_basis=nppes_primary",
+          "purpose": "Empty result and truncation semantics",
+          "response_bytes": 309,
+          "response_sha256": "001d4430ef14ba87719b2aaf8384771bf8517e380c735cf6acad49fddcecb8dd",
+          "result_count": 0,
+          "status_code": 200
+        },
+        {
+          "elapsed_ms": 13.75,
+          "expected_status": 200,
+          "family": "practice-search",
+          "name": "nppes-empty",
+          "passed": true,
+          "path": "/practices/search?specialty=Cardiology&zip=00000&limit=25&location_basis=nppes_primary",
+          "purpose": "Empty result and truncation semantics",
+          "response_bytes": 309,
+          "response_sha256": "001d4430ef14ba87719b2aaf8384771bf8517e380c735cf6acad49fddcecb8dd",
+          "result_count": 0,
+          "status_code": 200
+        }
+      ]
+    }
+  ],
+  "failure_count": 0,
+  "generated_at": "2026-08-14T18:46:34+00:00",
+  "identity": {
+    "code_commit": "55d31add1ad2751ba803486d6a22ce45bc0aa840",
+    "deployment_id": "candidate-20260814T183948Z-e5ff46dce9-mart",
+    "executor_settings": {
+      "backend": "mart",
+      "duckdb_memory_limit": "2GB",
+      "duckdb_threads": 4,
+      "pool_size": 4
+    },
+    "warehouse_release_id": "warehouse-20260814T183948Z-e5ff46dce9",
+    "warehouse_sha256": "2bcc92d44014b62e2bc0c4c42d3c1b814827668ed653b13ffe565ceea7aac9d3"
+  },
+  "schema_version": 1,
+  "stability_failure_count": 0,
+  "status_failure_count": 0,
+  "timeout_seconds": 60.0,
+  "trial_count": 3
+}

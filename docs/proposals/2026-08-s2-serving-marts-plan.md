@@ -2,8 +2,9 @@
 
 > Status: S2.1-S2.4 complete; the explicitly approved production cutover completed successfully on
 > 2026-08-14 and the first practice-search serving mart is live. S2.5 NPPES-primary implementation
-> is complete. The S2.6 staging-only release builder is implemented and an isolated candidate is
-> next; neither step is a production cutover.
+> is complete. S2.6 produced a validated isolated production-data candidate with passing parity,
+> plans, and concurrency evidence. Its required production copy is capacity-blocked; no deployment
+> was prepared and no NPPES-primary production cutover occurred.
 >
 > Production state: code-only deployment `deployment-20260814T172445Z-3cd965d04e` is selected and
 > verified; S2 deployment `deployment-20260814T160153Z-45ab9d2d38` remains the rollback-ready
@@ -205,15 +206,20 @@ falls back to raw when either is absent or incomplete. Byte-exact fixture parity
 multi-specialty/multi-ZIP, proximity/limit, empty results, raw fallback, and a mart-only query after
 raw dependencies are made unavailable. An isolated production-data release builder, complete
 parity corpus, operator profiles, concurrency benchmark, capacity preview, and explicit cutover
-decision remain required. No production state changes in S2.5.
+decision were the S2.6 gates. The staging candidate now passes the data and performance gates but
+is capacity-blocked before production preparation. No NPPES-primary production state changed.
 
-S2.6 begins with `build-nppes-serving-practice-release`. The command requires a named validated
+S2.6 uses `build-nppes-serving-practice-release`. The command requires a named validated
 baseline and matching verified backup, inherits its source and smoke identity, requires all
 declared NPPES/DAC/claims periods, and transactionally builds only the two NPPES serving tables.
 The `serving_practice_nppes_additive_v1` comparison rejects any other changed-table declaration,
 requires positive exact row-count evidence for both tables, and computes logical fingerprints for
 every invariant table. It is staging-only and intentionally absent from the production manager
-allowlist. An isolated production-data run and its acceptance evidence remain outstanding.
+allowlist. The isolated release `warehouse-20260814T183948Z-e5ff46dce9` passed both mart contracts,
+42 invariant fingerprints, focused exact parity, paired operator plans, and three-trial concurrency
+tests. Mart p95 was 80.0–88.3% lower across concurrency 1–12 with zero failures. The distinct
+production copy projects 90.85% disk use and is blocked; see the
+[candidate record](../operations/s2-nppes-primary-candidate-2026-08-14.md).
 
 Radar already uses release-built state/event tables and receives another mart only if its measured
 plan justifies one. Provider fuzzy search remains separate because precomputation must preserve its

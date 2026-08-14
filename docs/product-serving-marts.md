@@ -4,7 +4,7 @@
 
 The warehouse keeps raw publisher-shaped evidence separate from curated marts. Twelve
 source-oriented foundations are joined by three registered route-specific serving tables: the live
-CMS-enrollment practice table and a two-table NPPES-primary candidate. Registration does not
+CMS-enrollment practice table and a two-table NPPES-primary staging candidate. Registration does not
 automatically authorize replacement of request-time API logic. A route can switch only after
 response parity and a material p95 or resource improvement are proven under the S2 acceptance
 gates.
@@ -30,8 +30,8 @@ running row scans in the serving process.
 | `nppes_radar_provider_state` | One reconciled current state row per `npi` | Row release/period plus release manifest | Radar providers |
 | `nppes_radar_events` | One immutable event per `event_id` | Row release/period plus release manifest | Radar providers |
 | `serving_practice_provider_sites` | One normalized DAC site and organization-or-solo key per NPI | DAC, Part B, and Part D row run/period arrays plus release manifests | Live for `cms_enrollment` practice search |
-| `serving_practice_nppes_provider_sites` | One deterministic primary NPPES site per Medicare NPI | Selected NPPES row plus Part B/Part D run-period arrays | Candidate for `nppes_primary` practice search; not in production |
-| `serving_practice_nppes_org_memberships` | `addr_key × npi × org_pac_id` | DAC run-period arrays; provider parent retains NPPES identity | Candidate organization context bridge; not in production |
+| `serving_practice_nppes_provider_sites` | One deterministic primary NPPES site per Medicare NPI | Selected NPPES row plus Part B/Part D run-period arrays | Validated staging candidate for `nppes_primary`; not in production |
+| `serving_practice_nppes_org_memberships` | `addr_key × npi × org_pac_id` | DAC run-period arrays; provider parent retains NPPES identity | Validated staging organization bridge; not in production |
 
 The first live route-specific contract is `serving_practice_provider_sites`, at one normalized DAC site
 and organization-or-solo key per NPI. It retains ordered specialty values, national Part B and Part
@@ -50,8 +50,10 @@ Medicare NPI, ordered specialty values, national Part B/Part D measures, geocode
 source identity. `serving_practice_nppes_org_memberships` stores the provider's CMS organization
 contexts separately, so a provider associated with multiple organizations cannot duplicate
 national measures. The API's `auto` selector requires both complete table schemas as one
-capability; otherwise it keeps using the raw query. Fixture parity is byte-exact, but no isolated
-production-data candidate, performance proof, deployment, or cutover has occurred for this slice.
+capability; otherwise it keeps using the raw query. The isolated production-data candidate passed
+focused byte-exact parity, operator-plan, concurrency, mart-contract, and invariant-table gates.
+Production preparation is blocked because the required distinct production copy projects 90.85%
+disk use against the 85% limit; no deployment or cutover has occurred for this slice.
 
 The staging-only builder is `python -m pipeline.data_platform
 build-nppes-serving-practice-release`. It requires the exact validated baseline release and a
@@ -99,7 +101,8 @@ ingestion timestamps are never substituted for publisher periods.
 
 The [S2 execution plan](proposals/2026-08-s2-serving-marts-plan.md) begins with measured canonical
 plans, then builds the default practice-search serving mart as the first isolated vertical slice.
-That slice is now live. The NPPES-primary slice is implemented locally and remains behind its raw
-oracle pending an isolated candidate and acceptance evidence. Explorer remains source-faithful,
+That slice is now live. The NPPES-primary slice has a validated staging candidate and remains behind
+its raw oracle pending capacity remediation, deployment rehearsal, and separate cutover approval.
+Explorer remains source-faithful,
 Clinical Trials remains in AACT/PostgreSQL, and every future mart cutover still requires separate
 authorization.

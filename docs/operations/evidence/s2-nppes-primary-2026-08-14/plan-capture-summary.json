@@ -1,0 +1,96 @@
+{
+  "backends": {
+    "mart": {
+      "cases": {
+        "nppes-empty": {
+          "capture_elapsed_ms": 13.932,
+          "operator_time_ms": 12.794,
+          "peak_buffer_memory_bytes": 0,
+          "peak_temporary_storage_bytes": 0,
+          "rows_scanned": 46201038,
+          "slowest_operator": "SEQ_SCAN",
+          "slowest_operator_ms": 4.911
+        },
+        "nppes-multi-zip-specialty": {
+          "capture_elapsed_ms": 114.626,
+          "operator_time_ms": 876.984,
+          "peak_buffer_memory_bytes": 0,
+          "peak_temporary_storage_bytes": 0,
+          "rows_scanned": 46201038,
+          "slowest_operator": "SEQ_SCAN",
+          "slowest_operator_ms": 683.909
+        },
+        "nppes-proximity": {
+          "capture_elapsed_ms": 55.487,
+          "operator_time_ms": 384.359,
+          "peak_buffer_memory_bytes": 0,
+          "peak_temporary_storage_bytes": 0,
+          "rows_scanned": 46201038,
+          "slowest_operator": "SEQ_SCAN",
+          "slowest_operator_ms": 104.68
+        },
+        "nppes-state": {
+          "capture_elapsed_ms": 387.83,
+          "operator_time_ms": 1051.541,
+          "peak_buffer_memory_bytes": 0,
+          "peak_temporary_storage_bytes": 0,
+          "rows_scanned": 46201038,
+          "slowest_operator": "SEQ_SCAN",
+          "slowest_operator_ms": 538.858
+        }
+      },
+      "plan_error_count": 0,
+      "query_count": 4,
+      "status_failure_count": 0
+    },
+    "raw": {
+      "cases": {
+        "nppes-empty": {
+          "capture_elapsed_ms": 369.159,
+          "operator_time_ms": 4918.851,
+          "peak_buffer_memory_bytes": 0,
+          "peak_temporary_storage_bytes": 0,
+          "rows_scanned": 204418117,
+          "slowest_operator": "SEQ_SCAN",
+          "slowest_operator_ms": 3501.261
+        },
+        "nppes-multi-zip-specialty": {
+          "capture_elapsed_ms": 466.912,
+          "operator_time_ms": 6049.935,
+          "peak_buffer_memory_bytes": 0,
+          "peak_temporary_storage_bytes": 0,
+          "rows_scanned": 204418117,
+          "slowest_operator": "SEQ_SCAN",
+          "slowest_operator_ms": 3463.128
+        },
+        "nppes-proximity": {
+          "capture_elapsed_ms": 456.887,
+          "operator_time_ms": 5863.821,
+          "peak_buffer_memory_bytes": 0,
+          "peak_temporary_storage_bytes": 0,
+          "rows_scanned": 204418117,
+          "slowest_operator": "SEQ_SCAN",
+          "slowest_operator_ms": 3413.841
+        },
+        "nppes-state": {
+          "capture_elapsed_ms": 759.001,
+          "operator_time_ms": 6659.06,
+          "peak_buffer_memory_bytes": 0,
+          "peak_temporary_storage_bytes": 0,
+          "rows_scanned": 204418117,
+          "slowest_operator": "SEQ_SCAN",
+          "slowest_operator_ms": 3961.473
+        }
+      },
+      "plan_error_count": 0,
+      "query_count": 4,
+      "status_failure_count": 0
+    }
+  },
+  "case_manifest_sha256": "a240acd11301afb82a663af6d011346d749c06264d7493e57ac53dd4c2151c9a",
+  "code_commit": "55d31add1ad2751ba803486d6a22ce45bc0aa840",
+  "rows_scanned_reduction_percent": 77.4,
+  "schema_version": 1,
+  "warehouse_release_id": "warehouse-20260814T183948Z-e5ff46dce9",
+  "warehouse_sha256": "2bcc92d44014b62e2bc0c4c42d3c1b814827668ed653b13ffe565ceea7aac9d3"
+}

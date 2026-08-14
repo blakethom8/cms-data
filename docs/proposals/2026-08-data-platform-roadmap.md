@@ -221,8 +221,13 @@ Acceptance gates:
 - [x] Preserve raw source evidence and the discovery/profile/evidence endpoint separation.
 - [x] Compare the first practice slice against the existing implementation over the canonical
   corpus. See the [S2 candidate record](../operations/s2-managed-dac-candidate-2026-08-14.md).
-- [x] Demonstrate a material p95 improvement before switching the first route. The route remains
-  unswitched because the capacity and explicit cutover gates are separate.
+- [x] Demonstrate a material p95 improvement before switching the first route. That route is live
+  through deployment-local capability selection.
+- [x] Build and validate the second, NPPES-primary practice candidate against production data. See
+  the [candidate record](../operations/s2-nppes-primary-candidate-2026-08-14.md).
+- [ ] Recover capacity for its required distinct production artifact, then complete deployment
+  smoke, rollback dry-runs, and a separately authorized cutover. The current projection is 90.85%
+  against the 85% promotion block.
 
 ### O1. End-to-end observability
 

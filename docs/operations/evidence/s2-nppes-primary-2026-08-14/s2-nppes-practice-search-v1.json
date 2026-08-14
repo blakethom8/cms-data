@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "requests": [
+    {
+      "name": "nppes-state",
+      "path": "/practices/search?specialty=Cardiology&state=OH&limit=25&location_basis=nppes_primary",
+      "weight": 3
+    },
+    {
+      "name": "nppes-multi-zip-specialty",
+      "path": "/practices/search?specialties=Cardiology%2CInternal%20Medicine&zips=44101%2C44102%2C44103&limit=100&location_basis=nppes_primary",
+      "weight": 2
+    },
+    {
+      "name": "nppes-proximity",
+      "path": "/practices/search?specialty=Cardiology&lat=41.4993&lng=-81.6944&radius_miles=10&limit=50&location_basis=nppes_primary",
+      "weight": 1
+    },
+    {
+      "name": "nppes-empty",
+      "path": "/practices/search?specialty=Cardiology&zip=00000&limit=25&location_basis=nppes_primary",
+      "weight": 1
+    }
+  ]
+}

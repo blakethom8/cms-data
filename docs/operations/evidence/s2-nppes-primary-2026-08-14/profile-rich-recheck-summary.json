@@ -1,0 +1,20 @@
+{
+  "earlier_canonical_capture": {
+    "byte_exact": false,
+    "mart_bytes": 8593,
+    "mart_sha256": "e9f3f969ca2fcd45e359bc5afa1df3dd0d3b6ea702e5e9d282e10f27a96d0e9d",
+    "raw_bytes": 8611,
+    "raw_sha256": "9a1869888d143dce56ccfc6ca17accbc5f1e00f773e6fa0b518d9c9d84d82e3d"
+  },
+  "fresh_recheck": {
+    "byte_exact": true,
+    "mart_bytes": 8611,
+    "mart_sha256": "9a1869888d143dce56ccfc6ca17accbc5f1e00f773e6fa0b518d9c9d84d82e3d",
+    "raw_bytes": 8611,
+    "raw_sha256": "9a1869888d143dce56ccfc6ca17accbc5f1e00f773e6fa0b518d9c9d84d82e3d"
+  },
+  "interpretation": "The earlier cross-process profile mismatch is pre-existing process-order variance outside the NPPES practice backend. Fresh raw-flag and mart-flag responses are byte-identical; each canonical backend run was internally stable.",
+  "nppes_backend_flag_affects_route": false,
+  "route": "/profiles/1811967433",
+  "schema_version": 1
+}

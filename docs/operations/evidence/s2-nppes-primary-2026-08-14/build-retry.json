@@ -1,0 +1,5 @@
+{
+  "command": "build-nppes-serving-practice-release",
+  "environment": "staging",
+  "error": "[Errno 13] Permission denied: '/srv/cms-data-platform/data/warehouse-releases.json'"
+}

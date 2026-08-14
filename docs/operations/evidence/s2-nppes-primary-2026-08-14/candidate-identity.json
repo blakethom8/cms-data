@@ -1,0 +1,13 @@
+{
+  "byte_size": 21513908224,
+  "pipeline_code_commit": "55d31add1ad2751ba803486d6a22ce45bc0aa840",
+  "promotion_state": "not_promoted",
+  "sha256": "2bcc92d44014b62e2bc0c4c42d3c1b814827668ed653b13ffe565ceea7aac9d3",
+  "table_counts": {
+    "serving_practice_nppes_org_memberships": 1361659,
+    "serving_practice_nppes_provider_sites": 1229202
+  },
+  "validation_state": "passed",
+  "validation_timestamp": "2026-08-14T18:41:43+00:00",
+  "warehouse_release_id": "warehouse-20260814T183948Z-e5ff46dce9"
+}
