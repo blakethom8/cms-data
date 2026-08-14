@@ -1,8 +1,8 @@
 # S2 managed-DAC practice candidate — 2026-08-14
 
-> **Decision:** response parity and the S2 performance threshold pass for the first
-> `cms_enrollment` practice-search serving mart. Capacity does not pass. The candidate remains
-> unselected, the route default remains `raw`, and no production cutover is authorized.
+> **Decision:** response parity, performance, and post-cleanup capacity pass for the first
+> `cms_enrollment` practice-search serving mart. The candidate remains unselected and no production
+> cutover is authorized.
 
 ## Outcome
 
@@ -100,26 +100,37 @@ matching before a selective ZIP boundary. Making the location slice an explicit 
 keeps the same response semantics while allowing only the selected geography to reach list
 matching. This was validated by 89 focused tests and the full 468-passed, 1-skipped API suite.
 
-## Capacity gate and next action
+## Capacity gate and route authorization
 
-The read-only retention preview exited 1, as designed. It measured 305,705,242,624 used bytes
+The initial read-only retention preview exited 1, as designed. It measured 305,705,242,624 used bytes
 (84.3%) and 42,137,550,848 free bytes. Supplying the exact candidate size projected 90.08% use,
 above the configured 85% promotion block. The active-plus-two validated rollback floor passed.
 
 The planner names 54 review candidates totaling 95,406,317,568 allocated bytes but confirms zero
 automatically reclaimable bytes. Large items include a 42.5 GB legacy refresh workspace, three
 legacy warehouse artifacts totaling about 45.7 GB, and the 20.95 GB failed first S2 candidate. Each
-path needs explicit manifest/job/reference review and separately authorized cleanup; the final
-candidate and rollback floor must remain protected.
+path needed explicit manifest/job/reference review and separately authorized cleanup; the final
+candidate and rollback floor remained protected.
 
-After reviewed capacity cleanup, rerun the preview. A later PR may then authorize the exact route in
-the mart contract and production comparison policy and prepare an immutable deployment containing
-warehouse `warehouse-20260814T025428Z-5dac630227` plus route code at or after
-`91174f823a7a936e16408a1fdc177442fb30add1`. That work still does not authorize selection or
-cutover; those remain a separate explicit approval gate.
+After explicit approval, the failed unpromoted candidate
+`warehouse-20260814T023853Z-9b87f3e486` was reverified by release ID, SHA-256, validation and
+promotion state, open-file scan, symlink scan, systemd inventory, and production-ledger search. Only
+that directory was deleted, recovering about 20.95 GB. Production stayed on PID 3240475 with zero
+restarts and a healthy 7,395,713-provider response.
+
+The post-cleanup preview exited zero: used capacity is 284,682,866,688 bytes (78.5%), free capacity
+is 63,159,926,784 bytes, and adding the exact candidate size projects 84.28%, below the 85% block.
+The active-plus-two rollback floor still passes.
+
+The authorization change declares `/practices/search` as the mart consumer and permits
+`serving_practice_managed_dac_v1` only with the exact raw-DAC/mart changed-table set, matching row
+counts, and passed mart validation. The API's deployment-local `auto` selector uses the mart when
+the selected immutable warehouse contains it and falls back to raw for predecessor warehouses.
+This avoids a global configuration change that could break rollback. Preparation, selection, and
+cutover remain separate steps.
 
 ## Evidence
 
 Machine-readable acquisition, release, comparison, raw/mart diagnostics, six final benchmark
-trials, and the retention preview are retained under
+trials, and the before/after retention previews are retained under
 [`evidence/s2-managed-dac-2026-08-14`](evidence/s2-managed-dac-2026-08-14/).

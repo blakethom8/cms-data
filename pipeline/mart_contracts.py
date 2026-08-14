@@ -117,6 +117,7 @@ MART_CONTRACTS: tuple[MartSpec, ...] = (
         provenance_scope="row_and_release_manifest",
         kind="serving",
         npi_parent_table=None,
+        authorized_routes=("/practices/search",),
         row_validations=(
             (
                 "invalid_state_or_zip",

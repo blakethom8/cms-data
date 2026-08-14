@@ -647,6 +647,52 @@ def test_cms_serving_mart_is_byte_exact_with_raw_search_oracle():
         assert mart_response.content == raw_response.content
 
 
+def test_auto_backend_uses_raw_without_mart_and_mart_when_available():
+    connection = _database()
+    params = {
+        "specialty": "Cardiology",
+        "state": "CO",
+        "location_basis": "cms_enrollment",
+    }
+    raw_response = _client(connection, cms_backend="raw").get(
+        "/practices/search", params=params
+    )
+    fallback_response = _client(connection, cms_backend="auto").get(
+        "/practices/search", params=params
+    )
+    assert fallback_response.content == raw_response.content
+
+    _build_serving_mart(connection)
+    connection.execute(
+        "ALTER TABLE raw_dac_national RENAME TO unavailable_raw_dac_national"
+    )
+    mart_response = _client(connection, cms_backend="auto").get(
+        "/practices/search", params=params
+    )
+
+    assert mart_response.status_code == 200
+    assert mart_response.content == raw_response.content
+
+
+def test_auto_backend_falls_back_when_serving_table_contract_is_incomplete():
+    connection = _database()
+    connection.execute("CREATE TABLE serving_practice_provider_sites (npi VARCHAR)")
+    params = {
+        "specialty": "Cardiology",
+        "state": "CO",
+        "location_basis": "cms_enrollment",
+    }
+
+    raw_response = _client(connection, cms_backend="raw").get(
+        "/practices/search", params=params
+    )
+    auto_response = _client(connection, cms_backend="auto").get(
+        "/practices/search", params=params
+    )
+
+    assert auto_response.content == raw_response.content
+
+
 def test_proximity_requires_paired_coordinates_and_a_positive_bounded_radius():
     client = _client(_database())
     base = {"specialty": "Cardiology", "location_basis": "nppes_primary"}

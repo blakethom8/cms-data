@@ -37,7 +37,28 @@ LocationBasis = Literal["cms_enrollment", "nppes_primary"]
 PopulationScope = Literal["selected_specialties", "all_specialties"]
 OrganizationScope = Literal["cms_address_pac", "nppes_primary_address"]
 SiteClassification = Literal["solo", "shared_unaffiliated", "organization_context"]
-CmsEnrollmentSearchBackend = Literal["raw", "mart"]
+CmsEnrollmentSearchBackend = Literal["raw", "mart", "auto"]
+CMS_PRACTICE_MART_QUERY_COLUMNS = frozenset(
+    {
+        "npi",
+        "group_key",
+        "org_pac_id",
+        "practice_name",
+        "group_size_national",
+        "address",
+        "city",
+        "state",
+        "zip5",
+        "phone",
+        "specialties",
+        "first_name",
+        "last_name",
+        "latitude",
+        "longitude",
+        "partb_payments",
+        "partd_drug_cost",
+    }
+)
 
 # Search term -> pri_spec ILIKE patterns (CMS uses granular specialty labels).
 SPECIALTY_MAP: dict[str, list[str]] = {
@@ -607,11 +628,41 @@ def get_practices_router(
     # more than one app in the same process.
     router = APIRouter(prefix="/practices", tags=["Medicare Practices"])
     selected_cms_backend = cms_enrollment_search_backend or os.getenv(
-        "CMS_PRACTICE_SEARCH_BACKEND", "raw"
+        "CMS_PRACTICE_SEARCH_BACKEND", "auto"
     )
-    if selected_cms_backend not in {"raw", "mart"}:
-        raise ValueError("CMS_PRACTICE_SEARCH_BACKEND must be raw or mart")
+    if selected_cms_backend not in {"raw", "mart", "auto"}:
+        raise ValueError("CMS_PRACTICE_SEARCH_BACKEND must be raw, mart, or auto")
     specialty_catalog: tuple[str, ...] | None = None
+    cms_mart_available: bool | None = None
+
+    def resolve_cms_backend() -> Literal["raw", "mart"]:
+        """Select the mart only for an immutable warehouse that contains it.
+
+        Capability selection keeps rollback deployment-local: predecessor
+        warehouses without the serving table continue on the raw oracle without
+        requiring a global environment-file change.
+        """
+        nonlocal cms_mart_available
+        if selected_cms_backend != "auto":
+            return selected_cms_backend
+        if cms_mart_available is None:
+            available_columns = {
+                str(row[0])
+                for row in get_conn()
+                .execute(
+                    """
+                    select column_name
+                    from information_schema.columns
+                    where table_schema = 'main'
+                      and table_name = 'serving_practice_provider_sites'
+                    """
+                )
+                .fetchall()
+            }
+            cms_mart_available = CMS_PRACTICE_MART_QUERY_COLUMNS.issubset(
+                available_columns
+            )
+        return "mart" if cms_mart_available else "raw"
 
     def get_specialty_catalog() -> tuple[str, ...]:
         """Load and cache the normalized specialty catalog for this router."""
@@ -707,7 +758,7 @@ def get_practices_router(
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         patterns = patterns_for_specialties(requested_specialties)
         use_cms_mart = (
-            location_basis == "cms_enrollment" and selected_cms_backend == "mart"
+            location_basis == "cms_enrollment" and resolve_cms_backend() == "mart"
         )
 
         loc_clauses: list[str] = []

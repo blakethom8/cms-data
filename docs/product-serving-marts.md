@@ -34,8 +34,10 @@ and organization-or-solo key per NPI. It retains ordered specialty values, natio
 D totals, geocodes, and row-level source period/run IDs. DAC, Part B, and Part D are registered
 managed sources and require release-manifest provenance. The selected production baseline predates
 managed DAC acquisition and its `raw_dac_national` table lacks those provenance columns, so it is
-not eligible as an S2 candidate input. The table remains unauthorized for production serving until
-a newly acquired DAC run is loaded into an isolated candidate and parity and performance gates pass.
+not eligible as an S2 candidate input. The managed-DAC candidate passed parity and performance on
+2026-08-14, so `/practices/search` is now the declared consumer. Runtime capability selection uses
+the mart only when the selected immutable warehouse contains it; predecessors remain on the raw
+oracle without a global environment change.
 
 The additive offline builder is `python -m pipeline.data_platform
 build-serving-practice-release`. It requires a named validated baseline release, a verified backup
@@ -45,8 +47,9 @@ derives the baseline Part B and Part D run-period pairs from their rows, replace
 `raw_dac_national`, and then builds the mart. Its `serving_practice_managed_dac_v1` comparison policy
 allowlists only that raw table and `serving_practice_provider_sites`; every other table is protected
 by row counts, schema digests, and order-independent logical row fingerprints so equal counts cannot
-mask drift. The production release manager intentionally rejects this policy until the S2 gates pass
-and cutover is separately authorized.
+mask drift. The production release manager accepts this policy only when the comparison and release
+both contain the exact two-table scope, matching positive row counts, and passed serving-mart
+validation. Cutover remains separately authorized.
 
 ## Validation states
 

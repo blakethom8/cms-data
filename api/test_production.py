@@ -126,6 +126,36 @@ def _write_release(
         "comparison_policy": comparison_policy,
         "candidate": {"sha256": CANDIDATE_SHA},
     }
+    if comparison_policy == "serving_practice_managed_dac_v1":
+        counts = {
+            "raw_dac_national": 2,
+            "serving_practice_provider_sites": 1,
+        }
+        release["release"]["table_counts"] = counts
+        release["release"]["validation_details"] = {
+            "comparison_policy": comparison_policy,
+            "changed_tables": list(counts),
+            "mart_contract_validation": {
+                "passed": True,
+                "marts": [
+                    {
+                        "table": "serving_practice_provider_sites",
+                        "schema_valid": True,
+                        "data_valid": True,
+                        "issues": [],
+                        "row_count": 1,
+                        "row_validation_failures": {
+                            "invalid_state_or_zip": 0,
+                            "empty_specialties": 0,
+                        },
+                    }
+                ],
+            },
+        }
+        comparison["changed_tables"] = {
+            table: {"baseline_rows": None, "candidate_rows": count}
+            for table, count in counts.items()
+        }
     (release_dir / "release.json").write_text(json.dumps(release))
     (release_dir / "comparison.json").write_text(json.dumps(comparison))
 
@@ -155,7 +185,7 @@ def test_prepare_accepts_targeted_comparison_policy(
     assert deployment.state == production.DeploymentState.PREPARED
 
 
-def test_prepare_rejects_s2_managed_dac_policy_before_cutover_authorization(
+def test_prepare_accepts_validated_s2_managed_dac_policy_after_authorization(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -164,7 +194,52 @@ def test_prepare_rejects_s2_managed_dac_policy_before_cutover_authorization(
         paths, comparison_policy="serving_practice_managed_dac_v1"
     )
 
-    with pytest.raises(production.ProductionError, match="unsupported policy"):
+    deployment = production.prepare_release(
+        paths["production"],
+        paths["artifacts"],
+        paths["data"],
+        paths["candidate_code"],
+        paths["candidate_runtime"],
+        paths["candidate_db"],
+        RELEASE_ID,
+    )
+
+    assert deployment.warehouse_release_id == RELEASE_ID
+    assert deployment.state == production.DeploymentState.PREPARED
+
+
+@pytest.mark.parametrize(
+    "invalid_field",
+    ("comparison_changed_tables", "release_changed_tables", "mart_validation"),
+)
+def test_prepare_rejects_incomplete_s2_managed_dac_authorization_evidence(
+    invalid_field: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paths, _ = _bootstrap_verified(tmp_path, monkeypatch)
+    _write_release(paths, comparison_policy="serving_practice_managed_dac_v1")
+    release_path = paths["data"] / "releases" / RELEASE_ID / "release.json"
+    comparison_path = paths["data"] / "releases" / RELEASE_ID / "comparison.json"
+    release = json.loads(release_path.read_text())
+    comparison = json.loads(comparison_path.read_text())
+    if invalid_field == "comparison_changed_tables":
+        comparison["changed_tables"].pop("raw_dac_national")
+        expected = "changed-table scope"
+    elif invalid_field == "release_changed_tables":
+        release["release"]["validation_details"]["changed_tables"] = [
+            "serving_practice_provider_sites"
+        ]
+        expected = "release validation scope"
+    else:
+        release["release"]["validation_details"]["mart_contract_validation"][
+            "passed"
+        ] = False
+        expected = "serving-mart validation"
+    release_path.write_text(json.dumps(release))
+    comparison_path.write_text(json.dumps(comparison))
+
+    with pytest.raises(production.ProductionError, match=expected):
         production.prepare_release(
             paths["production"],
             paths["artifacts"],
