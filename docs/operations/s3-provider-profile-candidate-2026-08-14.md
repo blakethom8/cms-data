@@ -137,17 +137,25 @@ candidate-sized copy projects 84.29%, only 0.71 percentage points below the 85% 
 active-plus-two validated rollback floor passes, but that margin is not sufficient for another
 same-sized experiment plus normal growth.
 
+The superseded candidate database was subsequently removed through the controlled retention
+procedure recorded in
+[`s3-provider-profile-candidate-retention-cleanup-2026-08-14.md`](s3-provider-profile-candidate-retention-cleanup-2026-08-14.md).
+The release and comparison records remain, production stayed on its verified deployment, and the
+post-cleanup preview reports 70.79% used with 91,137,449,984 bytes free. A conservative
+24,696,061,952-byte candidate now projects 77.60% use and passes the capacity gate.
+
 The next sequence is:
 
 1. Retain this evidence and the three-table design, but keep the profile backend on `raw`.
-2. Reclaim the exact superseded staging candidate only after confirming it has no production or
-   process references; do not touch the active or two rollback warehouses.
-3. The next provider slice is now implemented in code: utilization/prescribing summary, top
+2. The exact superseded staging database has been reclaimed without touching the active or two
+   rollback warehouses.
+3. The next provider slice is implemented and merged in PR
+   [#73](https://github.com/blakethom8/cms-data/pull/73): utilization/prescribing summary, top
    services, and top drugs, together with the deterministic header fix. Its contracts retain
    separate claims source periods and provenance, and its combined release policy allows exactly
    six profile tables to differ.
-4. After approved capacity cleanup or added headroom, produce one new isolated candidate and repeat component/full-response parity, plans, three
-   concurrency trials, capacity, isolated smoke, and rollback rehearsal.
+4. Produce one new isolated six-table candidate and repeat component/full-response parity, plans,
+   three concurrency trials, capacity, isolated smoke, and rollback rehearsal.
 5. Stop again before production preparation or authorization. Consider cutover only if the combined
    slice clears every existing gate.
 
@@ -155,4 +163,5 @@ Merged work supporting this evaluation is in PRs
 [#68](https://github.com/blakethom8/cms-data/pull/68),
 [#69](https://github.com/blakethom8/cms-data/pull/69),
 [#70](https://github.com/blakethom8/cms-data/pull/70), and
-[#71](https://github.com/blakethom8/cms-data/pull/71).
+[#71](https://github.com/blakethom8/cms-data/pull/71). The combined claims-mart implementation is
+in [#73](https://github.com/blakethom8/cms-data/pull/73).
