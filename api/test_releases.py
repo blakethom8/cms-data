@@ -29,6 +29,7 @@ from pipeline.releases import (
     HOSPITAL_COLUMN_MAP,
     NPPES_SERVING_PRACTICE_CHANGED_TABLES,
     PPEF_CHANGED_TABLES,
+    PROVIDER_PROFILE_CHANGED_TABLES,
     PROVIDER_PROFILE_CORE_CHANGED_TABLES,
     SERVING_PRACTICE_CHANGED_TABLES,
     SERVING_PRACTICE_MANAGED_DAC_CHANGED_TABLES,
@@ -46,6 +47,7 @@ from pipeline.releases import (
     build_nppes_serving_practice_warehouse_release,
     build_ppef_warehouse_release,
     build_provider_profile_core_warehouse_release,
+    build_provider_profile_warehouse_release,
     build_serving_practice_warehouse_release,
     build_warehouse_release,
     compare_warehouse_release,
@@ -723,6 +725,93 @@ def _provider_profile_core_baseline(tmp_path: Path) -> tuple[Path, Path, str]:
             );
             INSERT INTO nucc_taxonomy VALUES
                 ('207RC0000X', 'Internal Medicine', 'Cardiovascular Disease');
+
+            ALTER TABLE raw_physician_by_provider
+                ADD COLUMN Rndrng_Prvdr_Ent_Cd VARCHAR;
+            ALTER TABLE raw_physician_by_provider
+                ADD COLUMN Tot_Mdcr_Alowd_Amt DOUBLE;
+            ALTER TABLE raw_physician_by_provider
+                ADD COLUMN Drug_Mdcr_Pymt_Amt DOUBLE;
+            ALTER TABLE raw_physician_by_provider ADD COLUMN Bene_Avg_Age BIGINT;
+            ALTER TABLE raw_physician_by_provider
+                ADD COLUMN Bene_Age_75_84_Cnt BIGINT;
+            ALTER TABLE raw_physician_by_provider
+                ADD COLUMN Bene_Age_GT_84_Cnt BIGINT;
+            ALTER TABLE raw_physician_by_provider ADD COLUMN Bene_Feml_Cnt BIGINT;
+            ALTER TABLE raw_physician_by_provider ADD COLUMN Bene_Dual_Cnt BIGINT;
+            ALTER TABLE raw_physician_by_provider
+                ADD COLUMN Bene_Avg_Risk_Scre DOUBLE;
+            ALTER TABLE raw_physician_by_provider
+                ADD COLUMN Bene_CC_PH_Hypertension_V2_Pct DOUBLE;
+            ALTER TABLE raw_physician_by_provider
+                ADD COLUMN Bene_CC_PH_Hyperlipidemia_V2_Pct DOUBLE;
+            ALTER TABLE raw_physician_by_provider
+                ADD COLUMN Bene_CC_PH_Diabetes_V2_Pct DOUBLE;
+            ALTER TABLE raw_physician_by_provider
+                ADD COLUMN Bene_CC_PH_IschemicHeart_V2_Pct DOUBLE;
+            ALTER TABLE raw_physician_by_provider
+                ADD COLUMN Bene_CC_PH_HF_NonIHD_V2_Pct DOUBLE;
+            ALTER TABLE raw_physician_by_provider
+                ADD COLUMN Bene_CC_PH_Afib_V2_Pct DOUBLE;
+            ALTER TABLE raw_physician_by_provider
+                ADD COLUMN Bene_CC_PH_CKD_V2_Pct DOUBLE;
+            ALTER TABLE raw_physician_by_provider
+                ADD COLUMN Bene_CC_PH_COPD_V2_Pct DOUBLE;
+            ALTER TABLE raw_physician_by_provider
+                ADD COLUMN Bene_CC_BH_Depress_V1_Pct DOUBLE;
+            UPDATE raw_physician_by_provider
+            SET Rndrng_Prvdr_Ent_Cd = 'I', Tot_Mdcr_Alowd_Amt = 100,
+                Drug_Mdcr_Pymt_Amt = 10, Bene_Avg_Age = 75,
+                Bene_Age_75_84_Cnt = 3, Bene_Age_GT_84_Cnt = 2,
+                Bene_Feml_Cnt = 5, Bene_Dual_Cnt = 2,
+                Bene_Avg_Risk_Scre = 1.5,
+                Bene_CC_PH_Hypertension_V2_Pct = 50,
+                Bene_CC_PH_Hyperlipidemia_V2_Pct = 40,
+                Bene_CC_PH_Diabetes_V2_Pct = 30,
+                Bene_CC_PH_IschemicHeart_V2_Pct = 20,
+                Bene_CC_PH_HF_NonIHD_V2_Pct = 10,
+                Bene_CC_PH_Afib_V2_Pct = 9, Bene_CC_PH_CKD_V2_Pct = 8,
+                Bene_CC_PH_COPD_V2_Pct = 7,
+                Bene_CC_BH_Depress_V1_Pct = 6;
+
+            CREATE TABLE raw_physician_by_provider_and_service (
+                Rndrng_NPI VARCHAR, Rndrng_Prvdr_Type VARCHAR,
+                HCPCS_Cd VARCHAR, HCPCS_Desc VARCHAR, HCPCS_Drug_Ind VARCHAR,
+                Place_Of_Srvc VARCHAR, Tot_Srvcs DOUBLE, Tot_Benes BIGINT,
+                Avg_Mdcr_Pymt_Amt DOUBLE, source_run_id VARCHAR,
+                source_data_period VARCHAR
+            );
+            INSERT INTO raw_physician_by_provider_and_service VALUES
+                ('1234567890', 'Cardiology', '99213', 'Office visit', 'N',
+                 'O', 10, 8, 12.5, 'partb-service-run', '2024');
+
+            ALTER TABLE raw_part_d_by_provider ADD COLUMN Tot_Clms BIGINT;
+            ALTER TABLE raw_part_d_by_provider ADD COLUMN Tot_Benes BIGINT;
+            ALTER TABLE raw_part_d_by_provider ADD COLUMN Brnd_Tot_Clms BIGINT;
+            ALTER TABLE raw_part_d_by_provider ADD COLUMN Gnrc_Tot_Clms BIGINT;
+            ALTER TABLE raw_part_d_by_provider
+                ADD COLUMN Brnd_Tot_Drug_Cst DOUBLE;
+            ALTER TABLE raw_part_d_by_provider
+                ADD COLUMN Opioid_Prscrbr_Rate DOUBLE;
+            ALTER TABLE raw_part_d_by_provider ADD COLUMN LIS_Tot_Clms BIGINT;
+            ALTER TABLE raw_part_d_by_provider ADD COLUMN Bene_Avg_Age DOUBLE;
+            ALTER TABLE raw_part_d_by_provider
+                ADD COLUMN Bene_Avg_Risk_Scre DOUBLE;
+            UPDATE raw_part_d_by_provider
+            SET Tot_Clms = 10, Tot_Benes = 5, Brnd_Tot_Clms = 2,
+                Gnrc_Tot_Clms = 8, Brnd_Tot_Drug_Cst = 20,
+                Opioid_Prscrbr_Rate = 1, LIS_Tot_Clms = 3,
+                Bene_Avg_Age = 74, Bene_Avg_Risk_Scre = 1.4;
+
+            CREATE TABLE raw_part_d_by_provider_and_drug (
+                Prscrbr_NPI VARCHAR, Brnd_Name VARCHAR, Gnrc_Name VARCHAR,
+                Tot_Clms BIGINT, Tot_Benes BIGINT, Tot_Drug_Cst DOUBLE,
+                Tot_Day_Suply BIGINT, source_run_id VARCHAR,
+                source_data_period VARCHAR
+            );
+            INSERT INTO raw_part_d_by_provider_and_drug VALUES
+                ('1234567890', 'Example Brand', 'Example Generic', 10, 5,
+                 50.75, 300, 'partd-drug-run', '2024');
             CHECKPOINT;
             '''
         )
@@ -736,12 +825,21 @@ def _provider_profile_core_baseline(tmp_path: Path) -> tuple[Path, Path, str]:
     store = WarehouseReleaseStore(data_root / "warehouse-releases.json")
     document = store.load()
     release = document.releases[0]
-    release.source_run_ids = (*release.source_run_ids, "reassign-run")
+    release.source_run_ids = (
+        *release.source_run_ids,
+        "reassign-run",
+        "partb-service-run",
+        "partd-drug-run",
+    )
     release.byte_size = baseline.stat().st_size
     release.sha256 = digest
     release.baseline_sha256 = digest
     release.validation_details["source_periods"].update(
-        {"cms_revalidation_group_reassignment": "2026-07"}
+        {
+            "cms_revalidation_group_reassignment": "2026-07",
+            "cms_physician_by_provider_and_service": "2024",
+            "cms_part_d_by_provider_and_drug": "2024",
+        }
     )
     store.save(document)
     return data_root, backup_manifest, baseline_release_id
@@ -1125,6 +1223,44 @@ def test_provider_profile_core_release_adds_exact_three_table_scope(
     assert location == ("1234567890", "10 MAIN ST|90001", "dac + nppes")
     assert group == ("1234567890", "PAC-1", "dac + reassignment")
     assert marker == "preserved"
+
+
+def test_complete_provider_profile_release_adds_exact_six_table_scope(
+    tmp_path: Path,
+) -> None:
+    data_root, backup_manifest, baseline_release_id = (
+        _provider_profile_core_baseline(tmp_path)
+    )
+    result = build_provider_profile_warehouse_release(
+        data_root=data_root,
+        baseline_warehouse_release_id=baseline_release_id,
+        backup_manifest_path=backup_manifest,
+        data_year=2026,
+        code_commit=CODE_COMMIT,
+        memory_limit_gb=1,
+        threads=1,
+    )
+    comparison = compare_warehouse_release(
+        data_root=data_root,
+        warehouse_release_id=result.release.warehouse_release_id,
+        backup_manifest_path=backup_manifest,
+    )
+
+    assert comparison["state"] == "passed"
+    assert comparison["comparison_policy"] == (
+        "serving_provider_profile_complete_additive_v1"
+    )
+    assert comparison["unexpected_differences"] == []
+    assert set(comparison["changed_tables"]) == PROVIDER_PROFILE_CHANGED_TABLES
+    assert set(result.release.table_counts) == PROVIDER_PROFILE_CHANGED_TABLES
+    assert result.release.table_counts[
+        "serving_provider_profile_claims_summary"
+    ] == 1
+    assert result.release.table_counts["serving_provider_profile_top_services"] == 1
+    assert result.release.table_counts["serving_provider_profile_top_drugs"] == 1
+    assert result.release.validation_details["mart_contract_validation"][
+        "passed"
+    ] is True
 
     store = WarehouseReleaseStore(data_root / "warehouse-releases.json")
     document = store.load()

@@ -97,6 +97,16 @@ PROVIDER_PROFILE_CORE_CHANGED_TABLES = frozenset(
         "serving_provider_profile_groups",
     }
 )
+PROVIDER_PROFILE_CLAIMS_CHANGED_TABLES = frozenset(
+    {
+        "serving_provider_profile_claims_summary",
+        "serving_provider_profile_top_services",
+        "serving_provider_profile_top_drugs",
+    }
+)
+PROVIDER_PROFILE_CHANGED_TABLES = (
+    PROVIDER_PROFILE_CORE_CHANGED_TABLES | PROVIDER_PROFILE_CLAIMS_CHANGED_TABLES
+)
 SERVING_PRACTICE_MANAGED_DAC_CHANGED_TABLES = frozenset(
     {"raw_dac_national", "serving_practice_provider_sites"}
 )
@@ -2189,9 +2199,13 @@ def build_provider_profile_core_warehouse_release(
     code_commit: str | None = None,
     memory_limit_gb: int = 12,
     threads: int = 1,
+    _include_claims: bool = False,
 ) -> BuildResult:
-    """Build only the first provider-profile serving slice on a baseline copy."""
-    from .transform import build_serving_provider_profile_core_tables
+    """Build provider-profile serving tables on an immutable baseline copy."""
+    from .transform import (
+        build_serving_provider_profile_claims_tables,
+        build_serving_provider_profile_core_tables,
+    )
 
     _validate_targeted_build_resources(memory_limit_gb, threads)
     if data_year < 2000 or data_year > 2100:
@@ -2283,7 +2297,12 @@ def build_provider_profile_core_warehouse_release(
                 "artifact_sha256": manifest.sha256,
             }
         )
-    contract_tables = tuple(sorted(PROVIDER_PROFILE_CORE_CHANGED_TABLES))
+    changed_tables = (
+        PROVIDER_PROFILE_CHANGED_TABLES
+        if _include_claims
+        else PROVIDER_PROFILE_CORE_CHANGED_TABLES
+    )
+    contract_tables = tuple(sorted(changed_tables))
     required_period_sources = {
         source_id
         for table in contract_tables
@@ -2319,10 +2338,15 @@ def build_provider_profile_core_warehouse_release(
             "Provider-profile serving baseline has invalid smoke table-count evidence"
         )
 
+    identity_prefix = (
+        "serving_provider_profile_complete_tables\0"
+        if _include_claims
+        else "serving_provider_profile_core_tables\0"
+    )
     identity = hashlib.sha256(
         (
-            "serving_provider_profile_core_tables\0"
-            f"{baseline_warehouse_release_id}\0{reassignment_run_id or ''}"
+            identity_prefix
+            + f"{baseline_warehouse_release_id}\0{reassignment_run_id or ''}"
         ).encode()
     ).hexdigest()
     warehouse_release_id = make_warehouse_release_id(identity, commit)
@@ -2365,6 +2389,12 @@ def build_provider_profile_core_warehouse_release(
                     table_counts = build_serving_provider_profile_core_tables(
                         connection, data_year
                     )
+                    if _include_claims:
+                        table_counts.update(
+                            build_serving_provider_profile_claims_tables(
+                                connection, data_year
+                            )
+                        )
                     contract_validation = validate_mart_contracts(
                         connection,
                         source_periods=source_periods,
@@ -2377,7 +2407,7 @@ def build_provider_profile_core_warehouse_release(
                 except Exception:
                     connection.execute("ROLLBACK")
                     raise
-                if set(table_counts) != set(PROVIDER_PROFILE_CORE_CHANGED_TABLES):
+                if set(table_counts) != set(changed_tables):
                     raise ReleaseError(
                         "Provider-profile serving build returned the wrong table set"
                     )
@@ -2387,10 +2417,14 @@ def build_provider_profile_core_warehouse_release(
                     )
                 release.validation_details = {
                     "release_scope": "targeted_additive",
-                    "comparison_policy": "serving_provider_profile_core_additive_v1",
+                    "comparison_policy": (
+                        "serving_provider_profile_complete_additive_v1"
+                        if _include_claims
+                        else "serving_provider_profile_core_additive_v1"
+                    ),
                     "baseline_warehouse_release_id": baseline_warehouse_release_id,
                     "source_periods": dict(sorted(source_periods.items())),
-                    "changed_tables": sorted(PROVIDER_PROFILE_CORE_CHANGED_TABLES),
+                    "changed_tables": sorted(changed_tables),
                     "serving_mart_counts": dict(sorted(table_counts.items())),
                     "reconciled_source_runs": reconciled_source_runs,
                     **(
@@ -2437,6 +2471,31 @@ def build_provider_profile_core_warehouse_release(
         database_path=database_path,
         release_manifest_path=_release_manifest_path(data_root, warehouse_release_id),
         release_store_path=release_store_path,
+    )
+
+
+def build_provider_profile_warehouse_release(
+    *,
+    data_root: Path,
+    baseline_warehouse_release_id: str,
+    backup_manifest_path: Path,
+    data_year: int,
+    reassignment_run_id: str | None = None,
+    code_commit: str | None = None,
+    memory_limit_gb: int = 12,
+    threads: int = 1,
+) -> BuildResult:
+    """Build the complete core plus claims profile capability in one release."""
+    return build_provider_profile_core_warehouse_release(
+        data_root=data_root,
+        baseline_warehouse_release_id=baseline_warehouse_release_id,
+        backup_manifest_path=backup_manifest_path,
+        data_year=data_year,
+        reassignment_run_id=reassignment_run_id,
+        code_commit=code_commit,
+        memory_limit_gb=memory_limit_gb,
+        threads=threads,
+        _include_claims=True,
     )
 
 
@@ -3008,10 +3067,16 @@ def _comparison_policy(
     release: WarehouseRelease,
 ) -> tuple[str, frozenset[str], dict[str, int]]:
     """Select the exact source-owned table set for a release comparison."""
-    if (
-        release.validation_details.get("comparison_policy")
-        == "serving_provider_profile_core_additive_v1"
-    ):
+    profile_policy = release.validation_details.get("comparison_policy")
+    if profile_policy in {
+        "serving_provider_profile_core_additive_v1",
+        "serving_provider_profile_complete_additive_v1",
+    }:
+        profile_changed_tables = (
+            PROVIDER_PROFILE_CHANGED_TABLES
+            if profile_policy == "serving_provider_profile_complete_additive_v1"
+            else PROVIDER_PROFILE_CORE_CHANGED_TABLES
+        )
         changed_tables = release.validation_details.get("changed_tables")
         evidence = release.validation_details.get("serving_mart_counts")
         baseline_release_id = release.validation_details.get(
@@ -3020,7 +3085,7 @@ def _comparison_policy(
         declared_changed_tables = (
             set(changed_tables) if isinstance(changed_tables, list) else set()
         )
-        if declared_changed_tables != set(PROVIDER_PROFILE_CORE_CHANGED_TABLES):
+        if declared_changed_tables != set(profile_changed_tables):
             raise ReleaseError(
                 "Provider-profile serving release has an invalid changed-table allowlist"
             )
@@ -3029,7 +3094,7 @@ def _comparison_policy(
                 "Provider-profile serving release lacks its baseline release identity"
             )
         if not isinstance(evidence, dict) or set(evidence) != set(
-            PROVIDER_PROFILE_CORE_CHANGED_TABLES
+            profile_changed_tables
         ):
             raise ReleaseError(
                 "Provider-profile serving release lacks exact row-count evidence"
@@ -3047,8 +3112,8 @@ def _comparison_policy(
                 "Provider-profile serving row-count evidence must be positive"
             )
         return (
-            "serving_provider_profile_core_additive_v1",
-            PROVIDER_PROFILE_CORE_CHANGED_TABLES,
+            str(profile_policy),
+            profile_changed_tables,
             expected_counts,
         )
     if (
@@ -3253,6 +3318,7 @@ def compare_warehouse_release(
                 "serving_practice_managed_dac_v1",
                 "serving_practice_nppes_additive_v1",
                 "serving_provider_profile_core_additive_v1",
+                "serving_provider_profile_complete_additive_v1",
             }:
                 baseline_fingerprints = {
                     table: _table_logical_fingerprint(baseline_connection, table)

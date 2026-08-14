@@ -1,6 +1,6 @@
 # S3 provider-profile serving marts plan
 
-> **Last reviewed: 2026-08-14** · **Status: S3.2 evaluated; core slice retained staging-only**
+> **Last reviewed: 2026-08-14** · **Status: S3.4 claims slice implemented; production unchanged**
 >
 > **Production state:** unchanged. Provider-profile core queries still default to the raw oracle.
 > One isolated candidate was built and evaluated, but was never prepared or selected. It missed the
@@ -37,9 +37,10 @@ capture; the standard profile took 244 ms with the same operator-row scale. Sepa
 runs observed roughly 777 ms and 592 ms respectively. These are diagnostic measurements against a
 fixed warehouse, not promises about production latency.
 
-The first three projections remove repeated identity, location, and group joins. They do not yet
-materialize utilization, services, drugs, industry, research, quality, or hospital sections, so the
-end-to-end benefit must be measured before any route switch.
+The first three projections remove repeated identity, location, and group joins. The next three
+response-exact projections now materialize utilization/prescribing summaries, top services, and
+top drugs. Industry, research, quality, and hospital sections still use their existing paths, so
+the combined six-table capability must be measured before any route switch.
 
 ## S3.1 — contract and implementation
 
@@ -104,6 +105,45 @@ selection. Because the latter merged after the candidate build, the candidate is
 with current parity semantics. The next candidate must include that fix plus the utilization,
 top-services, and top-drugs slice before these gates are rerun.
 
+## S3.4 — claims-side serving slice
+
+Implemented in the repository, but not built against production data:
+
+| Table | Grain | Existing response sections |
+| --- | --- | --- |
+| `serving_provider_profile_claims_summary` | One claims-bearing provider NPI | `panel`, `clinical`, and `prescribing` |
+| `serving_provider_profile_top_services` | One NPI × deterministic service rank, maximum 10 | `top_procedures` |
+| `serving_provider_profile_top_drugs` | One NPI × deterministic drug rank, maximum 10 | `top_drugs` |
+
+The summary retains separate Part B provider, Part B service, and Part D provider run/period
+arrays. The detail rows retain their contributing service or drug run/period. Source-grain
+duplicates and missing provenance fail the build before any table is accepted. Stable HCPCS,
+brand, and generic tie-breakers make repeated builds deterministic; service descriptions use a
+deterministic minimum rather than `any_value`. This does not broaden the endpoint's existing HCPCS
+description exposure, and the existing AMA licensing gate still applies to commercialization.
+
+`auto` detects the three claims tables independently of the three core tables. An incomplete
+claims capability therefore falls back to the raw claims oracle without disabling a complete core
+capability. `raw` remains the deployment default.
+
+The combined staging command is:
+
+```bash
+.venv/bin/python -m pipeline.data_platform \
+  build-provider-profile-release \
+  --baseline-warehouse-release-id <validated-release-id> \
+  --backup-manifest <verified-backup-manifest.json> \
+  --data-year <year> \
+  --code-commit <full-40-character-commit> \
+  --environment staging \
+  --json
+```
+
+It builds all six tables in one transaction and uses
+`serving_provider_profile_complete_additive_v1`, which permits exactly those six tables to differ
+from the verified baseline and fingerprints every invariant table. The production manager does not
+authorize that policy. No candidate, preparation, or cutover has occurred for this slice.
+
 ## S3.3 — explicit authorization and cutover
 
 Only after S3.2 passes should a separate change authorize
@@ -116,7 +156,7 @@ expected because the CMS endpoint contract remains unchanged.
 
 Continue in measured order:
 
-1. Utilization summary, top services, and top drugs.
+1. Evaluate the implemented utilization summary, top services, and top drugs with the core slice.
 2. Industry summary and its high-fanout facets.
 3. Quality and research summaries where their source semantics remain exact.
 4. Hospital projection only after facility-affiliation and hospital source registration is complete.

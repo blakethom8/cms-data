@@ -1124,6 +1124,416 @@ def build_serving_provider_profile_core_tables(
     return counts
 
 
+def _ensure_serving_provider_profile_claims_tables(
+    con: duckdb.DuckDBPyConnection,
+) -> None:
+    con.execute(
+        """
+        CREATE TABLE IF NOT EXISTS serving_provider_profile_claims_summary (
+            npi VARCHAR(10) PRIMARY KEY, has_panel BOOLEAN NOT NULL,
+            medicare_patients BIGINT, panel_total_services DOUBLE,
+            services_per_patient DOUBLE, medicare_allowed_amt DOUBLE,
+            part_b_drug_payments DOUBLE, avg_patient_age BIGINT,
+            pct_age_75_plus DOUBLE, pct_female DOUBLE,
+            pct_dual_eligible DOUBLE, avg_hcc_risk_score DOUBLE,
+            pct_hypertension DOUBLE, pct_hyperlipidemia DOUBLE,
+            pct_diabetes DOUBLE, pct_ischemic_heart DOUBLE,
+            pct_heart_failure DOUBLE, pct_afib DOUBLE, pct_ckd DOUBLE,
+            pct_copd DOUBLE, pct_depression DOUBLE,
+            has_clinical BOOLEAN NOT NULL, cms_specialty VARCHAR,
+            distinct_codes BIGINT NOT NULL, clinical_total_services DOUBLE,
+            est_total_paid DOUBLE, facility_paid_share DOUBLE,
+            drug_admin_paid_share DOUBLE, em_paid_share DOUBLE,
+            has_prescribing BOOLEAN NOT NULL, total_claims BIGINT,
+            prescribing_patients BIGINT, total_cost DOUBLE,
+            cost_per_claim DOUBLE, brand_claim_share DOUBLE,
+            brand_cost_share DOUBLE, opioid_rate_pct DOUBLE,
+            lis_claim_share DOUBLE, rx_panel_avg_age DOUBLE,
+            rx_panel_risk DOUBLE,
+            part_b_provider_source_data_periods VARCHAR[] NOT NULL,
+            part_b_provider_source_run_ids VARCHAR[] NOT NULL,
+            part_b_service_source_data_periods VARCHAR[] NOT NULL,
+            part_b_service_source_run_ids VARCHAR[] NOT NULL,
+            part_d_provider_source_data_periods VARCHAR[] NOT NULL,
+            part_d_provider_source_run_ids VARCHAR[] NOT NULL,
+            data_year INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS serving_provider_profile_top_services (
+            npi VARCHAR(10) NOT NULL, service_rank INTEGER NOT NULL,
+            hcpcs VARCHAR NOT NULL, category VARCHAR NOT NULL,
+            description VARCHAR, services DOUBLE, patients BIGINT,
+            est_paid DOUBLE, pct_of_paid DOUBLE, facility_share DOUBLE,
+            source_data_periods VARCHAR[] NOT NULL,
+            source_run_ids VARCHAR[] NOT NULL, data_year INTEGER NOT NULL,
+            PRIMARY KEY (npi, service_rank), UNIQUE (npi, hcpcs)
+        );
+        CREATE INDEX IF NOT EXISTS idx_serving_profile_top_services_npi
+            ON serving_provider_profile_top_services(npi);
+
+        CREATE TABLE IF NOT EXISTS serving_provider_profile_top_drugs (
+            npi VARCHAR(10) NOT NULL, drug_rank INTEGER NOT NULL,
+            brand VARCHAR, generic VARCHAR, claims BIGINT, patients BIGINT,
+            drug_cost DOUBLE, cost_per_claim DOUBLE, days_per_claim DOUBLE,
+            specialty_tier BOOLEAN, pct_of_cost DOUBLE,
+            source_data_periods VARCHAR[] NOT NULL,
+            source_run_ids VARCHAR[] NOT NULL, data_year INTEGER NOT NULL,
+            PRIMARY KEY (npi, drug_rank)
+        );
+        CREATE INDEX IF NOT EXISTS idx_serving_profile_top_drugs_npi
+            ON serving_provider_profile_top_drugs(npi);
+        """
+    )
+
+
+def build_serving_provider_profile_claims_tables(
+    con: duckdb.DuckDBPyConnection, data_year: int
+) -> dict[str, int]:
+    """Build response-exact profile utilization, service, and drug marts.
+
+    The summary and both detail tables retain the profile endpoint's existing
+    response grain. Deterministic tie-breakers make repeated builds stable,
+    while separate source arrays keep Part B provider, Part B service, and
+    Part D provider evidence distinguishable.
+    """
+    required_columns = {
+        "raw_physician_by_provider": {
+            "Rndrng_NPI", "Rndrng_Prvdr_Ent_Cd", "Tot_Benes", "Tot_Srvcs",
+            "Tot_Mdcr_Alowd_Amt", "Drug_Mdcr_Pymt_Amt", "Bene_Avg_Age",
+            "Bene_Age_75_84_Cnt", "Bene_Age_GT_84_Cnt", "Bene_Feml_Cnt",
+            "Bene_Dual_Cnt", "Bene_Avg_Risk_Scre",
+            "Bene_CC_PH_Hypertension_V2_Pct",
+            "Bene_CC_PH_Hyperlipidemia_V2_Pct",
+            "Bene_CC_PH_Diabetes_V2_Pct",
+            "Bene_CC_PH_IschemicHeart_V2_Pct",
+            "Bene_CC_PH_HF_NonIHD_V2_Pct", "Bene_CC_PH_Afib_V2_Pct",
+            "Bene_CC_PH_CKD_V2_Pct", "Bene_CC_PH_COPD_V2_Pct",
+            "Bene_CC_BH_Depress_V1_Pct", "source_run_id",
+            "source_data_period",
+        },
+        "raw_physician_by_provider_and_service": {
+            "Rndrng_NPI", "Rndrng_Prvdr_Type", "HCPCS_Cd", "HCPCS_Desc",
+            "HCPCS_Drug_Ind", "Place_Of_Srvc", "Tot_Srvcs", "Tot_Benes",
+            "Avg_Mdcr_Pymt_Amt", "source_run_id", "source_data_period",
+        },
+        "raw_part_d_by_provider": {
+            "Prscrbr_NPI", "Tot_Clms", "Tot_Benes", "Tot_Drug_Cst",
+            "Brnd_Tot_Clms", "Gnrc_Tot_Clms", "Brnd_Tot_Drug_Cst",
+            "Opioid_Prscrbr_Rate", "LIS_Tot_Clms", "Bene_Avg_Age",
+            "Bene_Avg_Risk_Scre", "source_run_id", "source_data_period",
+        },
+        "raw_part_d_by_provider_and_drug": {
+            "Prscrbr_NPI", "Brnd_Name", "Gnrc_Name", "Tot_Clms",
+            "Tot_Benes", "Tot_Drug_Cst", "Tot_Day_Suply", "source_run_id",
+            "source_data_period",
+        },
+        "serving_provider_profile_headers": {"npi"},
+    }
+    missing_tables = [
+        table
+        for table, columns in required_columns.items()
+        if not _table_has_columns(con, table, columns)
+    ]
+    if missing_tables:
+        raise ValueError(
+            "Provider profile claims inputs are missing required provenance or fields: "
+            + ", ".join(sorted(missing_tables))
+        )
+
+    provenance_checks = (
+        ("Part B provider", "raw_physician_by_provider", "Rndrng_NPI"),
+        (
+            "Part B service",
+            "raw_physician_by_provider_and_service",
+            "Rndrng_NPI",
+        ),
+        ("Part D provider", "raw_part_d_by_provider", "Prscrbr_NPI"),
+        ("Part D drug", "raw_part_d_by_provider_and_drug", "Prscrbr_NPI"),
+    )
+    for label, table, npi_column in provenance_checks:
+        missing = int(
+            con.execute(
+                f"""
+                SELECT count(*) FROM {table}
+                WHERE nullif(trim(CAST({npi_column} AS VARCHAR)), '') IS NOT NULL
+                  AND (nullif(trim(source_data_period), '') IS NULL
+                       OR nullif(trim(source_run_id), '') IS NULL)
+                """
+            ).fetchone()[0]
+        )
+        if missing:
+            raise ValueError(
+                "Provider profile claims mart found eligible "
+                f"{label} rows without source provenance: {missing}"
+            )
+
+    uniqueness_checks = (
+        (
+            "Part B provider NPI",
+            """
+            SELECT count(*) FROM (
+                SELECT CAST(Rndrng_NPI AS VARCHAR)
+                FROM raw_physician_by_provider
+                WHERE Rndrng_Prvdr_Ent_Cd = 'I'
+                GROUP BY 1 HAVING count(*) > 1
+            )
+            """,
+        ),
+        (
+            "Part B service NPI/HCPCS/place-of-service",
+            """
+            SELECT count(*) FROM (
+                SELECT CAST(Rndrng_NPI AS VARCHAR), HCPCS_Cd, Place_Of_Srvc
+                FROM raw_physician_by_provider_and_service
+                GROUP BY 1, 2, 3 HAVING count(*) > 1
+            )
+            """,
+        ),
+        (
+            "Part D provider NPI",
+            """
+            SELECT count(*) FROM (
+                SELECT CAST(Prscrbr_NPI AS VARCHAR)
+                FROM raw_part_d_by_provider
+                GROUP BY 1 HAVING count(*) > 1
+            )
+            """,
+        ),
+        (
+            "Part D drug NPI/brand/generic",
+            """
+            SELECT count(*) FROM (
+                SELECT CAST(Prscrbr_NPI AS VARCHAR), Brnd_Name, Gnrc_Name
+                FROM raw_part_d_by_provider_and_drug
+                GROUP BY 1, 2, 3 HAVING count(*) > 1
+            )
+            """,
+        ),
+    )
+    for label, sql in uniqueness_checks:
+        duplicates = int(con.execute(sql).fetchone()[0])
+        if duplicates:
+            raise ValueError(
+                f"Provider profile claims input violates {label} grain: "
+                f"{duplicates} duplicate keys"
+            )
+
+    _ensure_serving_provider_profile_claims_tables(con)
+    logger.info("Building provider profile claims serving tables (data_year=%d)", data_year)
+    con.execute("DELETE FROM serving_provider_profile_top_services")
+    con.execute("DELETE FROM serving_provider_profile_top_drugs")
+    con.execute("DELETE FROM serving_provider_profile_claims_summary")
+
+    con.execute(
+        """
+        INSERT INTO serving_provider_profile_claims_summary
+        WITH panel AS (
+            SELECT CAST(Rndrng_NPI AS VARCHAR) npi,
+                   Tot_Benes medicare_patients,
+                   Tot_Srvcs panel_total_services,
+                   round(Tot_Srvcs / nullif(Tot_Benes, 0), 1) services_per_patient,
+                   round(Tot_Mdcr_Alowd_Amt) medicare_allowed_amt,
+                   round(Drug_Mdcr_Pymt_Amt) part_b_drug_payments,
+                   Bene_Avg_Age avg_patient_age,
+                   round(100.0 * (coalesce(Bene_Age_75_84_Cnt, 0)
+                         + coalesce(Bene_Age_GT_84_Cnt, 0))
+                         / nullif(Tot_Benes, 0)) pct_age_75_plus,
+                   round(100.0 * Bene_Feml_Cnt / nullif(Tot_Benes, 0)) pct_female,
+                   round(100.0 * Bene_Dual_Cnt / nullif(Tot_Benes, 0)) pct_dual_eligible,
+                   Bene_Avg_Risk_Scre avg_hcc_risk_score,
+                   Bene_CC_PH_Hypertension_V2_Pct pct_hypertension,
+                   Bene_CC_PH_Hyperlipidemia_V2_Pct pct_hyperlipidemia,
+                   Bene_CC_PH_Diabetes_V2_Pct pct_diabetes,
+                   Bene_CC_PH_IschemicHeart_V2_Pct pct_ischemic_heart,
+                   Bene_CC_PH_HF_NonIHD_V2_Pct pct_heart_failure,
+                   Bene_CC_PH_Afib_V2_Pct pct_afib,
+                   Bene_CC_PH_CKD_V2_Pct pct_ckd,
+                   Bene_CC_PH_COPD_V2_Pct pct_copd,
+                   Bene_CC_BH_Depress_V1_Pct pct_depression,
+                   [source_data_period] source_data_periods,
+                   [source_run_id] source_run_ids
+            FROM raw_physician_by_provider
+            WHERE Rndrng_Prvdr_Ent_Cd = 'I'
+        ),
+        clinical AS (
+            SELECT CAST(Rndrng_NPI AS VARCHAR) npi,
+                   min(Rndrng_Prvdr_Type) cms_specialty,
+                   count(distinct HCPCS_Cd) distinct_codes,
+                   sum(Tot_Srvcs) clinical_total_services,
+                   round(sum(Tot_Srvcs * Avg_Mdcr_Pymt_Amt)) est_total_paid,
+                   round(sum(Tot_Srvcs * Avg_Mdcr_Pymt_Amt)
+                         FILTER (WHERE Place_Of_Srvc = 'F')
+                         / nullif(sum(Tot_Srvcs * Avg_Mdcr_Pymt_Amt), 0), 2)
+                       facility_paid_share,
+                   round(sum(Tot_Srvcs * Avg_Mdcr_Pymt_Amt)
+                         FILTER (WHERE HCPCS_Drug_Ind = 'Y')
+                         / nullif(sum(Tot_Srvcs * Avg_Mdcr_Pymt_Amt), 0), 2)
+                       drug_admin_paid_share,
+                   round(sum(Tot_Srvcs * Avg_Mdcr_Pymt_Amt)
+                         FILTER (WHERE HCPCS_Cd BETWEEN '99091' AND '99499')
+                         / nullif(sum(Tot_Srvcs * Avg_Mdcr_Pymt_Amt), 0), 2)
+                       em_paid_share,
+                   list(distinct source_data_period order by source_data_period)
+                       source_data_periods,
+                   list(distinct source_run_id order by source_run_id) source_run_ids
+            FROM raw_physician_by_provider_and_service
+            GROUP BY 1
+        ),
+        prescribing AS (
+            SELECT CAST(Prscrbr_NPI AS VARCHAR) npi,
+                   Tot_Clms total_claims, Tot_Benes prescribing_patients,
+                   round(Tot_Drug_Cst) total_cost,
+                   round(Tot_Drug_Cst / nullif(Tot_Clms, 0), 2) cost_per_claim,
+                   round(Brnd_Tot_Clms * 1.0
+                         / nullif(Brnd_Tot_Clms + Gnrc_Tot_Clms, 0), 2)
+                       brand_claim_share,
+                   round(Brnd_Tot_Drug_Cst / nullif(Tot_Drug_Cst, 0), 2)
+                       brand_cost_share,
+                   Opioid_Prscrbr_Rate opioid_rate_pct,
+                   round(LIS_Tot_Clms * 1.0 / nullif(Tot_Clms, 0), 2)
+                       lis_claim_share,
+                   Bene_Avg_Age rx_panel_avg_age,
+                   Bene_Avg_Risk_Scre rx_panel_risk,
+                   [source_data_period] source_data_periods,
+                   [source_run_id] source_run_ids
+            FROM raw_part_d_by_provider
+        ),
+        keys AS (
+            SELECT npi FROM panel UNION SELECT npi FROM clinical
+            UNION SELECT npi FROM prescribing
+        )
+        SELECT k.npi, p.npi IS NOT NULL,
+               p.medicare_patients, p.panel_total_services,
+               p.services_per_patient, p.medicare_allowed_amt,
+               p.part_b_drug_payments, p.avg_patient_age, p.pct_age_75_plus,
+               p.pct_female, p.pct_dual_eligible, p.avg_hcc_risk_score,
+               p.pct_hypertension, p.pct_hyperlipidemia, p.pct_diabetes,
+               p.pct_ischemic_heart, p.pct_heart_failure, p.pct_afib,
+               p.pct_ckd, p.pct_copd, p.pct_depression,
+               c.npi IS NOT NULL, c.cms_specialty,
+               coalesce(c.distinct_codes, 0), c.clinical_total_services,
+               c.est_total_paid, c.facility_paid_share,
+               c.drug_admin_paid_share, c.em_paid_share,
+               r.npi IS NOT NULL, r.total_claims, r.prescribing_patients,
+               r.total_cost, r.cost_per_claim, r.brand_claim_share,
+               r.brand_cost_share, r.opioid_rate_pct, r.lis_claim_share,
+               r.rx_panel_avg_age, r.rx_panel_risk,
+               coalesce(p.source_data_periods, []::VARCHAR[]),
+               coalesce(p.source_run_ids, []::VARCHAR[]),
+               coalesce(c.source_data_periods, []::VARCHAR[]),
+               coalesce(c.source_run_ids, []::VARCHAR[]),
+               coalesce(r.source_data_periods, []::VARCHAR[]),
+               coalesce(r.source_run_ids, []::VARCHAR[]), ?
+        FROM keys k
+        JOIN serving_provider_profile_headers h ON h.npi = k.npi
+        LEFT JOIN panel p ON p.npi = k.npi
+        LEFT JOIN clinical c ON c.npi = k.npi
+        LEFT JOIN prescribing r ON r.npi = k.npi
+        """,
+        [data_year],
+    )
+
+    con.execute(
+        """
+        INSERT INTO serving_provider_profile_top_services
+        WITH service AS (
+            SELECT CAST(Rndrng_NPI AS VARCHAR) npi, HCPCS_Cd hcpcs,
+                   CASE WHEN max(HCPCS_Drug_Ind) = 'Y' THEN 'drug_admin'
+                        WHEN HCPCS_Cd BETWEEN '99091' AND '99499'
+                            THEN 'evaluation_mgmt'
+                        WHEN HCPCS_Cd BETWEEN '70000' AND '79999' THEN 'imaging'
+                        WHEN HCPCS_Cd BETWEEN '80000' AND '89999' THEN 'lab_path'
+                        WHEN HCPCS_Cd BETWEEN '90000' AND '98999'
+                            THEN 'diagnostic_proc'
+                        WHEN HCPCS_Cd BETWEEN '00100' AND '69999'
+                            THEN 'surgical_proc'
+                        ELSE 'other' END category,
+                   left(min(HCPCS_Desc), 70) description,
+                   sum(Tot_Srvcs) services, max(Tot_Benes) patients,
+                   round(sum(Tot_Srvcs * Avg_Mdcr_Pymt_Amt)) est_paid,
+                   round(coalesce(sum(Tot_Srvcs)
+                         FILTER (WHERE Place_Of_Srvc = 'F'), 0)
+                         / nullif(sum(Tot_Srvcs), 0), 2) facility_share,
+                   list(distinct source_data_period order by source_data_period)
+                       source_data_periods,
+                   list(distinct source_run_id order by source_run_id) source_run_ids
+            FROM raw_physician_by_provider_and_service
+            GROUP BY 1, 2
+        ),
+        ranked AS (
+            SELECT s.*,
+                   round(est_paid / nullif(sum(est_paid) OVER (PARTITION BY npi), 0), 2)
+                       pct_of_paid,
+                   row_number() OVER (
+                       PARTITION BY npi ORDER BY est_paid DESC NULLS LAST, hcpcs
+                   ) service_rank
+            FROM service s
+        )
+        SELECT r.npi, CAST(r.service_rank AS INTEGER), r.hcpcs, r.category,
+               r.description, r.services, r.patients, r.est_paid,
+               r.pct_of_paid, r.facility_share, r.source_data_periods,
+               r.source_run_ids, ?
+        FROM ranked r
+        JOIN serving_provider_profile_headers h ON h.npi = r.npi
+        WHERE r.service_rank <= 10
+        """,
+        [data_year],
+    )
+
+    con.execute(
+        """
+        INSERT INTO serving_provider_profile_top_drugs
+        WITH drug AS (
+            SELECT CAST(Prscrbr_NPI AS VARCHAR) npi, Brnd_Name brand,
+                   Gnrc_Name generic, Tot_Clms claims, Tot_Benes patients,
+                   round(Tot_Drug_Cst) drug_cost,
+                   round(Tot_Drug_Cst / nullif(Tot_Clms, 0), 2) cost_per_claim,
+                   round(Tot_Day_Suply * 1.0 / nullif(Tot_Clms, 0))
+                       days_per_claim,
+                   (Tot_Drug_Cst / nullif(Tot_Clms, 0)) >= 950 specialty_tier,
+                   [source_data_period] source_data_periods,
+                   [source_run_id] source_run_ids
+            FROM raw_part_d_by_provider_and_drug
+        ),
+        ranked AS (
+            SELECT d.*,
+                   round(drug_cost / nullif(sum(drug_cost)
+                         OVER (PARTITION BY npi), 0), 2) pct_of_cost,
+                   row_number() OVER (
+                       PARTITION BY npi
+                       ORDER BY drug_cost DESC NULLS LAST,
+                                coalesce(brand, ''), coalesce(generic, '')
+                   ) drug_rank
+            FROM drug d
+        )
+        SELECT r.npi, CAST(r.drug_rank AS INTEGER), r.brand, r.generic,
+               r.claims, r.patients, r.drug_cost, r.cost_per_claim,
+               r.days_per_claim, r.specialty_tier, r.pct_of_cost,
+               r.source_data_periods, r.source_run_ids, ?
+        FROM ranked r
+        JOIN serving_provider_profile_headers h ON h.npi = r.npi
+        WHERE r.drug_rank <= 10
+        """,
+        [data_year],
+    )
+
+    counts = {
+        table: int(con.execute(f"SELECT count(*) FROM {table}").fetchone()[0])
+        for table in (
+            "serving_provider_profile_claims_summary",
+            "serving_provider_profile_top_services",
+            "serving_provider_profile_top_drugs",
+        )
+    }
+    logger.info(
+        "Provider profile claims serving rows: summaries=%d services=%d drugs=%d",
+        counts["serving_provider_profile_claims_summary"],
+        counts["serving_provider_profile_top_services"],
+        counts["serving_provider_profile_top_drugs"],
+    )
+    return counts
+
+
 def _ensure_pecos_relationship_tables(con: duckdb.DuckDBPyConnection) -> None:
     """Create the curated PPEF relationship tables in copied legacy warehouses."""
     con.execute(

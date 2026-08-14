@@ -94,9 +94,13 @@ allows exactly those three tables to differ and fingerprints every invariant tab
 a complete-capability selector, but `raw` remains the default and the production manager does not
 yet authorize this policy. The first production-data candidate validated all three contracts and
 showed material component and route gains, but missed both complete-route performance gates and was
-superseded by a deterministic DAC-header fix. It was not prepared or selected. The next candidate
-will add utilization, top-services, and top-drugs projections before repeating parity, performance,
-capacity, and rollback gates. Hospital affiliations stay on their existing path until their legacy
+superseded by a deterministic DAC-header fix. It was not prepared or selected. Three response-exact
+claims projections are now implemented for utilization/prescribing summaries, top services, and
+top drugs. `auto` detects this claims capability independently and safely falls back to raw claims
+queries when it is incomplete. The combined `build-provider-profile-release` builder creates all
+six profile tables transactionally, and its comparison policy allows exactly those six tables to
+differ. No production-data candidate has been built for the combined slice. Hospital affiliations
+stay on their existing path until their legacy
 source inputs have managed manifest coverage. See the
 [S3 provider-profile plan](proposals/2026-08-s3-provider-profile-serving-plan.md).
 
@@ -131,6 +135,7 @@ Clinical Trials remains in AACT/PostgreSQL, and every future mart cutover still 
 authorization.
 
 The [S3 provider-profile plan](proposals/2026-08-s3-provider-profile-serving-plan.md) extends that
-pattern without changing the public endpoint. Three core/access projections are implemented and
-fixture-parity tested. Their first production-data evaluation improved latency but did not meet the
-route-switch threshold, so they remain staging-only while the next profile slice is developed.
+pattern without changing the public endpoint. Three core/access and three claims projections are
+implemented and fixture-parity tested. The first core-only production-data evaluation improved
+latency but did not meet the route-switch threshold. The combined six-table slice remains code-only
+until a fresh isolated candidate repeats parity, performance, capacity, and rollback gates.

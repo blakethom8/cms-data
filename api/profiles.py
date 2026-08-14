@@ -47,6 +47,39 @@ PROFILE_MART_QUERY_COLUMNS = {
         }
     ),
 }
+PROFILE_CLAIMS_MART_QUERY_COLUMNS = {
+    "serving_provider_profile_claims_summary": frozenset(
+        {
+            "npi", "has_panel", "medicare_patients", "panel_total_services",
+            "services_per_patient", "medicare_allowed_amt",
+            "part_b_drug_payments", "avg_patient_age", "pct_age_75_plus",
+            "pct_female", "pct_dual_eligible", "avg_hcc_risk_score",
+            "pct_hypertension", "pct_hyperlipidemia", "pct_diabetes",
+            "pct_ischemic_heart", "pct_heart_failure", "pct_afib",
+            "pct_ckd", "pct_copd", "pct_depression", "has_clinical",
+            "cms_specialty", "distinct_codes", "clinical_total_services",
+            "est_total_paid", "facility_paid_share", "drug_admin_paid_share",
+            "em_paid_share", "has_prescribing", "total_claims",
+            "prescribing_patients", "total_cost", "cost_per_claim",
+            "brand_claim_share", "brand_cost_share", "opioid_rate_pct",
+            "lis_claim_share", "rx_panel_avg_age", "rx_panel_risk",
+        }
+    ),
+    "serving_provider_profile_top_services": frozenset(
+        {
+            "npi", "service_rank", "hcpcs", "category", "description",
+            "services", "patients", "est_paid", "pct_of_paid",
+            "facility_share",
+        }
+    ),
+    "serving_provider_profile_top_drugs": frozenset(
+        {
+            "npi", "drug_rank", "brand", "generic", "claims", "patients",
+            "drug_cost", "cost_per_claim", "days_per_claim",
+            "specialty_tier", "pct_of_cost",
+        }
+    ),
+}
 
 
 def _profile_mart_is_available(conn) -> bool:
@@ -71,6 +104,31 @@ def _profile_mart_is_available(conn) -> bool:
     return all(
         required.issubset(available[table])
         for table, required in PROFILE_MART_QUERY_COLUMNS.items()
+    )
+
+
+def _profile_claims_mart_is_available(conn) -> bool:
+    """Return whether the complete three-table claims capability is usable."""
+    available: dict[str, set[str]] = {
+        table: set() for table in PROFILE_CLAIMS_MART_QUERY_COLUMNS
+    }
+    rows = conn.execute(
+        """
+        select table_name, column_name
+        from information_schema.columns
+        where table_schema = 'main'
+          and table_name in (
+            'serving_provider_profile_claims_summary',
+            'serving_provider_profile_top_services',
+            'serving_provider_profile_top_drugs'
+          )
+        """
+    ).fetchall()
+    for table, column in rows:
+        available[str(table)].add(str(column))
+    return all(
+        required.issubset(available[table])
+        for table, required in PROFILE_CLAIMS_MART_QUERY_COLUMNS.items()
     )
 
 # Curated demo exemplars (validated LA cardiologists with contrasting stories).
@@ -315,6 +373,201 @@ def _profile_locations(
     """, [npi, npi])
 
 
+def _profile_claims_summary(
+    conn, npi: str, *, backend: Literal["raw", "mart"] = "raw"
+) -> dict[str, dict | None]:
+    """Return response-exact panel, clinical, and prescribing summaries."""
+    if backend == "raw":
+        panel = _row(conn, """
+            select Tot_Benes medicare_patients, Tot_Srvcs total_services,
+                   round(Tot_Srvcs / nullif(Tot_Benes,0), 1) services_per_patient,
+                   round(Tot_Mdcr_Alowd_Amt) medicare_allowed_amt,
+                   round(Drug_Mdcr_Pymt_Amt) part_b_drug_payments,
+                   Bene_Avg_Age avg_patient_age,
+                   round(100.0*(coalesce(Bene_Age_75_84_Cnt,0)+coalesce(Bene_Age_GT_84_Cnt,0))
+                         / nullif(Tot_Benes,0)) pct_age_75_plus,
+                   round(100.0*Bene_Feml_Cnt/nullif(Tot_Benes,0)) pct_female,
+                   round(100.0*Bene_Dual_Cnt/nullif(Tot_Benes,0)) pct_dual_eligible,
+                   Bene_Avg_Risk_Scre avg_hcc_risk_score,
+                   Bene_CC_PH_Hypertension_V2_Pct pct_hypertension,
+                   Bene_CC_PH_Hyperlipidemia_V2_Pct pct_hyperlipidemia,
+                   Bene_CC_PH_Diabetes_V2_Pct pct_diabetes,
+                   Bene_CC_PH_IschemicHeart_V2_Pct pct_ischemic_heart,
+                   Bene_CC_PH_HF_NonIHD_V2_Pct pct_heart_failure,
+                   Bene_CC_PH_Afib_V2_Pct pct_afib,
+                   Bene_CC_PH_CKD_V2_Pct pct_ckd,
+                   Bene_CC_PH_COPD_V2_Pct pct_copd,
+                   Bene_CC_BH_Depress_V1_Pct pct_depression
+            from raw_physician_by_provider
+            where CAST(Rndrng_NPI as varchar) = ? and Rndrng_Prvdr_Ent_Cd = 'I'
+        """, [npi])
+        clinical = _row(conn, """
+            select min(Rndrng_Prvdr_Type) cms_specialty,
+                   count(distinct HCPCS_Cd) distinct_codes,
+                   sum(Tot_Srvcs) total_services,
+                   round(sum(Tot_Srvcs*Avg_Mdcr_Pymt_Amt)) est_total_paid,
+                   round(sum(Tot_Srvcs*Avg_Mdcr_Pymt_Amt) filter (where Place_Of_Srvc='F')
+                         / nullif(sum(Tot_Srvcs*Avg_Mdcr_Pymt_Amt),0), 2) facility_paid_share,
+                   round(sum(Tot_Srvcs*Avg_Mdcr_Pymt_Amt) filter (where HCPCS_Drug_Ind='Y')
+                         / nullif(sum(Tot_Srvcs*Avg_Mdcr_Pymt_Amt),0), 2) drug_admin_paid_share,
+                   round(sum(Tot_Srvcs*Avg_Mdcr_Pymt_Amt) filter (where HCPCS_Cd between '99091' and '99499')
+                         / nullif(sum(Tot_Srvcs*Avg_Mdcr_Pymt_Amt),0), 2) em_paid_share
+            from raw_physician_by_provider_and_service
+            where CAST(Rndrng_NPI as varchar) = ?
+        """, [npi])
+        prescribing = _row(conn, """
+            select Tot_Clms total_claims, Tot_Benes patients,
+                   round(Tot_Drug_Cst) total_cost,
+                   round(Tot_Drug_Cst/nullif(Tot_Clms,0), 2) cost_per_claim,
+                   round(Brnd_Tot_Clms*1.0/nullif(Brnd_Tot_Clms+Gnrc_Tot_Clms,0), 2) brand_claim_share,
+                   round(Brnd_Tot_Drug_Cst/nullif(Tot_Drug_Cst,0), 2) brand_cost_share,
+                   Opioid_Prscrbr_Rate opioid_rate_pct,
+                   round(LIS_Tot_Clms*1.0/nullif(Tot_Clms,0), 2) lis_claim_share,
+                   Bene_Avg_Age rx_panel_avg_age, Bene_Avg_Risk_Scre rx_panel_risk
+            from raw_part_d_by_provider where CAST(PRSCRBR_NPI as varchar) = ?
+        """, [npi])
+        return {"panel": panel, "clinical": clinical, "prescribing": prescribing}
+
+    row = _row(conn, """
+        select has_panel, medicare_patients,
+               panel_total_services total_services, services_per_patient,
+               medicare_allowed_amt, part_b_drug_payments, avg_patient_age,
+               pct_age_75_plus, pct_female, pct_dual_eligible,
+               avg_hcc_risk_score, pct_hypertension, pct_hyperlipidemia,
+               pct_diabetes, pct_ischemic_heart, pct_heart_failure, pct_afib,
+               pct_ckd, pct_copd, pct_depression, has_clinical,
+               cms_specialty, distinct_codes,
+               clinical_total_services clinical_total_services,
+               est_total_paid, facility_paid_share, drug_admin_paid_share,
+               em_paid_share, has_prescribing, total_claims,
+               prescribing_patients prescribing_patients, total_cost,
+               cost_per_claim, brand_claim_share, brand_cost_share,
+               opioid_rate_pct, lis_claim_share, rx_panel_avg_age, rx_panel_risk
+        from serving_provider_profile_claims_summary where npi = ?
+    """, [npi])
+
+    panel_keys = (
+        "medicare_patients", "total_services", "services_per_patient",
+        "medicare_allowed_amt", "part_b_drug_payments", "avg_patient_age",
+        "pct_age_75_plus", "pct_female", "pct_dual_eligible",
+        "avg_hcc_risk_score", "pct_hypertension", "pct_hyperlipidemia",
+        "pct_diabetes", "pct_ischemic_heart", "pct_heart_failure",
+        "pct_afib", "pct_ckd", "pct_copd", "pct_depression",
+    )
+    clinical_keys = (
+        "cms_specialty", "distinct_codes", "total_services", "est_total_paid",
+        "facility_paid_share", "drug_admin_paid_share", "em_paid_share",
+    )
+    prescribing_keys = (
+        "total_claims", "patients", "total_cost", "cost_per_claim",
+        "brand_claim_share", "brand_cost_share", "opioid_rate_pct",
+        "lis_claim_share", "rx_panel_avg_age", "rx_panel_risk",
+    )
+    if row is None:
+        return {
+            "panel": None,
+            "clinical": {
+                "cms_specialty": None, "distinct_codes": 0,
+                "total_services": None, "est_total_paid": None,
+                "facility_paid_share": None, "drug_admin_paid_share": None,
+                "em_paid_share": None,
+            },
+            "prescribing": None,
+        }
+    panel = {key: row[key] for key in panel_keys} if row["has_panel"] else None
+    clinical_values = {
+        "cms_specialty": row["cms_specialty"],
+        "distinct_codes": row["distinct_codes"],
+        "total_services": row["clinical_total_services"],
+        "est_total_paid": row["est_total_paid"],
+        "facility_paid_share": row["facility_paid_share"],
+        "drug_admin_paid_share": row["drug_admin_paid_share"],
+        "em_paid_share": row["em_paid_share"],
+    }
+    if not row["has_clinical"]:
+        clinical_values = dict(zip(clinical_keys, (None, 0, None, None, None, None, None)))
+    prescribing_values = {
+        "total_claims": row["total_claims"],
+        "patients": row["prescribing_patients"],
+        "total_cost": row["total_cost"],
+        "cost_per_claim": row["cost_per_claim"],
+        "brand_claim_share": row["brand_claim_share"],
+        "brand_cost_share": row["brand_cost_share"],
+        "opioid_rate_pct": row["opioid_rate_pct"],
+        "lis_claim_share": row["lis_claim_share"],
+        "rx_panel_avg_age": row["rx_panel_avg_age"],
+        "rx_panel_risk": row["rx_panel_risk"],
+    }
+    return {
+        "panel": panel,
+        "clinical": clinical_values,
+        "prescribing": prescribing_values if row["has_prescribing"] else None,
+    }
+
+
+def _profile_top_procedures(
+    conn, npi: str, *, backend: Literal["raw", "mart"] = "raw"
+) -> list[dict]:
+    if backend == "mart":
+        return _rows(conn, """
+            select hcpcs, category, description, services, patients, est_paid,
+                   pct_of_paid, facility_share
+            from serving_provider_profile_top_services where npi = ?
+            order by service_rank
+        """, [npi])
+    return _rows(conn, """
+        with svc as (
+          select HCPCS_Cd, min(HCPCS_Desc) descr,
+                 case when max(HCPCS_Drug_Ind)='Y' then 'drug_admin'
+                      when HCPCS_Cd between '99091' and '99499' then 'evaluation_mgmt'
+                      when HCPCS_Cd between '70000' and '79999' then 'imaging'
+                      when HCPCS_Cd between '80000' and '89999' then 'lab_path'
+                      when HCPCS_Cd between '90000' and '98999' then 'diagnostic_proc'
+                      when HCPCS_Cd between '00100' and '69999' then 'surgical_proc'
+                      else 'other' end category,
+                 sum(Tot_Srvcs) services, max(Tot_Benes) patients,
+                 round(sum(Tot_Srvcs*Avg_Mdcr_Pymt_Amt)) est_paid,
+                 round(coalesce(sum(Tot_Srvcs) filter (where Place_Of_Srvc='F'),0)
+                       / nullif(sum(Tot_Srvcs),0), 2) facility_share
+          from raw_physician_by_provider_and_service
+          where CAST(Rndrng_NPI as varchar) = ? group by HCPCS_Cd),
+        tot as (select sum(est_paid) all_paid from svc)
+        select s.HCPCS_Cd hcpcs, s.category, left(s.descr, 70) description,
+               s.services, s.patients, s.est_paid,
+               round(s.est_paid/nullif(t.all_paid,0), 2) pct_of_paid,
+               s.facility_share
+        from svc s cross join tot t
+        order by s.est_paid desc nulls last, s.HCPCS_Cd limit 10
+    """, [npi])
+
+
+def _profile_top_drugs(
+    conn, npi: str, *, backend: Literal["raw", "mart"] = "raw"
+) -> list[dict]:
+    if backend == "mart":
+        return _rows(conn, """
+            select brand, generic, claims, patients, drug_cost, cost_per_claim,
+                   days_per_claim, specialty_tier, pct_of_cost
+            from serving_provider_profile_top_drugs where npi = ?
+            order by drug_rank
+        """, [npi])
+    return _rows(conn, """
+        with rx as (
+          select Brnd_Name brand, Gnrc_Name generic, Tot_Clms claims,
+                 Tot_Benes patients, round(Tot_Drug_Cst) drug_cost,
+                 round(Tot_Drug_Cst/nullif(Tot_Clms,0), 2) cost_per_claim,
+                 round(Tot_Day_Suply*1.0/nullif(Tot_Clms,0)) days_per_claim,
+                 (Tot_Drug_Cst/nullif(Tot_Clms,0)) >= 950 specialty_tier
+          from raw_part_d_by_provider_and_drug
+          where CAST(Prscrbr_NPI as varchar) = ?),
+        tot as (select sum(drug_cost) all_cost from rx)
+        select r.*, round(r.drug_cost/nullif(t.all_cost,0), 2) pct_of_cost
+        from rx r cross join tot t
+        order by r.drug_cost desc nulls last, coalesce(r.brand, ''),
+                 coalesce(r.generic, '') limit 10
+    """, [npi])
+
+
 def _hospital_affiliations(conn, npi: str) -> list[dict]:
     """DAC facility affiliations resolved to hospital names where possible.
 
@@ -548,6 +801,7 @@ def get_profiles_router(
     if selected_profile_backend not in {"raw", "mart", "auto"}:
         raise ValueError("PROVIDER_PROFILE_BACKEND must be raw, mart, or auto")
     profile_mart_available: bool | None = None
+    profile_claims_mart_available: bool | None = None
 
     def resolve_profile_backend() -> Literal["raw", "mart"]:
         """Select the complete three-table profile capability as one unit."""
@@ -557,6 +811,17 @@ def get_profiles_router(
         if profile_mart_available is None:
             profile_mart_available = _profile_mart_is_available(get_conn())
         return "mart" if profile_mart_available else "raw"
+
+    def resolve_profile_claims_backend() -> Literal["raw", "mart"]:
+        """Select the complete claims capability independently of core."""
+        nonlocal profile_claims_mart_available
+        if selected_profile_backend != "auto":
+            return selected_profile_backend
+        if profile_claims_mart_available is None:
+            profile_claims_mart_available = _profile_claims_mart_is_available(
+                get_conn()
+            )
+        return "mart" if profile_claims_mart_available else "raw"
 
     @router.get("/exemplars")
     async def exemplars():
@@ -600,6 +865,7 @@ def get_profiles_router(
         npi = _npi(npi)
         conn = get_conn()
         profile_backend = resolve_profile_backend()
+        profile_claims_backend = resolve_profile_claims_backend()
         out: dict = {"npi": npi}
 
         # ------ header / background (DAC + NPPES) ------
@@ -607,92 +873,16 @@ def get_profiles_router(
         if not out["header"]:
             raise HTTPException(status_code=404, detail="NPI not found in NPPES or Doctors & Clinicians")
 
-        # ------ 1. patient panel ------
-        out["panel"] = _row(conn, """
-            select Tot_Benes medicare_patients, Tot_Srvcs total_services,
-                   round(Tot_Srvcs / nullif(Tot_Benes,0), 1) services_per_patient,
-                   round(Tot_Mdcr_Alowd_Amt) medicare_allowed_amt,
-                   round(Drug_Mdcr_Pymt_Amt) part_b_drug_payments,
-                   Bene_Avg_Age avg_patient_age,
-                   round(100.0*(coalesce(Bene_Age_75_84_Cnt,0)+coalesce(Bene_Age_GT_84_Cnt,0))
-                         / nullif(Tot_Benes,0)) pct_age_75_plus,
-                   round(100.0*Bene_Feml_Cnt/nullif(Tot_Benes,0)) pct_female,
-                   round(100.0*Bene_Dual_Cnt/nullif(Tot_Benes,0)) pct_dual_eligible,
-                   Bene_Avg_Risk_Scre avg_hcc_risk_score,
-                   Bene_CC_PH_Hypertension_V2_Pct pct_hypertension,
-                   Bene_CC_PH_Hyperlipidemia_V2_Pct pct_hyperlipidemia,
-                   Bene_CC_PH_Diabetes_V2_Pct pct_diabetes,
-                   Bene_CC_PH_IschemicHeart_V2_Pct pct_ischemic_heart,
-                   Bene_CC_PH_HF_NonIHD_V2_Pct pct_heart_failure,
-                   Bene_CC_PH_Afib_V2_Pct pct_afib,
-                   Bene_CC_PH_CKD_V2_Pct pct_ckd,
-                   Bene_CC_PH_COPD_V2_Pct pct_copd,
-                   Bene_CC_BH_Depress_V1_Pct pct_depression
-            from raw_physician_by_provider
-            where CAST(Rndrng_NPI as varchar) = ? and Rndrng_Prvdr_Ent_Cd = 'I'
-        """, [npi])
-
-        # ------ 2. clinical focus ------
-        out["clinical"] = _row(conn, """
-            select any_value(Rndrng_Prvdr_Type) cms_specialty,
-                   count(distinct HCPCS_Cd) distinct_codes,
-                   sum(Tot_Srvcs) total_services,
-                   round(sum(Tot_Srvcs*Avg_Mdcr_Pymt_Amt)) est_total_paid,
-                   round(sum(Tot_Srvcs*Avg_Mdcr_Pymt_Amt) filter (where Place_Of_Srvc='F')
-                         / nullif(sum(Tot_Srvcs*Avg_Mdcr_Pymt_Amt),0), 2) facility_paid_share,
-                   round(sum(Tot_Srvcs*Avg_Mdcr_Pymt_Amt) filter (where HCPCS_Drug_Ind='Y')
-                         / nullif(sum(Tot_Srvcs*Avg_Mdcr_Pymt_Amt),0), 2) drug_admin_paid_share,
-                   round(sum(Tot_Srvcs*Avg_Mdcr_Pymt_Amt) filter (where HCPCS_Cd between '99091' and '99499')
-                         / nullif(sum(Tot_Srvcs*Avg_Mdcr_Pymt_Amt),0), 2) em_paid_share
-            from raw_physician_by_provider_and_service
-            where CAST(Rndrng_NPI as varchar) = ?
-        """, [npi])
-        out["top_procedures"] = _rows(conn, """
-            with svc as (
-              select HCPCS_Cd, any_value(HCPCS_Desc) descr,
-                     case when max(HCPCS_Drug_Ind)='Y' then 'drug_admin'
-                          when HCPCS_Cd between '99091' and '99499' then 'evaluation_mgmt'
-                          when HCPCS_Cd between '70000' and '79999' then 'imaging'
-                          when HCPCS_Cd between '80000' and '89999' then 'lab_path'
-                          when HCPCS_Cd between '90000' and '98999' then 'diagnostic_proc'
-                          when HCPCS_Cd between '00100' and '69999' then 'surgical_proc'
-                          else 'other' end category,
-                     sum(Tot_Srvcs) services, max(Tot_Benes) patients,
-                     round(sum(Tot_Srvcs*Avg_Mdcr_Pymt_Amt)) est_paid,
-                     round(coalesce(sum(Tot_Srvcs) filter (where Place_Of_Srvc='F'),0)
-                           / nullif(sum(Tot_Srvcs),0), 2) facility_share
-              from raw_physician_by_provider_and_service
-              where CAST(Rndrng_NPI as varchar) = ? group by HCPCS_Cd),
-            tot as (select sum(est_paid) all_paid from svc)
-            select s.HCPCS_Cd hcpcs, s.category, left(s.descr, 70) description,
-                   s.services, s.patients, s.est_paid,
-                   round(s.est_paid/nullif(t.all_paid,0), 2) pct_of_paid, s.facility_share
-            from svc s cross join tot t order by s.est_paid desc limit 10
-        """, [npi])
-
-        # ------ 3. prescribing ------
-        out["prescribing"] = _row(conn, """
-            select Tot_Clms total_claims, Tot_Benes patients, round(Tot_Drug_Cst) total_cost,
-                   round(Tot_Drug_Cst/nullif(Tot_Clms,0), 2) cost_per_claim,
-                   round(Brnd_Tot_Clms*1.0/nullif(Brnd_Tot_Clms+Gnrc_Tot_Clms,0), 2) brand_claim_share,
-                   round(Brnd_Tot_Drug_Cst/nullif(Tot_Drug_Cst,0), 2) brand_cost_share,
-                   Opioid_Prscrbr_Rate opioid_rate_pct,
-                   round(LIS_Tot_Clms*1.0/nullif(Tot_Clms,0), 2) lis_claim_share,
-                   Bene_Avg_Age rx_panel_avg_age, Bene_Avg_Risk_Scre rx_panel_risk
-            from raw_part_d_by_provider where CAST(PRSCRBR_NPI as varchar) = ?
-        """, [npi])
-        out["top_drugs"] = _rows(conn, """
-            with rx as (
-              select Brnd_Name brand, Gnrc_Name generic, Tot_Clms claims, Tot_Benes patients,
-                     round(Tot_Drug_Cst) drug_cost,
-                     round(Tot_Drug_Cst/nullif(Tot_Clms,0), 2) cost_per_claim,
-                     round(Tot_Day_Suply*1.0/nullif(Tot_Clms,0)) days_per_claim,
-                     (Tot_Drug_Cst/nullif(Tot_Clms,0)) >= 950 specialty_tier
-              from raw_part_d_by_provider_and_drug where CAST(Prscrbr_NPI as varchar) = ?),
-            tot as (select sum(drug_cost) all_cost from rx)
-            select r.*, round(r.drug_cost/nullif(t.all_cost,0), 2) pct_of_cost
-            from rx r cross join tot t order by r.drug_cost desc limit 10
-        """, [npi])
+        claims = _profile_claims_summary(
+            conn, npi, backend=profile_claims_backend
+        )
+        out.update(claims)
+        out["top_procedures"] = _profile_top_procedures(
+            conn, npi, backend=profile_claims_backend
+        )
+        out["top_drugs"] = _profile_top_drugs(
+            conn, npi, backend=profile_claims_backend
+        )
 
         # ------ 4. industry (Open Payments) ------
         out["industry"] = industry_summary(conn, npi)

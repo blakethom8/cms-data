@@ -241,6 +241,103 @@ CREATE TABLE IF NOT EXISTS serving_provider_profile_groups (
 CREATE INDEX IF NOT EXISTS idx_serving_profile_groups_npi
     ON serving_provider_profile_groups(npi);
 
+------------------------------------------------------------
+-- S3 serving tables: provider profile claims lenses
+-- Summary grain: one claims-bearing provider NPI
+-- Detail grains: one provider NPI x deterministic top-10 rank
+------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS serving_provider_profile_claims_summary (
+    npi                              VARCHAR(10) PRIMARY KEY,
+    has_panel                        BOOLEAN NOT NULL,
+    medicare_patients                BIGINT,
+    panel_total_services             DOUBLE,
+    services_per_patient             DOUBLE,
+    medicare_allowed_amt             DOUBLE,
+    part_b_drug_payments             DOUBLE,
+    avg_patient_age                  BIGINT,
+    pct_age_75_plus                  DOUBLE,
+    pct_female                       DOUBLE,
+    pct_dual_eligible                DOUBLE,
+    avg_hcc_risk_score               DOUBLE,
+    pct_hypertension                 DOUBLE,
+    pct_hyperlipidemia               DOUBLE,
+    pct_diabetes                     DOUBLE,
+    pct_ischemic_heart               DOUBLE,
+    pct_heart_failure                DOUBLE,
+    pct_afib                         DOUBLE,
+    pct_ckd                          DOUBLE,
+    pct_copd                         DOUBLE,
+    pct_depression                   DOUBLE,
+    has_clinical                     BOOLEAN NOT NULL,
+    cms_specialty                    VARCHAR,
+    distinct_codes                   BIGINT NOT NULL,
+    clinical_total_services          DOUBLE,
+    est_total_paid                   DOUBLE,
+    facility_paid_share              DOUBLE,
+    drug_admin_paid_share            DOUBLE,
+    em_paid_share                    DOUBLE,
+    has_prescribing                  BOOLEAN NOT NULL,
+    total_claims                     BIGINT,
+    prescribing_patients             BIGINT,
+    total_cost                       DOUBLE,
+    cost_per_claim                   DOUBLE,
+    brand_claim_share                DOUBLE,
+    brand_cost_share                 DOUBLE,
+    opioid_rate_pct                  DOUBLE,
+    lis_claim_share                  DOUBLE,
+    rx_panel_avg_age                 DOUBLE,
+    rx_panel_risk                    DOUBLE,
+    part_b_provider_source_data_periods VARCHAR[] NOT NULL,
+    part_b_provider_source_run_ids      VARCHAR[] NOT NULL,
+    part_b_service_source_data_periods  VARCHAR[] NOT NULL,
+    part_b_service_source_run_ids       VARCHAR[] NOT NULL,
+    part_d_provider_source_data_periods VARCHAR[] NOT NULL,
+    part_d_provider_source_run_ids      VARCHAR[] NOT NULL,
+    data_year                        INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS serving_provider_profile_top_services (
+    npi                 VARCHAR(10) NOT NULL,
+    service_rank        INTEGER NOT NULL,
+    hcpcs               VARCHAR NOT NULL,
+    category            VARCHAR NOT NULL,
+    description         VARCHAR,
+    services            DOUBLE,
+    patients            BIGINT,
+    est_paid             DOUBLE,
+    pct_of_paid          DOUBLE,
+    facility_share       DOUBLE,
+    source_data_periods  VARCHAR[] NOT NULL,
+    source_run_ids       VARCHAR[] NOT NULL,
+    data_year            INTEGER NOT NULL,
+    PRIMARY KEY (npi, service_rank),
+    UNIQUE (npi, hcpcs)
+);
+
+CREATE INDEX IF NOT EXISTS idx_serving_profile_top_services_npi
+    ON serving_provider_profile_top_services(npi);
+
+CREATE TABLE IF NOT EXISTS serving_provider_profile_top_drugs (
+    npi                 VARCHAR(10) NOT NULL,
+    drug_rank           INTEGER NOT NULL,
+    brand               VARCHAR,
+    generic             VARCHAR,
+    claims              BIGINT,
+    patients            BIGINT,
+    drug_cost           DOUBLE,
+    cost_per_claim      DOUBLE,
+    days_per_claim      DOUBLE,
+    specialty_tier      BOOLEAN,
+    pct_of_cost         DOUBLE,
+    source_data_periods VARCHAR[] NOT NULL,
+    source_run_ids      VARCHAR[] NOT NULL,
+    data_year           INTEGER NOT NULL,
+    PRIMARY KEY (npi, drug_rank)
+);
+
+CREATE INDEX IF NOT EXISTS idx_serving_profile_top_drugs_npi
+    ON serving_provider_profile_top_drugs(npi);
+
 
 ------------------------------------------------------------
 -- Tables 2b/2c: PECOS benefit-reassignment relationships

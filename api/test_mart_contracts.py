@@ -28,6 +28,9 @@ EXPECTED_MARTS = {
     "serving_provider_profile_headers",
     "serving_provider_profile_locations",
     "serving_provider_profile_groups",
+    "serving_provider_profile_claims_summary",
+    "serving_provider_profile_top_services",
+    "serving_provider_profile_top_drugs",
     "utilization_metrics",
     "industry_relationships",
     "hospital_affiliations",
@@ -58,7 +61,7 @@ def _spec(**overrides) -> MartSpec:
 
 
 def test_registered_marts_have_complete_source_and_lineage_contracts() -> None:
-    assert len(MART_CONTRACTS) == 18
+    assert len(MART_CONTRACTS) == 21
     assert set(MART_CONTRACT_BY_TABLE) == EXPECTED_MARTS
 
     transforms = {transform.transform_id: transform for transform in TRANSFORMS}
@@ -82,6 +85,9 @@ def test_registered_marts_have_complete_source_and_lineage_contracts() -> None:
     assert table_kind("serving_provider_profile_headers") == "serving"
     assert table_kind("serving_provider_profile_locations") == "serving"
     assert table_kind("serving_provider_profile_groups") == "serving"
+    assert table_kind("serving_provider_profile_claims_summary") == "serving"
+    assert table_kind("serving_provider_profile_top_services") == "serving"
+    assert table_kind("serving_provider_profile_top_drugs") == "serving"
     assert MART_CONTRACT_BY_TABLE[
         "serving_practice_provider_sites"
     ].authorized_routes == ("/practices/search",)
@@ -96,7 +102,7 @@ def test_schema_inspection_does_not_claim_missing_marts_are_ready() -> None:
     finally:
         connection.close()
 
-    assert report["registered_count"] == 18
+    assert report["registered_count"] == 21
     assert report["available_count"] == 1
     assert report["schema_valid_count"] == 0
     assert report["serving_authorized_count"] == 0
@@ -109,6 +115,31 @@ def test_schema_inspection_does_not_claim_missing_marts_are_ready() -> None:
         "entity_type_code",
         "last_org_name",
     ]
+
+
+def test_schema_columns_are_required_physically_but_may_remain_null() -> None:
+    spec = _spec(schema_columns=("nullable_measure",), npi_parent_table=None)
+    connection = duckdb.connect(":memory:")
+    try:
+        connection.execute(
+            "CREATE TABLE example_mart (npi VARCHAR, data_year INTEGER)"
+        )
+        report = inspect_mart_contracts(connection, contracts=(spec,))
+        assert report["marts"][0]["missing_required_columns"] == [
+            "nullable_measure"
+        ]
+        connection.execute("ALTER TABLE example_mart ADD nullable_measure DOUBLE")
+        connection.execute("INSERT INTO example_mart VALUES ('1111111111', 2026, NULL)")
+        validated = validate_mart_contracts(
+            connection,
+            source_periods={"cms_physician_by_provider": "2024"},
+            contracts=(spec,),
+        )
+    finally:
+        connection.close()
+
+    assert validated["passed"] is True
+    assert validated["marts"][0]["required_null_rows"] == 0
 
 
 def test_row_validation_records_key_null_npi_orphan_and_provenance_checks() -> None:
