@@ -19,6 +19,33 @@ from pipeline.releases import ReleaseError
 from pipeline.source_registry import SOURCE_REGISTRY
 
 
+def _dac_payload(*, organization_members: str = "20") -> bytes:
+    values = {
+        "NPI": "1234567890",
+        "Ind_PAC_ID": "PAC-I",
+        "Ind_enrl_ID": "ENROLL-I",
+        "Provider Last Name": "Rivera",
+        "Provider First Name": "Jamie",
+        "pri_spec": "Cardiology",
+        "Facility Name": "Cardio Group",
+        "org_pac_id": "PAC-O",
+        "num_org_mem": organization_members,
+        "adr_ln_1": "10 MAIN ST",
+        "City/Town": "Los Angeles",
+        "State": "CA",
+        "ZIP Code": "90001",
+        "Telephone Number": "1115550100",
+        "adrs_id": "ADDR-1",
+    }
+    columns = CMS_CSV_PROFILES["cms_dac_national"].required_columns
+    return (
+        ",".join(columns)
+        + "\n"
+        + ",".join(values.get(column, "") for column in columns)
+        + "\n"
+    ).encode()
+
+
 def _stage(
     data_root: Path,
     *,
@@ -136,6 +163,58 @@ def test_load_cms_raw_table_preserves_established_numeric_types(tmp_path: Path) 
     assert types["Prscrbr_NPI"] == "BIGINT"
     assert types["Tot_Clms"] == "BIGINT"
     assert types["Tot_Drug_Cst"] == "DOUBLE"
+
+
+def test_load_managed_dac_preserves_schema_and_records_provenance(
+    tmp_path: Path,
+) -> None:
+    data_root = tmp_path / "data"
+    manifest = _stage(
+        data_root,
+        source_id="cms_dac_national",
+        run_id="20990720T030000Z-dac",
+        payload=_dac_payload(),
+    )
+    connection = duckdb.connect(":memory:")
+    try:
+        connection.execute("SET TimeZone = 'UTC'")
+        connection.execute(
+            'CREATE TABLE raw_dac_national ("NPI" BIGINT, num_org_mem INTEGER)'
+        )
+        counts = load_cms_raw_tables(
+            connection,
+            data_root=data_root,
+            run_ids=[manifest.run_id],
+        )
+        row = connection.execute(
+            '''
+            SELECT "NPI", num_org_mem, source_run_id, source_release_id,
+                   source_data_period, CAST(ingested_at AS VARCHAR)
+            FROM raw_dac_national
+            '''
+        ).fetchone()
+        types = dict(
+            connection.execute(
+                "select column_name, data_type from information_schema.columns "
+                "where table_name = 'raw_dac_national'"
+            ).fetchall()
+        )
+    finally:
+        connection.close()
+
+    assert counts == {"raw_dac_national": 1}
+    assert row == (
+        1234567890,
+        20,
+        manifest.run_id,
+        manifest.release_id,
+        manifest.source_data_period,
+        "2099-07-20 01:00:00+00",
+    )
+    assert types["NPI"] == "BIGINT"
+    assert types["num_org_mem"] == "INTEGER"
+    assert types["source_run_id"] == "VARCHAR"
+    assert types["ingested_at"] == "TIMESTAMP WITH TIME ZONE"
 
 
 def test_load_cms_raw_table_rejects_numeric_contract_change(tmp_path: Path) -> None:

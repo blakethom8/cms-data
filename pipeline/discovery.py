@@ -28,6 +28,9 @@ from .source_registry import (
 )
 
 CMS_CATALOG_URL = "https://data.cms.gov/data.json"
+CMS_PROVIDER_DATA_METASTORE_URL = (
+    "https://data.cms.gov/provider-data/api/1/metastore/schemas/dataset/items/"
+)
 PPEF_DATASET_UUID = "2457ea29-fc82-48b0-86ec-3b0755de7515"
 PPEF_RESOURCES_URL = (
     f"https://data.cms.gov/data-api/v1/dataset/{PPEF_DATASET_UUID}/resources"
@@ -206,6 +209,81 @@ def parse_cms_catalog(payload: bytes, specs: tuple[SourceSpec, ...]) -> dict[str
                 error_summary=safe_error(error),
             )
     return results
+
+
+def parse_provider_data_metastore(
+    payload: bytes, specs: tuple[SourceSpec, ...]
+) -> dict[str, DiscoveryResult]:
+    """Parse a Provider Data Catalog dataset's official metastore record."""
+    discovered_at = utc_now()
+    if len(specs) != 1:
+        raise DiscoveryError("Provider Data metastore discovery requires one source spec")
+    spec = specs[0]
+    try:
+        document = json.loads(payload)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise DiscoveryError("CMS Provider Data metastore is not valid JSON") from error
+    try:
+        if not isinstance(document, dict) or document.get("identifier") != spec.discovery_key:
+            raise DiscoveryError("CMS Provider Data identifier does not match the registry")
+        distributions = document.get("distribution")
+        if not isinstance(distributions, list):
+            raise DiscoveryError("CMS Provider Data record lacks distributions")
+        csv_distributions = [
+            item
+            for item in distributions
+            if isinstance(item, dict)
+            and item.get("mediaType") == "text/csv"
+            and item.get("downloadURL")
+        ]
+        if len(csv_distributions) != 1:
+            raise DiscoveryError(
+                "Expected one CMS Provider Data CSV distribution; "
+                f"found {len(csv_distributions)}"
+            )
+        source_url = str(csv_distributions[0]["downloadURL"])
+        parsed_url = urlparse(source_url)
+        if parsed_url.scheme != "https" or parsed_url.hostname != "data.cms.gov":
+            raise DiscoveryError("CMS Provider Data URL is outside the official CMS host")
+        resource_match = re.search(
+            r"/resources/([A-Za-z0-9_-]+)/([^/]+\.csv)$", parsed_url.path
+        )
+        if resource_match is None:
+            raise DiscoveryError("CMS Provider Data URL lacks a stable resource identity")
+        modified = document.get("modified")
+        released = document.get("released")
+        if not isinstance(modified, str) or not isinstance(released, str):
+            raise DiscoveryError("CMS Provider Data record lacks modified or released dates")
+        _iso_date_timestamp(modified)
+        release_timestamp = _iso_date_timestamp(released)
+        resource_identity = resource_match.group(1)
+        release = ReleaseMetadata(
+            source_id=spec.source_id,
+            publisher_version=(
+                f"cms-provider-data:{spec.discovery_key}:{released}:"
+                f"{resource_identity}"
+            ),
+            source_data_period=modified,
+            publisher_release_timestamp=release_timestamp,
+            source_url=source_url,
+        )
+        return {
+            spec.source_id: DiscoveryResult(
+                spec.source_id,
+                DiscoveryState.AVAILABLE,
+                discovered_at,
+                release=release,
+            )
+        }
+    except DiscoveryError as error:
+        return {
+            spec.source_id: DiscoveryResult(
+                spec.source_id,
+                DiscoveryState.ERROR,
+                discovered_at,
+                error_summary=safe_error(error),
+            )
+        }
 
 
 def _ppef_quarter_period(title: str) -> str:
@@ -564,6 +642,7 @@ def parse_aact_downloads(payload: bytes, spec: SourceSpec) -> DiscoveryResult:
 FIXTURE_FILES = {
     DiscoveryMechanism.CMS_DATA_JSON: "cms-data.json",
     DiscoveryMechanism.CMS_DATASET_RESOURCES: "ppef-resources.json",
+    DiscoveryMechanism.CMS_PROVIDER_DATA_METASTORE: "provider-data-dac.json",
     DiscoveryMechanism.NPPES_DOWNLOAD_INDEX: "nppes.html",
     DiscoveryMechanism.OPEN_PAYMENTS_DOWNLOAD_INDEX: "open-payments.html",
     DiscoveryMechanism.AACT_DOWNLOADS_PAGE: "aact.html",
@@ -637,6 +716,9 @@ def discover_all(
                 url = {
                     DiscoveryMechanism.CMS_DATA_JSON: CMS_CATALOG_URL,
                     DiscoveryMechanism.CMS_DATASET_RESOURCES: PPEF_RESOURCES_URL,
+                    DiscoveryMechanism.CMS_PROVIDER_DATA_METASTORE: (
+                        CMS_PROVIDER_DATA_METASTORE_URL + specs[0].discovery_key
+                    ),
                     DiscoveryMechanism.NPPES_DOWNLOAD_INDEX: NPPES_INDEX_URL,
                     DiscoveryMechanism.OPEN_PAYMENTS_DOWNLOAD_INDEX: OPEN_PAYMENTS_INDEX_URL,
                     DiscoveryMechanism.AACT_DOWNLOADS_PAGE: AACT_DOWNLOADS_URL,
@@ -654,6 +736,8 @@ def discover_all(
                 results.update(parse_cms_catalog(payload, specs))
             elif mechanism == DiscoveryMechanism.CMS_DATASET_RESOURCES:
                 results.update(parse_ppef_resources(payload, specs))
+            elif mechanism == DiscoveryMechanism.CMS_PROVIDER_DATA_METASTORE:
+                results.update(parse_provider_data_metastore(payload, specs))
             elif mechanism == DiscoveryMechanism.NPPES_DOWNLOAD_INDEX:
                 results.update(parse_nppes_index(payload, specs))
             elif mechanism == DiscoveryMechanism.OPEN_PAYMENTS_DOWNLOAD_INDEX:
@@ -683,6 +767,12 @@ def discover_source(source_id: str, *, timeout: float = 30.0) -> DiscoveryResult
     if spec.discovery == DiscoveryMechanism.CMS_DATASET_RESOURCES:
         payload = fetch_metadata(PPEF_RESOURCES_URL, timeout=timeout)
         return parse_ppef_resources(payload, (spec,))[source_id]
+    if spec.discovery == DiscoveryMechanism.CMS_PROVIDER_DATA_METASTORE:
+        payload = fetch_metadata(
+            CMS_PROVIDER_DATA_METASTORE_URL + spec.discovery_key,
+            timeout=timeout,
+        )
+        return parse_provider_data_metastore(payload, (spec,))[source_id]
     payload = fetch_metadata(AACT_DOWNLOADS_URL, timeout=timeout)
     return parse_aact_downloads(payload, spec)
 

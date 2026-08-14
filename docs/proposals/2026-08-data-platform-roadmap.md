@@ -271,9 +271,11 @@ evidence. Keep `primary_practice`, `secondary_practice`, and `mailing` semantica
 
 ### D2. First-class Doctors & Clinicians management
 
-Replace the legacy unregistered `raw_dac_national` path with managed National Downloadable File,
-Facility Affiliation Data, and approved utilization inputs. Persist publisher periods and versions,
-register lineage, and validate the clinician/enrollment/group/address grain.
+Manage the National Downloadable File through official Provider Data Catalog discovery, immutable
+acquisition, strict schema validation, and row/release provenance. This managed path is now the S2.4
+prerequisite because the selected legacy `raw_dac_national` table has no recoverable source period
+or run identity. Next, prove its clinician/enrollment/group/address grain in an isolated candidate,
+then add Facility Affiliation Data and approved utilization inputs without inferring relationships.
 
 ### D3. Ownership and organizational change
 

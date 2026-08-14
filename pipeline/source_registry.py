@@ -14,6 +14,7 @@ class Publisher(str, Enum):
 class DiscoveryMechanism(str, Enum):
     CMS_DATA_JSON = "cms_data_json"
     CMS_DATASET_RESOURCES = "cms_dataset_resources"
+    CMS_PROVIDER_DATA_METASTORE = "cms_provider_data_metastore"
     NPPES_DOWNLOAD_INDEX = "nppes_download_index"
     OPEN_PAYMENTS_DOWNLOAD_INDEX = "open_payments_download_index"
     AACT_DOWNLOADS_PAGE = "aact_downloads_page"
@@ -64,6 +65,27 @@ AACT_ATTRIBUTION = (
 SOURCE_REGISTRY: dict[str, SourceSpec] = {
     spec.source_id: spec
     for spec in (
+        SourceSpec(
+            "cms_dac_national",
+            "Doctors and Clinicians National Downloadable File",
+            Publisher.CMS,
+            DiscoveryMechanism.CMS_PROVIDER_DATA_METASTORE,
+            "mj5m-pzi6",
+            Cadence.MONTHLY,
+            (
+                "Current Care Compare clinician/enrollment/group/address snapshot; "
+                "the CMS modified date is the source data period and the released "
+                "date is the publisher release timestamp."
+            ),
+            (
+                "raw_dac_national",
+                "serving_practice_provider_sites",
+                "provider_address_evidence",
+                "provider_organization_evidence",
+                "provider_hospital_evidence",
+            ),
+            CMS_ATTRIBUTION,
+        ),
         SourceSpec(
             "cms_physician_by_provider",
             "Medicare Physician & Other Practitioners - by Provider",

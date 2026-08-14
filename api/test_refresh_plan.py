@@ -96,7 +96,7 @@ def test_live_stale_shape_chooses_three_independent_candidate_lanes() -> None:
     assert plan["read_only"] is True
     assert plan["summary"]["stale"] == 11
     assert plan["summary"]["acquire"] == 10
-    assert plan["summary"]["candidate_input_restore"] == 4
+    assert plan["summary"]["candidate_input_restore"] == 5
     assert plan["summary"]["covered"] == 1
     assert "nppes_monthly_v2" in plan["acquisition_order"]
     assert "nppes_weekly_incremental_v2" not in plan["acquisition_order"]
@@ -107,6 +107,7 @@ def test_live_stale_shape_chooses_three_independent_candidate_lanes() -> None:
     }
     assert all(lane["state"] == "awaiting_validated_runs" for lane in lanes.values())
     assert set(plan["candidate_input_restore_ids"]) == {
+        "cms_dac_national",
         "cms_part_d_by_provider_and_drug",
         "cms_physician_by_provider",
         "cms_physician_by_provider_and_service",

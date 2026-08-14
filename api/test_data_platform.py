@@ -26,6 +26,7 @@ from pipeline.discovery import (
     discover_all,
     parse_aact_downloads,
     parse_cms_catalog,
+    parse_provider_data_metastore,
     parse_nppes_index,
     parse_open_payments_index,
     parse_ppef_resources,
@@ -102,7 +103,7 @@ def _manifest_for_discoveries(discoveries: dict[str, DiscoveryResult]) -> Manife
 
 
 def test_registry_covers_all_required_source_families() -> None:
-    assert len(SOURCE_REGISTRY) == 18
+    assert len(SOURCE_REGISTRY) == 19
     assert {spec.discovery for spec in SOURCE_REGISTRY.values()} == set(DiscoveryMechanism)
     assert all(spec.downstream_tables for spec in SOURCE_REGISTRY.values())
     assert all(spec.source_period_semantics for spec in SOURCE_REGISTRY.values())
@@ -121,6 +122,34 @@ def test_cms_catalog_parsing_uses_stable_dataset_and_resource_ids() -> None:
         "cms-resource:10000000-0000-4000-8000-000000000001"
     )
     assert physician.release.source_data_period == "2097-01-01/2097-12-31"
+
+
+def test_provider_data_metastore_preserves_modified_and_release_dates() -> None:
+    result = parse_provider_data_metastore(
+        (FIXTURES / "provider-data-dac.json").read_bytes(),
+        sources_for(DiscoveryMechanism.CMS_PROVIDER_DATA_METASTORE),
+    )["cms_dac_national"]
+
+    assert result.state == DiscoveryState.AVAILABLE
+    assert result.release.publisher_version == (
+        "cms-provider-data:mj5m-pzi6:2099-08-13:fixture_resource_20990813"
+    )
+    assert result.release.source_data_period == "2099-07-31"
+    assert result.release.publisher_release_timestamp == "2099-08-13T00:00:00+00:00"
+    assert result.release.source_url.endswith("DAC_NationalDownloadableFile.csv")
+
+
+def test_provider_data_metastore_rejects_non_cms_distribution() -> None:
+    payload = json.loads((FIXTURES / "provider-data-dac.json").read_text())
+    payload["distribution"][0]["downloadURL"] = "https://example.com/dac.csv"
+
+    result = parse_provider_data_metastore(
+        json.dumps(payload).encode(),
+        (SOURCE_REGISTRY["cms_dac_national"],),
+    )["cms_dac_national"]
+
+    assert result.state == DiscoveryState.ERROR
+    assert "official CMS host" in result.error_summary
 
 
 def test_cms_missing_distribution_field_is_a_discovery_error() -> None:

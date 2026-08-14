@@ -589,7 +589,7 @@ def _serving_practice_baseline(tmp_path: Path) -> tuple[Path, Path, str]:
                 WarehouseRelease(
                     warehouse_release_id=baseline_release_id,
                     created_at="2026-08-01T00:00:00Z",
-                    source_run_ids=("partb-run", "partd-run"),
+                    source_run_ids=("dac-run", "partb-run", "partd-run"),
                     pipeline_code_commit=CODE_COMMIT,
                     baseline_path=str(baseline),
                     baseline_sha256=digest,
@@ -598,6 +598,7 @@ def _serving_practice_baseline(tmp_path: Path) -> tuple[Path, Path, str]:
                     sha256=digest,
                     validation_details={
                         "source_periods": {
+                            "cms_dac_national": "2026-07",
                             "cms_physician_by_provider": "2024",
                             "cms_part_d_by_provider": "2024",
                         }
@@ -636,7 +637,7 @@ def test_targeted_serving_practice_release_inherits_baseline_provenance(
     assert comparison["comparison_policy"] == "serving_practice_additive_v1"
     assert comparison["unexpected_differences"] == []
     assert set(comparison["changed_tables"]) == SERVING_PRACTICE_CHANGED_TABLES
-    assert result.release.source_run_ids == ("partb-run", "partd-run")
+    assert result.release.source_run_ids == ("dac-run", "partb-run", "partd-run")
     assert result.release.table_counts == {"serving_practice_provider_sites": 1}
     details = result.release.validation_details
     assert details["baseline_warehouse_release_id"] == baseline_release_id

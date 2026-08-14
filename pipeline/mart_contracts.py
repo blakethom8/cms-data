@@ -87,7 +87,11 @@ MART_CONTRACTS: tuple[MartSpec, ...] = (
             "raw_part_d_by_provider",
             "address_geocode",
         ),
-        source_ids=("cms_physician_by_provider", "cms_part_d_by_provider"),
+        source_ids=(
+            "cms_dac_national",
+            "cms_physician_by_provider",
+            "cms_part_d_by_provider",
+        ),
         required_columns=(
             "site_key",
             "addr_key",
@@ -107,8 +111,8 @@ MART_CONTRACTS: tuple[MartSpec, ...] = (
             "data_year",
         ),
         source_period_policy=(
-            "DAC period/run IDs are retained per row from the legacy raw table; "
-            "Part B and Part D require managed release-manifest periods"
+            "DAC, Part B, and Part D retain row period/run IDs and require "
+            "managed release-manifest periods"
         ),
         provenance_scope="row_and_release_manifest",
         kind="serving",

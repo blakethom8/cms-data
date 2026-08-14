@@ -1,6 +1,7 @@
 # S2 release-built serving marts plan
 
-> Status: S2.1 and S2.2 complete; S2.3 implemented locally and pending isolated-candidate proof
+> Status: S2.1-S2.3 merged; S2.4 prerequisite in progress — managed DAC acquisition and an isolated
+> same-source raw/mart candidate
 >
 > Production boundary: do not select, rebuild, amend, or supersede prepared S1 deployment
 > `deployment-20260814T002255Z-11131e3630`. S2 candidates remain isolated and unselected until a
@@ -217,3 +218,13 @@ named validated baseline with a matching verified-backup digest, inherits its so
 and allowlists only the serving table. Its comparison scans schema and order-independent logical
 row fingerprints for every non-allowlisted table in addition to row counts. This implementation is
 not route-authorized; S2.4 must still produce and evaluate an isolated production-data candidate.
+
+The first production audit found a fail-closed provenance prerequisite. The selected warehouse's
+Part B and Part D raw tables carry managed run, release, period, and ingestion fields, but its legacy
+`raw_dac_national` table carries none. No historical manifest records an exact DAC publisher period
+or resource identity, so the missing values cannot be reconstructed honestly. S2.4 therefore first
+registers the official CMS Provider Data Catalog dataset `mj5m-pzi6`, validates its exact 31-column
+CSV contract, and acquires it as an immutable managed run. The isolated candidate will replace only
+that raw DAC table, build `serving_practice_provider_sites` from DAC and the baseline's exact Part B
+and Part D rows, and compare raw versus mart responses within the same candidate. This prerequisite
+does not select a warehouse, change a route, or authorize cutover.

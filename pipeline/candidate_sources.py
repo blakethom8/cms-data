@@ -23,6 +23,7 @@ from .releases import ReleaseError
 
 
 CMS_RAW_TABLES: dict[str, str] = {
+    "cms_dac_national": "raw_dac_national",
     "cms_physician_by_provider": "raw_physician_by_provider",
     "cms_physician_by_provider_and_service": (
         "raw_physician_by_provider_and_service"
