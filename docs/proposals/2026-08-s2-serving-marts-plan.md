@@ -231,3 +231,12 @@ protects every other table with logical fingerprints. Its comparison policy is d
 from the production manager allowlist. The isolated production-data run must still compare raw
 versus mart responses within the same candidate; none of this selects a warehouse, changes a route,
 or authorizes cutover.
+
+The first isolated managed-DAC candidate, `warehouse-20260814T023853Z-9b87f3e486`, passed its mart
+contract and proved all 40 non-allowlisted tables logically unchanged. The complete API corpus then
+failed before parity: current CMS publishes `Cred` and `Telehlth`, while the legacy raw table stored
+those headers with trailing tab characters and existing API SQL addresses the legacy physical names.
+This is an N/N-1 schema-compatibility failure, not a mart result. The candidate remains unselected.
+The managed loader now reconciles only leading/trailing whitespace differences to established raw
+column names, fails on ambiguous normalized names, and retains strict publisher-header acquisition.
+A new immutable candidate is required; the first candidate must not be amended in place.
