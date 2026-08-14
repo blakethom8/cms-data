@@ -155,6 +155,27 @@ def test_prepare_accepts_targeted_comparison_policy(
     assert deployment.state == production.DeploymentState.PREPARED
 
 
+def test_prepare_rejects_s2_managed_dac_policy_before_cutover_authorization(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paths, _ = _bootstrap_verified(tmp_path, monkeypatch)
+    _write_release(
+        paths, comparison_policy="serving_practice_managed_dac_v1"
+    )
+
+    with pytest.raises(production.ProductionError, match="unsupported policy"):
+        production.prepare_release(
+            paths["production"],
+            paths["artifacts"],
+            paths["data"],
+            paths["candidate_code"],
+            paths["candidate_runtime"],
+            paths["candidate_db"],
+            RELEASE_ID,
+        )
+
+
 def _write_evidence(
     paths: dict[str, Path],
     deployment: production.ProductionDeployment,

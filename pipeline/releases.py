@@ -84,6 +84,9 @@ PPEF_CHANGED_TABLES = frozenset(
 SERVING_PRACTICE_CHANGED_TABLES = frozenset(
     {"serving_practice_provider_sites"}
 )
+SERVING_PRACTICE_MANAGED_DAC_CHANGED_TABLES = frozenset(
+    {"raw_dac_national", "serving_practice_provider_sites"}
+)
 RADAR_SOURCE_IDS = frozenset(
     {"nppes_monthly_v2", "nppes_weekly_incremental_v2"}
 )
@@ -1617,6 +1620,35 @@ def _single_table_source_period(
     return periods[0]
 
 
+def _single_table_source_provenance(
+    connection: duckdb.DuckDBPyConnection,
+    table: str,
+) -> tuple[str, str]:
+    """Return one complete run/period pair for a baseline raw table."""
+    try:
+        missing = int(
+            connection.execute(
+                f'SELECT count(*) FROM "{table}" '
+                "WHERE nullif(trim(source_run_id), '') IS NULL "
+                "OR nullif(trim(source_data_period), '') IS NULL"
+            ).fetchone()[0]
+        )
+        rows = connection.execute(
+            f'SELECT DISTINCT source_run_id, source_data_period FROM "{table}" '
+            "ORDER BY source_run_id, source_data_period"
+        ).fetchall()
+    except duckdb.Error as error:
+        raise ReleaseError(
+            f"Baseline {table} lacks managed source provenance: {safe_error(error)}"
+        ) from error
+    if missing or len(rows) != 1:
+        raise ReleaseError(
+            f"Baseline {table} must contain one complete source run/period pair; "
+            f"found pairs={len(rows)}, missing_rows={missing}"
+        )
+    return str(rows[0][0]), str(rows[0][1])
+
+
 def _smoke_table_counts(
     connection: duckdb.DuckDBPyConnection,
 ) -> dict[str, int]:
@@ -1920,6 +1952,202 @@ def build_serving_practice_warehouse_release(
             release.byte_size = partial_path.stat().st_size
             release.sha256 = sha256_file(partial_path)
             release.table_counts = table_counts
+            release.validation_state = ValidationState.PASSED
+            release.validation_timestamp = utc_now()
+            os.replace(partial_path, database_path)
+            os.chmod(database_path, 0o440)
+            _save_release_document(data_root, document)
+            try:
+                spill_directory.rmdir()
+            except OSError:
+                pass
+        except Exception as error:
+            release.validation_state = ValidationState.FAILED
+            release.error_summary = safe_error(error)
+            _save_release_document(data_root, document)
+            raise ReleaseError(release.error_summary) from error
+
+    return BuildResult(
+        release=release,
+        database_path=database_path,
+        release_manifest_path=_release_manifest_path(data_root, warehouse_release_id),
+        release_store_path=release_store_path,
+    )
+
+
+def build_managed_dac_serving_practice_warehouse_release(
+    *,
+    data_root: Path,
+    baseline_warehouse_release_id: str,
+    dac_source_run_id: str,
+    backup_manifest_path: Path,
+    data_year: int,
+    code_commit: str | None = None,
+    memory_limit_gb: int = 12,
+    threads: int = 1,
+) -> BuildResult:
+    """Replace legacy DAC and build its serving mart in one isolated candidate."""
+    from .candidate_sources import load_cms_raw_tables, verified_cms_runs
+    from .transform import build_serving_practice_provider_sites
+
+    _validate_targeted_build_resources(memory_limit_gb, threads)
+    if data_year < 2000 or data_year > 2100:
+        raise ReleaseError("Serving mart data year must be between 2000 and 2100")
+    verified = verified_cms_runs(data_root, (dac_source_run_id,))
+    dac_manifest = verified[0][0]
+    if dac_manifest.source_id != "cms_dac_national":
+        raise ReleaseError("Managed DAC serving build requires one cms_dac_national run")
+    if _period_year(dac_manifest) != data_year:
+        raise ReleaseError("Managed DAC source period year must match the mart data year")
+
+    baseline, baseline_sha, baseline_bytes = _load_backup_manifest(backup_manifest_path)
+    commit = code_commit or pipeline_commit()
+    if commit is None:
+        raise ReleaseError("A full pipeline Git commit is required to build a release")
+    release_store_path = _release_store_path(data_root)
+    document = WarehouseReleaseStore(release_store_path).load()
+    baseline_release = _find_release(document, baseline_warehouse_release_id)
+    if baseline_release.validation_state != ValidationState.PASSED:
+        raise ReleaseError("Serving mart baseline release has not passed validation")
+    if baseline_release.sha256 != baseline_sha:
+        raise ReleaseError(
+            "Serving mart backup SHA-256 does not match the named baseline release"
+        )
+
+    baseline_connection = duckdb.connect(str(baseline), read_only=True)
+    try:
+        partb_run_id, partb_period = _single_table_source_provenance(
+            baseline_connection, "raw_physician_by_provider"
+        )
+        partd_run_id, partd_period = _single_table_source_provenance(
+            baseline_connection, "raw_part_d_by_provider"
+        )
+    finally:
+        baseline_connection.close()
+    inherited_periods = baseline_release.validation_details.get("source_periods")
+    source_periods = (
+        dict(inherited_periods) if isinstance(inherited_periods, dict) else {}
+    )
+    source_periods.update(
+        {
+            "cms_dac_national": dac_manifest.source_data_period,
+            "cms_physician_by_provider": partb_period,
+            "cms_part_d_by_provider": partd_period,
+        }
+    )
+    source_run_ids = tuple(
+        sorted(
+            {
+                *baseline_release.source_run_ids,
+                dac_manifest.run_id,
+                partb_run_id,
+                partd_run_id,
+            }
+        )
+    )
+
+    identity = hashlib.sha256(
+        (
+            "serving_practice_provider_sites_managed_dac\0"
+            f"{baseline_warehouse_release_id}\0{dac_manifest.run_id}"
+        ).encode()
+    ).hexdigest()
+    warehouse_release_id = make_warehouse_release_id(identity, commit)
+    release_dir = data_root / "releases" / warehouse_release_id
+    database_path = release_dir / "warehouse.duckdb"
+    partial_path = release_dir / "warehouse.duckdb.partial"
+    spill_directory = data_root / "staging" / "duckdb-spill" / warehouse_release_id
+
+    with _exclusive_lock(data_root / "locks" / "build.lock"):
+        release_dir.mkdir(parents=True, exist_ok=False)
+        release = WarehouseRelease(
+            warehouse_release_id=warehouse_release_id,
+            created_at=utc_now(),
+            source_run_ids=source_run_ids,
+            pipeline_code_commit=commit,
+            baseline_path=str(baseline),
+            baseline_sha256=baseline_sha,
+            database_path=str(database_path.relative_to(data_root)),
+            duckdb_version=duckdb.__version__,
+        )
+        document.releases.append(release)
+        _save_release_document(data_root, document)
+        try:
+            _copy_verified_baseline(
+                baseline,
+                partial_path,
+                expected_sha256=baseline_sha,
+                expected_bytes=baseline_bytes,
+            )
+            connection = duckdb.connect(str(partial_path), read_only=False)
+            try:
+                _configure_targeted_build_resources(
+                    connection,
+                    memory_limit_gb=memory_limit_gb,
+                    threads=threads,
+                    spill_directory=spill_directory,
+                )
+                raw_counts = load_cms_raw_tables(
+                    connection,
+                    data_root=data_root,
+                    run_ids=(dac_manifest.run_id,),
+                )
+                connection.execute("BEGIN TRANSACTION")
+                try:
+                    mart_rows = build_serving_practice_provider_sites(
+                        connection, data_year
+                    )
+                    contract_validation = validate_mart_contracts(
+                        connection,
+                        source_periods=source_periods,
+                        contracts=(
+                            MART_CONTRACT_BY_TABLE[
+                                "serving_practice_provider_sites"
+                            ],
+                        ),
+                    )
+                    connection.execute("COMMIT")
+                except Exception:
+                    connection.execute("ROLLBACK")
+                    raise
+                table_counts = {
+                    **raw_counts,
+                    "serving_practice_provider_sites": mart_rows,
+                }
+                release.validation_details = {
+                    "release_scope": "targeted_managed_source_and_mart",
+                    "comparison_policy": "serving_practice_managed_dac_v1",
+                    "baseline_warehouse_release_id": baseline_warehouse_release_id,
+                    "source_periods": dict(sorted(source_periods.items())),
+                    "changed_tables": sorted(
+                        SERVING_PRACTICE_MANAGED_DAC_CHANGED_TABLES
+                    ),
+                    "changed_table_counts": dict(sorted(table_counts.items())),
+                    "baseline_dependency_provenance": {
+                        "cms_physician_by_provider": {
+                            "source_run_id": partb_run_id,
+                            "source_data_period": partb_period,
+                        },
+                        "cms_part_d_by_provider": {
+                            "source_run_id": partd_run_id,
+                            "source_data_period": partd_period,
+                        },
+                    },
+                    "mart_contract_validation": contract_validation,
+                    "resource_limits": {
+                        "memory_limit_gb": memory_limit_gb,
+                        "threads": threads,
+                        "spill_directory": str(spill_directory),
+                        "preserve_insertion_order": False,
+                    },
+                }
+                connection.execute("CHECKPOINT")
+            finally:
+                connection.close()
+
+            release.byte_size = partial_path.stat().st_size
+            release.sha256 = sha256_file(partial_path)
+            release.table_counts = dict(sorted(table_counts.items()))
             release.validation_state = ValidationState.PASSED
             release.validation_timestamp = utc_now()
             os.replace(partial_path, database_path)
@@ -2290,6 +2518,49 @@ def _comparison_policy(
     release: WarehouseRelease,
 ) -> tuple[str, frozenset[str], dict[str, int]]:
     """Select the exact source-owned table set for a release comparison."""
+    if (
+        release.validation_details.get("comparison_policy")
+        == "serving_practice_managed_dac_v1"
+    ):
+        changed_tables = release.validation_details.get("changed_tables")
+        evidence = release.validation_details.get("changed_table_counts")
+        baseline_release_id = release.validation_details.get(
+            "baseline_warehouse_release_id"
+        )
+        declared_changed_tables = (
+            set(changed_tables) if isinstance(changed_tables, list) else set()
+        )
+        if declared_changed_tables != set(
+            SERVING_PRACTICE_MANAGED_DAC_CHANGED_TABLES
+        ):
+            raise ReleaseError(
+                "Managed DAC serving release has an invalid changed-table allowlist"
+            )
+        if not isinstance(baseline_release_id, str) or not baseline_release_id:
+            raise ReleaseError(
+                "Managed DAC serving release lacks its baseline release identity"
+            )
+        if not isinstance(evidence, dict) or set(evidence) != set(
+            SERVING_PRACTICE_MANAGED_DAC_CHANGED_TABLES
+        ):
+            raise ReleaseError(
+                "Managed DAC serving release lacks exact row-count evidence"
+            )
+        try:
+            expected_counts = {table: int(count) for table, count in evidence.items()}
+        except (TypeError, ValueError) as error:
+            raise ReleaseError(
+                "Managed DAC serving row-count evidence is invalid"
+            ) from error
+        if any(count <= 0 for count in expected_counts.values()):
+            raise ReleaseError(
+                "Managed DAC serving row-count evidence must be positive"
+            )
+        return (
+            "serving_practice_managed_dac_v1",
+            SERVING_PRACTICE_MANAGED_DAC_CHANGED_TABLES,
+            expected_counts,
+        )
     if release.validation_details.get("comparison_policy") == "serving_practice_additive_v1":
         changed_tables = release.validation_details.get("changed_tables")
         evidence = release.validation_details.get("serving_mart_counts")
@@ -2401,7 +2672,10 @@ def compare_warehouse_release(
             common_invariant_tables = sorted(
                 set(baseline_counts) & set(candidate_counts) & set(invariant_tables)
             )
-            if policy_name == "serving_practice_additive_v1":
+            if policy_name in {
+                "serving_practice_additive_v1",
+                "serving_practice_managed_dac_v1",
+            }:
                 baseline_fingerprints = {
                     table: _table_logical_fingerprint(baseline_connection, table)
                     for table in common_invariant_tables
