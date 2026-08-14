@@ -56,7 +56,9 @@ The first two investigations are complete in the
 and identified the exact unstable response fields. Remaining work is:
 
 1. Define and test the intended ordering, representative-value, and monetary-precision semantics
-   before using exact response digests as a parity gate.
+   before using exact response digests as a parity gate. **Complete:** the
+   [stabilization record](s2-parity-oracle-stabilization-2026-08-14.md) reports all fourteen cases
+   byte-stable across three trials.
 2. Add discovered practice roster and site-profile cases after the search response selects a real
    site, so drill-downs use the same site identity rather than a hand-maintained address.
 3. Re-run the corpus against an isolated serving-mart candidate on the same warehouse. A mart route

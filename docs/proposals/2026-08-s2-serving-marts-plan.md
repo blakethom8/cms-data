@@ -1,6 +1,6 @@
 # S2 release-built serving marts plan
 
-> Status: S2.1 complete; S2.2 behavior and query-plan baselines complete
+> Status: S2.1 and S2.2 complete; response-stabilization prerequisite accepted
 >
 > Production boundary: do not select, rebuild, amend, or supersede prepared S1 deployment
 > `deployment-20260814T002255Z-11131e3630`. S2 candidates remain isolated and unselected until a
@@ -201,3 +201,10 @@ case corpus with immutable warehouse identity; the second attached per-query `EX
 evidence to those same case IDs. A response timing is never represented as an operator plan. The
 result also established a response-stabilization prerequisite before the Phase 2 parity oracle can
 be authoritative.
+
+That prerequisite keeps the v3 response shape intact while defining cent precision, complete list
+and pagination ordering, deterministic market-site representative values, and source-faithful
+Explorer row ordering. It passed the full API suite and all fourteen canonical cases passed three-
+trial byte-stability checks against the immutable selected warehouse. See the
+[stabilization record](../operations/s2-parity-oracle-stabilization-2026-08-14.md). This acceptance
+does not authorize a route switch, candidate selection, or production cutover.

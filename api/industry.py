@@ -150,14 +150,19 @@ def get_industry_router(get_conn):
         sql = f"""
             with doctor as (
               select CAST("NPI" as varchar) npi,
-                     any_value("Provider First Name") || ' ' || any_value("Provider Last Name") as "name",
-                     trim(coalesce(any_value("Cred\t\t\t\t"), '')) as credentials,
-                     any_value(pri_spec) as specialty,
-                     any_value("Facility Name") as practice_name,
-                     any_value("City/Town") as city, any_value("State") as state,
-                     upper(trim(any_value(adr_ln_1))) || '|' ||
-                       left(any_value(CAST("ZIP Code" as varchar)), 5) as addr_key
-              from raw_dac_national group by "NPI"
+                     "Provider First Name" || ' ' || "Provider Last Name" as "name",
+                     trim(coalesce("Cred\t\t\t\t", '')) as credentials,
+                     pri_spec as specialty, "Facility Name" as practice_name,
+                     "City/Town" as city, "State" as state,
+                     upper(trim(adr_ln_1)) || '|' ||
+                       left(CAST("ZIP Code" as varchar), 5) as addr_key
+              from raw_dac_national
+              qualify row_number() over (
+                partition by "NPI"
+                order by coalesce(adr_ln_1, ''), coalesce(CAST("ZIP Code" as varchar), ''),
+                         coalesce("Facility Name", ''), coalesce(pri_spec, ''),
+                         coalesce("Provider First Name", ''), coalesce("Provider Last Name", '')
+              ) = 1
             ), matched_rows as (
               select op.*, d.name, d.credentials, d.specialty, d.practice_name,
                      d.city, d.state, d.addr_key
@@ -189,7 +194,8 @@ def get_industry_router(get_conn):
                      Applicable_Manufacturer_or_Applicable_GPO_Making_Payment_Name manufacturer,
                      sum(Total_Amount_of_Payment_USDollars) usd,
                      row_number() over (
-                       partition by CAST(Covered_Recipient_NPI as varchar) order by usd desc
+                       partition by CAST(Covered_Recipient_NPI as varchar)
+                       order by usd desc, manufacturer
                      ) rank
               from full_rows group by 1, 2
             ), product_rank as (
@@ -197,17 +203,18 @@ def get_industry_router(get_conn):
                      Name_of_Drug_or_Biological_or_Device_or_Medical_Supply_1 product,
                      sum(Total_Amount_of_Payment_USDollars) usd,
                      row_number() over (
-                       partition by CAST(Covered_Recipient_NPI as varchar) order by usd desc
+                       partition by CAST(Covered_Recipient_NPI as varchar)
+                       order by usd desc, product
                      ) rank
               from full_rows
               where Name_of_Drug_or_Biological_or_Device_or_Medical_Supply_1 is not null
               group by 1, 2
             ), aggregated as (
               select CAST(f.Covered_Recipient_NPI as varchar) as npi,
-                   any_value(f.name) as "name", any_value(f.credentials) as credentials,
-                   any_value(f.specialty) as specialty, any_value(f.practice_name) as practice_name,
-                   any_value(f.city) as city, any_value(f.state) as state,
-                   any_value(f.lat) as lat, any_value(f.lng) as lng,
+                   min(f.name) as "name", min(f.credentials) as credentials,
+                   min(f.specialty) as specialty, min(f.practice_name) as practice_name,
+                   min(f.city) as city, min(f.state) as state,
+                   min(f.lat) as lat, min(f.lng) as lng,
                    count(*) as payment_count,
                    round(sum(f.Total_Amount_of_Payment_USDollars), 2) total_usd,
                    round(sum(case when f.Nature_of_Payment_or_Transfer_of_Value <> 'Food and Beverage'
@@ -219,12 +226,12 @@ def get_industry_router(get_conn):
                      consulting_speaking_usd,
                    count(distinct f.Applicable_Manufacturer_or_Applicable_GPO_Making_Payment_Name)
                      as n_manufacturers,
-                   any_value(m.manufacturer) as top_manufacturer,
-                   any_value(p.product) as top_product,
-                   any_value(mt.matched_payment_count) matched_payment_count,
-                   any_value(mt.matched_total_usd) matched_total_usd,
-                   any_value(mt.matched_nonfood_usd) matched_nonfood_usd,
-                   any_value(mt.matched_consulting_speaking_usd)
+                   min(m.manufacturer) as top_manufacturer,
+                   min(p.product) as top_product,
+                   min(mt.matched_payment_count) matched_payment_count,
+                   min(mt.matched_total_usd) matched_total_usd,
+                   min(mt.matched_nonfood_usd) matched_nonfood_usd,
+                   min(mt.matched_consulting_speaking_usd)
                      matched_consulting_speaking_usd,
                    case when consulting_speaking_usd >= 25000 then 4
                         when consulting_speaking_usd >= 5000 then 3
@@ -248,7 +255,7 @@ def get_industry_router(get_conn):
               select *, count(*) over () total_matches from scoped
               where qualification_total_usd >= ? and qualification_tier_score >= ?
             )
-            select * from qualified order by {order_by} desc limit ? offset ?
+            select * from qualified order by {order_by} desc, npi limit ? offset ?
         """
         cursor = get_conn().execute(
             sql,
@@ -320,7 +327,7 @@ def get_industry_router(get_conn):
                      count(*) payment_count,
                      round(sum(Total_Amount_of_Payment_USDollars), 2) total_usd
               from raw_open_payments_general where {predicate}
-              group by 1 order by total_usd desc
+              group by 1 order by total_usd desc, "label"
             """,
             params,
         ).fetchall()
@@ -330,7 +337,7 @@ def get_industry_router(get_conn):
                      count(*) payment_count,
                      round(sum(Total_Amount_of_Payment_USDollars), 2) total_usd
               from raw_open_payments_general where {predicate}
-              group by 1 order by total_usd desc
+              group by 1 order by total_usd desc, manufacturer
             """,
             params,
         ).fetchall()
@@ -342,7 +349,7 @@ def get_industry_router(get_conn):
               from raw_open_payments_general where {predicate}
                 and Name_of_Drug_or_Biological_or_Device_or_Medical_Supply_1 is not null
                 and trim(Name_of_Drug_or_Biological_or_Device_or_Medical_Supply_1) <> ''
-              group by 1 order by total_usd desc
+              group by 1 order by total_usd desc, "label"
             """,
             params,
         ).fetchall()
@@ -439,12 +446,22 @@ def get_industry_router(get_conn):
                 "in (" + ",".join(["?"] * len(product)) + ")"
             )
             params.extend(value.strip().upper() for value in product)
-        order_by = '"value" asc' if sort == "alpha" else "physician_count desc, total_usd desc"
+        order_by = (
+            '"value" asc'
+            if sort == "alpha"
+            else 'physician_count desc, total_usd desc, "value" asc'
+        )
         sql = f"""
             with doctor as (
-              select CAST("NPI" as varchar) npi, any_value(pri_spec) specialty,
-                     any_value("City/Town") city, any_value("State") state
-              from raw_dac_national group by "NPI"
+              select CAST("NPI" as varchar) npi, pri_spec specialty,
+                     "City/Town" city, "State" state
+              from raw_dac_national
+              qualify row_number() over (
+                partition by "NPI"
+                order by coalesce(adr_ln_1, ''), coalesce(CAST("ZIP Code" as varchar), ''),
+                         coalesce("Facility Name", ''), coalesce(pri_spec, ''),
+                         coalesce("Provider First Name", ''), coalesce("Provider Last Name", '')
+              ) = 1
             ), full_stats as (
               select CAST(Covered_Recipient_NPI as varchar) npi,
                      sum(Total_Amount_of_Payment_USDollars) total_usd,

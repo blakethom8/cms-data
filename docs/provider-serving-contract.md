@@ -1,6 +1,6 @@
 # Provider discovery, profile, and evidence serving contract
 
-> **Last reviewed: 2026-08-11** · **Status: representation version 3 in production**
+> **Last reviewed: 2026-08-14** · **Status: representation version 3 in production**
 
 The serving API deliberately exposes three provider views. They share NPI as the identity key, but
 they answer different questions and must not be collapsed into one oversized response.
@@ -83,3 +83,22 @@ not write. A v3 candidate must prove Alicia Terando (`1396877080`) is NPPES-disc
 separate provenance-labelled doors, prove at least one real NPPES-only clinician can be searched and
 profiled, retain the Fischer and Do affiliation counts, pass the provider-evidence check, and pass
 the canonical production smoke and ETag/304 checks before approval.
+
+## Deterministic representation semantics
+
+Representation version 3 also has deterministic serialization rules so an unchanged warehouse and
+code bundle can serve as a byte-exact parity oracle:
+
+- monetary aggregates exposed by practice search are rounded to cents;
+- collections and distinct string aggregates have explicit lexical ordering;
+- paginated provider, site, industry, and evidence rows have complete tie-breakers;
+- a market site's representative publisher values use the lexical minimum non-null value across its
+  member rows, while IDs retain their explicit primary-before-other grouping; and
+- source-faithful Explorer rows are ordered by every exposed column. Duplicate practice-location
+  rows reached through multiple reassignment relationships are collapsed only at the endpoint's
+  declared receiving-enrollment/location grain.
+
+The market representative is a stable display value, not a claim that the publisher preferred that
+value or that it is clinically authoritative. These corrections do not add, remove, rename, or
+retype response fields, so `representation_version` remains 3. Any future code deployment receives
+a new immutable deployment identity, which invalidates caches under the existing cache contract.

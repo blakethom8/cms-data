@@ -79,6 +79,7 @@ def _build_client() -> TestClient:
 
     app = FastAPI()
     app.include_router(get_industry_router(lambda: connection))
+    app.state.connection = connection
     return TestClient(app)
 
 
@@ -162,3 +163,33 @@ def test_options_use_the_same_threshold_scope_as_search():
             "total_usd": 70,
         }
     ]
+
+
+def test_search_uses_stable_representatives_and_tie_breakers():
+    connection = client.app.state.connection
+    connection.execute("begin transaction")
+    try:
+        connection.execute(
+            "insert into raw_dac_national values "
+            "('2222222222', 'Aaron', 'Alternate', 'DO', 'A Specialty', "
+            "'A Practice', 'A City', 'AZ', '0 Main St', '85001')"
+        )
+        connection.execute(
+            "insert into raw_open_payments_general values "
+            "('2222222222', 'Acme Medical', 'ALPHA', 'Consulting Fee', 6000)"
+        )
+
+        response = client.get(
+            "/industry/search", params={"min_tier": 1, "sort": "payments"}
+        )
+
+        assert response.status_code == 200
+        row = next(
+            item for item in response.json()["results"] if item["npi"] == "2222222222"
+        )
+        assert row["name"] == "Aaron Alternate"
+        assert row["practice_name"] == "A Practice"
+        assert row["top_manufacturer"] == "Acme Medical"
+        assert row["top_product"] == "ALPHA"
+    finally:
+        connection.execute("rollback")
