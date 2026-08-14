@@ -1,0 +1,14 @@
+{
+  "accessLevel": "public",
+  "identifier": "mj5m-pzi6",
+  "title": "National Downloadable File",
+  "modified": "2099-07-31",
+  "released": "2099-08-13",
+  "distribution": [
+    {
+      "@type": "dcat:Distribution",
+      "downloadURL": "https://data.cms.gov/provider-data/sites/default/files/resources/fixture_resource_20990813/DAC_NationalDownloadableFile.csv",
+      "mediaType": "text/csv"
+    }
+  ]
+}

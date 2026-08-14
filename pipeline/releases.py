@@ -43,6 +43,7 @@ STAGING_ENVIRONMENT = "staging"
 HOSPITAL_SOURCE_ID = "cms_hospital_enrollments"
 FULL_CMS_SOURCE_IDS = frozenset(
     {
+        "cms_dac_national",
         "cms_physician_by_provider",
         "cms_physician_by_provider_and_service",
         "cms_part_d_by_provider",
@@ -108,6 +109,7 @@ FULL_PLATFORM_SMOKE_TABLES = (
     "provider_drug_detail",
     "provider_quality_scores",
     "order_referring_eligibility",
+    "raw_dac_national",
     "raw_physician_by_provider",
     "raw_physician_by_provider_and_service",
     "raw_part_d_by_provider",
@@ -1495,7 +1497,7 @@ def build_full_cms_warehouse_release(
     backup_manifest_path: Path,
     code_commit: str | None = None,
 ) -> BuildResult:
-    """Build all twelve CMS sources into a new immutable warehouse candidate."""
+    """Build every registered CMS warehouse source into an immutable candidate."""
     by_source_id = _resolve_exact_source_set(
         data_root,
         source_run_ids,
