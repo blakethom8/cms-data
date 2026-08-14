@@ -938,8 +938,10 @@ def build_serving_provider_profile_core_tables(
         INSERT INTO serving_provider_profile_locations
         WITH dac AS (
             SELECT CAST("NPI" AS VARCHAR) npi,
-                   upper(trim(adr_ln_1)) || '|'
-                       || left(CAST("ZIP Code" AS VARCHAR), 5) addr_key,
+                   CASE WHEN "ZIP Code" IS NULL THEN '~MISSING_ZIP_DAC~'
+                        ELSE upper(trim(adr_ln_1)) || '|'
+                            || left(CAST("ZIP Code" AS VARCHAR), 5)
+                   END addr_key,
                    min(trim(adr_ln_1)) street,
                    list(distinct trim(adr_ln_2) order by trim(adr_ln_2))
                        FILTER (WHERE nullif(trim(adr_ln_2), '') IS NOT NULL) suites,
@@ -956,8 +958,10 @@ def build_serving_provider_profile_core_tables(
         ),
         nppes AS (
             SELECT CAST(npi AS VARCHAR) npi,
-                   upper(trim(practice_address_1)) || '|'
-                       || left(CAST(practice_zip AS VARCHAR), 5) addr_key,
+                   CASE WHEN practice_zip IS NULL THEN '~MISSING_ZIP_NPPES~'
+                        ELSE upper(trim(practice_address_1)) || '|'
+                            || left(CAST(practice_zip AS VARCHAR), 5)
+                   END addr_key,
                    min(trim(practice_address_1)) street,
                    list(distinct trim(practice_address_2) order by trim(practice_address_2))
                        FILTER (WHERE nullif(trim(practice_address_2), '') IS NOT NULL) suites,

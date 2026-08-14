@@ -1,9 +1,10 @@
 # S3 provider-profile production-data preflight — 2026-08-14
 
-> **Decision update:** source readiness passes and the approved exact cleanup removed the capacity
-> block. Candidate allocation is now paused on explicit reassignment-source provenance
-> reconciliation. Production traffic, the selected deployment, and its warehouse were not changed.
-> No staging candidate, production artifact, deployment, or route switch was created.
+> **Decision update:** source readiness, capacity, and explicit reassignment-source provenance now
+> pass. The first production-data build failed closed on two NPPES international addresses with no
+> ZIP; its incomplete copy was removed after preserving failure evidence. Production traffic, the
+> selected deployment, and its warehouse were not changed. No valid staging candidate, production
+> artifact, deployment, or route switch was created.
 
 ## Starting identity
 
@@ -127,14 +128,40 @@ builder's optional `--reassignment-run-id` then revalidates that managed artifac
 baseline raw table's sole run, period, and row count to match before it can fill the missing release
 provenance. The candidate records the reconciliation in `reconciled_source_runs`.
 
+The adoption completed for run `20260721T220859Z-0353abdb`, and an immediate replay returned
+`adopted: false`. The managed artifact is root-owned, read-only, 534,858,072 bytes, and retains the
+expected checksum. A fresh full hash and read-only open of baseline
+`warehouse-20260814T183948Z-e5ff46dce9` passed with 7,395,713 core providers and 44 tables. After
+adoption, the exact baseline-sized capacity preview reported 70.78% current use, 76.72% projected
+use, and a passed rollback floor.
+
+## First production-data build learning
+
+The first reconciled build allocated failed release
+`warehouse-20260814T221250Z-6fc15bc3b0` and stopped on the warehouse constraint
+`serving_provider_profile_locations.addr_key NOT NULL`. The build transaction rolled back, no
+completed `warehouse.duckdb` was created, and the 21,735,944,192-byte partial copy was preserved long
+enough to archive its failed release manifest, proved unopen, then removed by its exact filename.
+
+Read-only diagnostics found the full cause:
+
+- DAC rows with a non-empty street and null ZIP: 0;
+- NPPES rows with a non-empty street and null ZIP: 2;
+- affected NPIs: `1306373501` and `1760673693`; and
+- each affected NPI has exactly one NPPES location and no DAC location.
+
+The raw profile query includes both legitimate international/territory addresses and returns
+`zip5: null`; only its hidden concatenated address key becomes null. Excluding those rows or
+inventing a ZIP would break the raw oracle. The follow-up fix therefore uses source-qualified,
+internal missing-ZIP sentinels only for the mart key. The visible street, city, state, phone, and
+null ZIP remain unchanged; DAC and NPPES null keys cannot incorrectly merge; and a null-key DAC row
+still cannot acquire roster evidence through a join that is null in the raw query.
+
 ## Next safe sequence
 
-1. Merge and deploy the tested source-adoption/reconciliation code to the staging operator path.
-2. Adopt only run `20260721T220859Z-0353abdb` using the retained acquisition manifest, retained
-   source bytes, and selected production deployment evidence.
-3. Re-run source verification and create a fresh verified backup manifest for the selected staging
-   baseline.
-4. Build one isolated provider-profile candidate with the explicit reassignment run.
-5. Validate its exact three-table scope, contracts, invariant fingerprints, actual size, raw/mart
+1. Merge and seal the missing-ZIP key fix after the full suite and CI pass.
+2. Re-run the exact candidate-capacity preview and build one isolated provider-profile candidate
+   with the already adopted explicit reassignment run.
+3. Validate its exact three-table scope, contracts, invariant fingerprints, actual size, raw/mart
    parity, query plans, and concurrency results.
-6. Stop before production preparation, policy authorization, or cutover and present the evidence.
+4. Stop before production preparation, policy authorization, or cutover and present the evidence.
