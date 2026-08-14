@@ -496,6 +496,10 @@ def _parser() -> argparse.ArgumentParser:
     build_nppes_serving.add_argument("--backup-manifest", required=True, type=Path)
     build_nppes_serving.add_argument("--data-year", required=True, type=int)
     build_nppes_serving.add_argument(
+        "--code-commit",
+        help="Exact 40-character Git commit for a sealed source archive",
+    )
+    build_nppes_serving.add_argument(
         "--data-root", type=Path, default=DEFAULT_MANIFEST_PATH.parent
     )
     build_nppes_serving.add_argument(
@@ -757,6 +761,7 @@ def main(argv: list[str] | None = None) -> int:
                     ),
                     backup_manifest_path=args.backup_manifest,
                     data_year=args.data_year,
+                    code_commit=args.code_commit,
                     memory_limit_gb=args.memory_limit_gb,
                     threads=args.threads,
                 ).to_dict()

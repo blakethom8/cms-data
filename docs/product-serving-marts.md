@@ -57,7 +57,9 @@ The staging-only builder is `python -m pipeline.data_platform
 build-nppes-serving-practice-release`. It requires the exact validated baseline release and a
 matching verified-backup digest, inherits source-run and smoke-count evidence, requires every
 declared NPPES/DAC/Part B/Part D source period, and builds both tables in one transaction under
-bounded DuckDB resources. Its `serving_practice_nppes_additive_v1` comparison policy permits only
+bounded DuckDB resources. A sealed source archive supplies its explicit full Git identity through
+`--code-commit`; an absent, abbreviated, or malformed identity fails before allocation. Its
+`serving_practice_nppes_additive_v1` comparison policy permits only
 those two tables to differ and applies schema plus order-independent logical fingerprints to every
 other table. The production manager deliberately does not accept this policy yet.
 

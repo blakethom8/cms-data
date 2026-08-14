@@ -54,10 +54,16 @@ The focused API, transform, contract, and operations suite passed 50 tests. The 
 passed 483 tests with one expected skip. The final diff check reported no whitespace errors.
 
 The follow-on S2.6 builder adds `build-nppes-serving-practice-release` and the exact
-`serving_practice_nppes_additive_v1` comparison policy. Fixture validation passed 26 release tests,
+`serving_practice_nppes_additive_v1` comparison policy. Fixture validation passed 27 release tests,
 including rejection of a missing declared source period and a tampered changed-table allowlist.
-The complete suite passed 486 tests with one expected skip. The builder remains staging-only and
+The complete suite passed 487 tests with one expected skip. The builder remains staging-only and
 the production manager does not accept its policy.
+
+The first server invocation from a sealed code archive stopped before allocating a release because
+the archive intentionally had no `.git` directory and the CLI could not infer a commit. The command
+now accepts `--code-commit` for this case and validates an exact 40-character hexadecimal identity;
+missing, abbreviated, or malformed values still fail closed. No warehouse copy or partial database
+was created by the rejected invocation.
 
 ## Required before any production cutover
 
