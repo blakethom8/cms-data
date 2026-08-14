@@ -79,7 +79,13 @@ expected verification timestamp, and Provider Search stayed ready.
 
 A new full selected-warehouse-sized allocation would project approximately 84.76% use. That is
 below the 85% block but leaves little margin, so every further warehouse build or production copy
-still requires its own retention preview. The full refresh workspace and backups remain untouched.
+still requires its own retention preview. The full refresh workspace and backups remained
+untouched during that operation.
+
+The refresh workspace was subsequently handled by the separately reviewed
+[July refresh workspace compaction](july-refresh-workspace-compaction-2026-08-14.md). That operation
+kept every checksum-valid source snapshot while deduplicating repeated payloads and retiring the
+verified old staging warehouse; it did not modify or select production.
 
 ## Operator learnings
 

@@ -96,6 +96,12 @@ results pass the correctness, performance, bounded-overload, and memory gates.
 
 ## Capacity decision
 
+> **Resolved later on 2026-08-14:** the approved
+> [July refresh workspace compaction](july-refresh-workspace-compaction-2026-08-14.md) retained all
+> 18 checksum-valid source snapshots while reclaiming 26,169,270,272 filesystem bytes. The fresh
+> exact 21,513,908,224-byte preview now allows the production copy at 83.64% projected use. The
+> candidate remains staging-only; this resolution is not cutover authorization.
+
 After the staging candidate was allocated, the host used 307,955,982,336 of 362,633,863,168 bytes
 (84.92%) with 39,886,811,136 bytes free. The active-plus-two verified rollback floor passes.
 
