@@ -156,6 +156,61 @@ def _write_release(
             table: {"baseline_rows": None, "candidate_rows": count}
             for table, count in counts.items()
         }
+    if comparison_policy == "serving_practice_nppes_additive_v1":
+        counts = {
+            "serving_practice_nppes_provider_sites": 2,
+            "serving_practice_nppes_org_memberships": 3,
+        }
+        release["release"]["table_counts"] = counts
+        release["release"]["validation_details"] = {
+            "comparison_policy": comparison_policy,
+            "release_scope": "targeted_additive",
+            "changed_tables": list(counts),
+            "mart_contract_validation": {
+                "passed": True,
+                "registered_count": 2,
+                "available_count": 2,
+                "schema_valid_count": 2,
+                "data_valid_count": 2,
+                "serving_authorized_count": 2,
+                "marts": [
+                    {
+                        "table": table,
+                        "schema_valid": True,
+                        "data_valid": True,
+                        "serving_authorized": True,
+                        "issues": [],
+                        "row_count": count,
+                        "key_columns": (
+                            ["addr_key", "npi", "org_pac_id"]
+                            if table.endswith("org_memberships")
+                            else ["npi"]
+                        ),
+                        "duplicate_key_groups": 0,
+                        "invalid_npis": 0,
+                        "required_null_rows": 0,
+                        "orphan_npis": 0 if table.endswith("org_memberships") else None,
+                        "row_validation_failures": (
+                            {"missing_dac_provenance": 0}
+                            if table.endswith("org_memberships")
+                            else {
+                                "empty_specialties": 0,
+                                "invalid_state_or_zip": 0,
+                                "partb_value_without_provenance": 0,
+                                "partd_value_without_provenance": 0,
+                            }
+                        ),
+                    }
+                    for table, count in counts.items()
+                ],
+            },
+        }
+        comparison["changed_tables"] = {
+            table: {"baseline_rows": None, "candidate_rows": count}
+            for table, count in counts.items()
+        }
+        comparison["invariant_logical_fingerprints_checked"] = 42
+        comparison["unchanged_table_count"] = 42
     (release_dir / "release.json").write_text(json.dumps(release))
     (release_dir / "comparison.json").write_text(json.dumps(comparison))
 
@@ -208,6 +263,29 @@ def test_prepare_accepts_validated_s2_managed_dac_policy_after_authorization(
     assert deployment.state == production.DeploymentState.PREPARED
 
 
+def test_prepare_accepts_validated_s2_nppes_practice_policy_after_authorization(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paths, _ = _bootstrap_verified(tmp_path, monkeypatch)
+    _write_release(
+        paths, comparison_policy="serving_practice_nppes_additive_v1"
+    )
+
+    deployment = production.prepare_release(
+        paths["production"],
+        paths["artifacts"],
+        paths["data"],
+        paths["candidate_code"],
+        paths["candidate_runtime"],
+        paths["candidate_db"],
+        RELEASE_ID,
+    )
+
+    assert deployment.warehouse_release_id == RELEASE_ID
+    assert deployment.state == production.DeploymentState.PREPARED
+
+
 @pytest.mark.parametrize(
     "invalid_field",
     ("comparison_changed_tables", "release_changed_tables", "mart_validation"),
@@ -235,6 +313,101 @@ def test_prepare_rejects_incomplete_s2_managed_dac_authorization_evidence(
         release["release"]["validation_details"]["mart_contract_validation"][
             "passed"
         ] = False
+        expected = "serving-mart validation"
+    release_path.write_text(json.dumps(release))
+    comparison_path.write_text(json.dumps(comparison))
+
+    with pytest.raises(production.ProductionError, match=expected):
+        production.prepare_release(
+            paths["production"],
+            paths["artifacts"],
+            paths["data"],
+            paths["candidate_code"],
+            paths["candidate_runtime"],
+            paths["candidate_db"],
+            RELEASE_ID,
+        )
+
+
+@pytest.mark.parametrize(
+    "invalid_field",
+    (
+        "comparison_changed_tables",
+        "release_changed_tables",
+        "table_counts",
+        "baseline_rows",
+        "invariant_fingerprints",
+        "mart_validation",
+        "mart_type",
+        "mart_set",
+        "mart_rows",
+        "mart_keys",
+        "row_validation_shape",
+        "row_validation",
+        "membership_orphans",
+    ),
+)
+def test_prepare_rejects_incomplete_s2_nppes_practice_authorization_evidence(
+    invalid_field: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paths, _ = _bootstrap_verified(tmp_path, monkeypatch)
+    _write_release(paths, comparison_policy="serving_practice_nppes_additive_v1")
+    release_path = paths["data"] / "releases" / RELEASE_ID / "release.json"
+    comparison_path = paths["data"] / "releases" / RELEASE_ID / "comparison.json"
+    release = json.loads(release_path.read_text())
+    comparison = json.loads(comparison_path.read_text())
+    details = release["release"]["validation_details"]
+    mart_validation = details["mart_contract_validation"]
+    provider_table = "serving_practice_nppes_provider_sites"
+    membership_table = "serving_practice_nppes_org_memberships"
+    if invalid_field == "comparison_changed_tables":
+        comparison["changed_tables"].pop(provider_table)
+        expected = "comparison changed-table scope"
+    elif invalid_field == "release_changed_tables":
+        details["changed_tables"] = [provider_table]
+        expected = "release validation scope"
+    elif invalid_field == "table_counts":
+        release["release"]["table_counts"].pop(provider_table)
+        expected = "release table-count scope"
+    elif invalid_field == "baseline_rows":
+        comparison["changed_tables"][provider_table]["baseline_rows"] = 1
+        expected = "candidate table counts"
+    elif invalid_field == "invariant_fingerprints":
+        comparison["invariant_logical_fingerprints_checked"] = 0
+        expected = "invariant-table evidence"
+    elif invalid_field == "mart_validation":
+        mart_validation["passed"] = False
+        expected = "serving-mart validation"
+    elif invalid_field == "mart_type":
+        mart_validation["marts"] = {"unexpected": "mapping"}
+        expected = "serving-mart validation"
+    elif invalid_field == "mart_set":
+        mart_validation["marts"] = mart_validation["marts"][:1]
+        expected = "serving-mart validation"
+    elif invalid_field == "mart_rows":
+        mart_validation["marts"][0]["row_count"] = 999
+        expected = "serving-mart validation"
+    elif invalid_field == "mart_keys":
+        mart_validation["marts"][0]["key_columns"] = ["npi", "addr_key"]
+        expected = "serving-mart validation"
+    elif invalid_field == "row_validation_shape":
+        mart_validation["marts"][0]["row_validation_failures"].pop(
+            "empty_specialties"
+        )
+        expected = "serving-mart validation"
+    elif invalid_field == "row_validation":
+        mart_validation["marts"][0]["row_validation_failures"][
+            "empty_specialties"
+        ] = 1
+        expected = "serving-mart validation"
+    else:
+        membership = next(
+            mart for mart in mart_validation["marts"]
+            if mart["table"] == membership_table
+        )
+        membership["orphan_npis"] = 1
         expected = "serving-mart validation"
     release_path.write_text(json.dumps(release))
     comparison_path.write_text(json.dumps(comparison))
