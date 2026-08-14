@@ -886,22 +886,47 @@ def build_serving_provider_profile_core_tables(
                    [source_run_id] source_run_ids
             FROM ranked_nppes WHERE row_number = 1
         ),
-        dac AS (
+        ranked_dac AS (
             SELECT CAST("NPI" AS VARCHAR) npi,
-                   any_value("Provider First Name") || ' '
-                       || any_value("Provider Last Name") "name",
-                   nullif(trim(any_value("Cred\t\t\t\t")), '') credentials,
-                   any_value(pri_spec) specialty,
-                   any_value(sec_spec_all) secondary_specialties,
-                   any_value("City/Town") city, any_value("State") state,
-                   any_value(Med_sch) med_school, any_value(Grd_yr) grad_year,
-                   max(CASE WHEN "Telehlth\t\t\t\t" = 'Y' THEN 1 ELSE 0 END) = 1
-                       telehealth,
+                   "Provider First Name" || ' ' || "Provider Last Name" "name",
+                   nullif(trim("Cred\t\t\t\t"), '') credentials,
+                   pri_spec specialty, sec_spec_all secondary_specialties,
+                   "City/Town" city, "State" state,
+                   Med_sch med_school, Grd_yr grad_year,
+                   max(CASE WHEN "Telehlth\t\t\t\t" = 'Y' THEN 1 ELSE 0 END)
+                       OVER (PARTITION BY "NPI") = 1 telehealth,
+                   row_number() OVER (
+                       PARTITION BY "NPI"
+                       ORDER BY nullif(trim(pri_spec), '') IS NULL,
+                                trim(pri_spec),
+                                nullif(trim(sec_spec_all), '') IS NULL,
+                                trim(sec_spec_all),
+                                coalesce(trim("Provider First Name"), ''),
+                                coalesce(trim("Provider Last Name"), ''),
+                                coalesce(trim("City/Town"), ''),
+                                coalesce(trim("State"), ''),
+                                coalesce(trim(Med_sch), ''),
+                                coalesce(Grd_yr, 0),
+                                coalesce(trim("Cred\t\t\t\t"), '')
+                   ) row_number
+            FROM raw_dac_national
+        ),
+        dac_provenance AS (
+            SELECT CAST("NPI" AS VARCHAR) npi,
                    list(distinct source_data_period order by source_data_period)
                        source_data_periods,
                    list(distinct source_run_id order by source_run_id) source_run_ids
             FROM raw_dac_national
             GROUP BY "NPI"
+        ),
+        dac AS (
+            SELECT d.npi, d."name", d.credentials, d.specialty,
+                   d.secondary_specialties, d.city, d.state, d.med_school,
+                   d.grad_year, d.telehealth, p.source_data_periods,
+                   p.source_run_ids
+            FROM ranked_dac d
+            JOIN dac_provenance p ON p.npi = d.npi
+            WHERE d.row_number = 1
         ),
         taxonomy AS (
             SELECT taxonomy_code, min(classification) classification,

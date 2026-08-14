@@ -140,19 +140,36 @@ def _profile_header(
                  practice_city city, practice_state state, taxonomy_1
           from raw_nppes
           where CAST(npi as varchar) = ?),
-        dac as (
+        ranked_dac as (
           select CAST("NPI" as varchar) npi,
-                 any_value("Provider First Name") || ' '
-                   || any_value("Provider Last Name") "name",
-                 nullif(trim(any_value({CRED})), '') credentials,
-                 any_value(pri_spec) specialty,
-                 any_value(sec_spec_all) secondary_specialties,
-                 any_value("City/Town") city, any_value("State") state,
-                 any_value(Med_sch) med_school, any_value(Grd_yr) grad_year,
-                 max(case when {TELE} = 'Y' then 1 else 0 end) = 1 telehealth
+                 "Provider First Name" || ' ' || "Provider Last Name" "name",
+                 nullif(trim({CRED}), '') credentials,
+                 pri_spec specialty, sec_spec_all secondary_specialties,
+                 "City/Town" city, "State" state,
+                 Med_sch med_school, Grd_yr grad_year,
+                 max(case when {TELE} = 'Y' then 1 else 0 end)
+                   over (partition by "NPI") = 1 telehealth,
+                 row_number() over (
+                   partition by "NPI"
+                   order by nullif(trim(pri_spec), '') is null,
+                            trim(pri_spec),
+                            nullif(trim(sec_spec_all), '') is null,
+                            trim(sec_spec_all),
+                            coalesce(trim("Provider First Name"), ''),
+                            coalesce(trim("Provider Last Name"), ''),
+                            coalesce(trim("City/Town"), ''),
+                            coalesce(trim("State"), ''),
+                            coalesce(trim(Med_sch), ''),
+                            coalesce(Grd_yr, 0),
+                            coalesce(trim({CRED}), '')
+                 ) row_number
           from raw_dac_national
-          where CAST("NPI" as varchar) = ?
-          group by "NPI")
+          where CAST("NPI" as varchar) = ?),
+        dac as (
+          select npi, "name", credentials, specialty,
+                 secondary_specialties, city, state, med_school, grad_year,
+                 telehealth
+          from ranked_dac where row_number = 1)
         select coalesce(n.npi, d.npi) npi,
                coalesce(n."name", d."name") "name",
                coalesce(n.credentials, d.credentials) credentials,

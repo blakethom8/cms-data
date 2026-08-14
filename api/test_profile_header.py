@@ -97,6 +97,38 @@ def test_nppes_identity_is_enriched_by_medicare() -> None:
     assert header["telehealth"] is True
 
 
+def test_dac_enrichment_selects_one_deterministic_coherent_row() -> None:
+    conn = _connection()
+    conn.execute(
+        "insert into raw_nppes values "
+        "('1811967433', 'MATTHEW', 'BUDOFF', 'MD', 'LOS ANGELES', 'CA', NULL)"
+    )
+    conn.executemany(
+        "insert into raw_dac_national values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+            (
+                "1811967433", "MATTHEW", "BUDOFF", "MD",
+                "INTERNAL MEDICINE", "CARDIOVASCULAR DISEASE (CARDIOLOGY)",
+                "MISSION VIEJO", "CA", "SECOND SCHOOL", 1991, "N",
+            ),
+            (
+                "1811967433", "MATTHEW", "BUDOFF", "MD",
+                "CARDIOVASCULAR DISEASE (CARDIOLOGY)", None,
+                "LOVELAND", "CO", "FIRST SCHOOL", 1990, "Y",
+            ),
+        ],
+    )
+
+    header = _profile_header(conn, "1811967433")
+
+    assert header is not None
+    assert header["specialty"] == "CARDIOVASCULAR DISEASE (CARDIOLOGY)"
+    assert header["secondary_specialties"] is None
+    assert header["med_school"] == "FIRST SCHOOL"
+    assert header["grad_year"] == 1990
+    assert header["telehealth"] is True
+
+
 def test_missing_nppes_and_medicare_rows_has_no_profile_header() -> None:
     conn = _connection()
     assert _profile_header(conn, "1000000002") is None

@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "name": "profile-rich",
+      "family": "provider-profile",
+      "path": "/profiles/1811967433",
+      "expected_status": 200,
+      "purpose": "Provider with broad utilization, industry, research, location, group, and hospital evidence"
+    },
+    {
+      "name": "profile-standard",
+      "family": "provider-profile",
+      "path": "/profiles/1003005257",
+      "expected_status": 200,
+      "purpose": "Stable mixed-workload provider identity used by the concurrency corpus"
+    },
+    {
+      "name": "profile-missing",
+      "family": "provider-profile",
+      "path": "/profiles/0000000000",
+      "expected_status": 404,
+      "purpose": "Missing-provider status and body semantics"
+    }
+  ]
+}
