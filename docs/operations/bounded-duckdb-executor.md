@@ -89,3 +89,6 @@ the active database in place.
   overload behavior.
 - 2026-08-13: Commit benchmark workload files, not only their hashes. The original baseline retained
   semantic identity and a raw hash but not the bytes needed to reproduce that raw hash.
+- 2026-08-13: Measured executor parameters belong in the checked-in non-secret production release
+  environment file. A prepared bundle must load that exact file during rehearsal so configuration
+  provenance does not depend on manually repeated shell flags.
