@@ -805,6 +805,57 @@ def _stage_managed_dac(data_root: Path) -> RunManifest:
     return manifest
 
 
+def _stage_reassignment(data_root: Path) -> RunManifest:
+    source_id = "cms_revalidation_group_reassignment"
+    run_id = "reassign-run"
+    columns = CMS_CSV_PROFILES[source_id].required_columns
+    values = {
+        "Group PAC ID": "PAC-1",
+        "Group Enrollment ID": "GROUP-1",
+        "Group Legal Business Name": "Cardio Group Legal",
+        "Group State Code": "CA",
+        "Group Reassignments and Physician Assistants": "25",
+        "Individual NPI": "1234567890",
+        "Individual State Code": "CA",
+    }
+    stream = io.StringIO(newline="")
+    writer = csv.writer(stream, lineterminator="\n")
+    writer.writerow(columns)
+    writer.writerow([values[column] for column in columns])
+    artifact = data_root / "runs" / source_id / run_id / "source.csv"
+    artifact.parent.mkdir(parents=True, exist_ok=True)
+    artifact.write_bytes(stream.getvalue().encode())
+    inspection = inspect_cms_csv(artifact, profile=CMS_CSV_PROFILES[source_id])
+    manifest = RunManifest(
+        run_id=run_id,
+        release_id="cms_revalidation_group_reassignment-2026-07-fixture",
+        source_id=source_id,
+        publisher=SOURCE_REGISTRY[source_id].publisher.value,
+        publisher_version="cms-resource:reassignment-fixture",
+        source_data_period="2026-07",
+        publisher_release_timestamp="2026-07-20T00:00:00+00:00",
+        discovery_timestamp="2026-07-21T22:00:00+00:00",
+        retrieval_timestamp="2026-07-21T22:08:59+00:00",
+        source_url="https://data.cms.gov/example/source.csv",
+        byte_size=inspection.byte_size,
+        sha256=inspection.sha256,
+        schema_fingerprint=inspection.schema_fingerprint,
+        source_encoding=inspection.source_encoding,
+        row_counts={
+            "source_rows": inspection.row_count,
+            "invalid_identifier_rows": inspection.invalid_identifier_rows,
+        },
+        pipeline_code_commit=CODE_COMMIT,
+        validation_state=ValidationState.PASSED,
+        validation_timestamp="2026-07-21T22:10:00+00:00",
+    )
+    store = ManifestStore(data_root / "manifests.json")
+    document = store.load()
+    document.manifests.append(manifest)
+    store.save(document)
+    return manifest
+
+
 def test_targeted_serving_practice_release_inherits_baseline_provenance(
     tmp_path: Path,
 ) -> None:
@@ -1117,6 +1168,90 @@ def test_provider_profile_core_release_requires_every_declared_source_period(
             baseline_warehouse_release_id=baseline_release_id,
             backup_manifest_path=backup_manifest,
             data_year=2026,
+            code_commit=CODE_COMMIT,
+            memory_limit_gb=1,
+            threads=1,
+        )
+
+
+def test_provider_profile_core_release_reconciles_verified_reassignment_run(
+    tmp_path: Path,
+) -> None:
+    data_root, backup_manifest, baseline_release_id = (
+        _provider_profile_core_baseline(tmp_path)
+    )
+    manifest = _stage_reassignment(data_root)
+    store = WarehouseReleaseStore(data_root / "warehouse-releases.json")
+    document = store.load()
+    del document.releases[0].validation_details["source_periods"][manifest.source_id]
+    store.save(document)
+
+    result = build_provider_profile_core_warehouse_release(
+        data_root=data_root,
+        baseline_warehouse_release_id=baseline_release_id,
+        backup_manifest_path=backup_manifest,
+        data_year=2026,
+        reassignment_run_id=manifest.run_id,
+        code_commit=CODE_COMMIT,
+        memory_limit_gb=1,
+        threads=1,
+    )
+
+    assert manifest.run_id in result.release.source_run_ids
+    details = result.release.validation_details
+    assert details["source_periods"][manifest.source_id] == "2026-07"
+    assert details["reconciled_source_runs"] == [
+        {
+            "source_id": manifest.source_id,
+            "run_id": manifest.run_id,
+            "source_data_period": "2026-07",
+            "raw_table": "raw_reassignment",
+            "raw_row_count": 1,
+            "artifact_sha256": manifest.sha256,
+        }
+    ]
+
+
+def test_provider_profile_core_release_rejects_raw_reassignment_mismatch(
+    tmp_path: Path,
+) -> None:
+    data_root, backup_manifest, baseline_release_id = (
+        _provider_profile_core_baseline(tmp_path)
+    )
+    manifest = _stage_reassignment(data_root)
+    backup_document = json.loads(backup_manifest.read_text())
+    baseline = Path(backup_document["backup_path"])
+    connection = duckdb.connect(str(baseline))
+    try:
+        connection.execute(
+            "UPDATE raw_reassignment SET source_run_id = 'different-run'"
+        )
+        connection.execute("CHECKPOINT")
+    finally:
+        connection.close()
+    digest = sha256_file(baseline)
+    backup_document["backup_identity"]["byte_size"] = baseline.stat().st_size
+    backup_document["sha256"] = digest
+    backup_manifest.write_text(json.dumps(backup_document))
+    store = WarehouseReleaseStore(data_root / "warehouse-releases.json")
+    document = store.load()
+    release = document.releases[0]
+    release.sha256 = digest
+    release.baseline_sha256 = digest
+    release.byte_size = baseline.stat().st_size
+    del release.validation_details["source_periods"][manifest.source_id]
+    store.save(document)
+
+    with pytest.raises(
+        ReleaseError,
+        match="raw_reassignment provenance does not match",
+    ):
+        build_provider_profile_core_warehouse_release(
+            data_root=data_root,
+            baseline_warehouse_release_id=baseline_release_id,
+            backup_manifest_path=backup_manifest,
+            data_year=2026,
+            reassignment_run_id=manifest.run_id,
             code_commit=CODE_COMMIT,
             memory_limit_gb=1,
             threads=1,

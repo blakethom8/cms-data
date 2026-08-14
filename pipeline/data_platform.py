@@ -53,6 +53,7 @@ from .releases import (
     promote_staging_release,
     rollback_staging_release,
 )
+from .source_adoption import SourceAdoptionError, adopt_validated_source_run
 from .source_registry import SOURCE_REGISTRY, SourceSpec
 
 DEFAULT_MANIFEST_PATH = Path(__file__).resolve().parent.parent / "data" / "manifests.json"
@@ -383,6 +384,22 @@ def _parser() -> argparse.ArgumentParser:
         type=int,
         help="Optional hard transfer limit; defaults to the source-specific safety ceiling",
     )
+    adopt_source = subparsers.add_parser(
+        "adopt-validated-source-run",
+        help="Adopt a retained, production-proven validated CMS run into staging",
+    )
+    adopt_source.add_argument("--source-manifest", required=True, type=Path)
+    adopt_source.add_argument("--source-artifact", required=True, type=Path)
+    adopt_source.add_argument("--production-evidence", required=True, type=Path)
+    adopt_source.add_argument("--expected-source-id", required=True)
+    adopt_source.add_argument("--expected-run-id", required=True)
+    adopt_source.add_argument(
+        "--data-root", type=Path, default=DEFAULT_MANIFEST_PATH.parent
+    )
+    adopt_source.add_argument(
+        "--environment", choices=[STAGING_ENVIRONMENT], required=True
+    )
+    adopt_source.add_argument("--json", action="store_true")
     build = subparsers.add_parser(
         "build-release",
         help="Build and validate a versioned DuckDB candidate in staging",
@@ -528,6 +545,13 @@ def _parser() -> argparse.ArgumentParser:
     )
     build_profile_core.add_argument("--backup-manifest", required=True, type=Path)
     build_profile_core.add_argument("--data-year", required=True, type=int)
+    build_profile_core.add_argument(
+        "--reassignment-run-id",
+        help=(
+            "Verified managed run used to reconcile missing baseline "
+            "reassignment provenance"
+        ),
+    )
     build_profile_core.add_argument(
         "--code-commit",
         help="Exact 40-character Git commit for a sealed source archive",
@@ -723,6 +747,7 @@ def _completed_nppes_acquisition(
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     if args.command in {
+        "adopt-validated-source-run",
         "build-release",
         "build-cms-release",
         "build-ppef-release",
@@ -739,7 +764,17 @@ def main(argv: list[str] | None = None) -> int:
         "rollback",
     }:
         try:
-            if args.command == "build-release":
+            if args.command == "adopt-validated-source-run":
+                payload = adopt_validated_source_run(
+                    data_root=args.data_root,
+                    source_manifest_path=args.source_manifest,
+                    source_artifact_path=args.source_artifact,
+                    production_evidence_path=args.production_evidence,
+                    expected_source_id=args.expected_source_id,
+                    expected_run_id=args.expected_run_id,
+                ).to_dict()
+                heading = "Validated retained source run adopted into staging"
+            elif args.command == "build-release":
                 payload = build_warehouse_release(
                     data_root=args.data_root,
                     source_run_id=args.source_run_id,
@@ -808,6 +843,7 @@ def main(argv: list[str] | None = None) -> int:
                     ),
                     backup_manifest_path=args.backup_manifest,
                     data_year=args.data_year,
+                    reassignment_run_id=args.reassignment_run_id,
                     code_commit=args.code_commit,
                     memory_limit_gb=args.memory_limit_gb,
                     threads=args.threads,
@@ -863,7 +899,7 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 payload = rollback_staging_release(args.data_root)
                 heading = "Staging warehouse release rolled back"
-        except (OSError, ValueError, ReleaseError) as error:
+        except (OSError, ValueError, ReleaseError, SourceAdoptionError) as error:
             payload = {
                 "environment": STAGING_ENVIRONMENT,
                 "command": args.command,
