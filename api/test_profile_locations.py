@@ -119,3 +119,20 @@ def test_locations_without_any_address_return_empty() -> None:
         "('1111111111', '', ' ', 'LOS ANGELES', 'CA', '90012', null)"
     )
     assert _profile_locations(conn, "1111111111") == []
+
+
+def test_locations_choose_deterministic_values_and_suite_order() -> None:
+    conn = _connection()
+    conn.executemany(
+        "insert into raw_dac_national values (?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+            ("1234567890", "200", "10 MAIN ST", "SUITE B", "B CITY", "CA", "90001", "222"),
+            ("1234567890", "100", "10 MAIN ST", "SUITE A", "A CITY", "CA", "90001", "111"),
+        ],
+    )
+
+    row = _profile_locations(conn, "1234567890")[0]
+
+    assert row["suites"] == ["SUITE A", "SUITE B"]
+    assert row["city"] == "A CITY"
+    assert row["phone"] == "111"

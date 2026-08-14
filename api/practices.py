@@ -823,8 +823,8 @@ def get_practices_router(get_conn):
                        min(phone) phone,
                        count(*) providers_here,
                        list(distinct spec order by spec) specialties,
-                       sum(partb_payments) partb_payments,
-                       sum(partd_drug_cost) partd_drug_cost,
+                       round(sum(partb_payments), 2) partb_payments,
+                       round(sum(partd_drug_cost), 2) partd_drug_cost,
                        min(trim(coalesce(first_name, '') || ' ' ||
                                 coalesce(last_name, ''))) solo_name
                 from attributed
@@ -1011,8 +1011,8 @@ def get_practices_router(get_conn):
                    max(group_size_national) group_size_national,
                    count(*) providers_here,
                    list(distinct spec order by spec) specialties,
-                   sum(u.payments) partb_payments,
-                   sum(rx.drug_cost) partd_drug_cost,
+                   round(sum(u.payments), 2) partb_payments,
+                   round(sum(rx.drug_cost), 2) partd_drug_cost,
                    min(case when org_pac_id is null then
                        trim(coalesce(first_name, '') || ' ' || coalesce(last_name, ''))
                    end) solo_name

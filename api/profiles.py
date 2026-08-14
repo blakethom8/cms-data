@@ -165,25 +165,25 @@ def _profile_locations(conn, npi: str) -> list[dict]:
     return _rows(conn, """
         with dac as (
           select upper(trim(adr_ln_1)) || '|' || left(CAST("ZIP Code" as varchar),5) addr_key,
-                 any_value(trim(adr_ln_1)) street,
-                 list(distinct trim(adr_ln_2))
+                 min(trim(adr_ln_1)) street,
+                 list(distinct trim(adr_ln_2) order by trim(adr_ln_2))
                    filter (where nullif(trim(adr_ln_2), '') is not null) suites,
-                 any_value("City/Town") city, any_value("State") state,
-                 left(any_value(CAST("ZIP Code" as varchar)),5) zip5,
-                 any_value(CAST("Telephone Number" as varchar)) phone,
-                 any_value(org_pac_id) org_pac_id
+                 min("City/Town") city, min("State") state,
+                 left(min(CAST("ZIP Code" as varchar)),5) zip5,
+                 min(CAST("Telephone Number" as varchar)) phone,
+                 min(org_pac_id) org_pac_id
           from raw_dac_national
           where CAST("NPI" as varchar) = ?
             and nullif(trim(adr_ln_1), '') is not null
           group by 1),
         nppes as (
           select upper(trim(practice_address_1)) || '|' || left(CAST(practice_zip as varchar),5) addr_key,
-                 any_value(trim(practice_address_1)) street,
-                 list(distinct trim(practice_address_2))
+                 min(trim(practice_address_1)) street,
+                 list(distinct trim(practice_address_2) order by trim(practice_address_2))
                    filter (where nullif(trim(practice_address_2), '') is not null) suites,
-                 any_value(practice_city) city, any_value(practice_state) state,
-                 left(any_value(CAST(practice_zip as varchar)),5) zip5,
-                 any_value(CAST(practice_phone as varchar)) phone
+                 min(practice_city) city, min(practice_state) state,
+                 left(min(CAST(practice_zip as varchar)),5) zip5,
+                 min(CAST(practice_phone as varchar)) phone
           from raw_nppes
           where CAST(npi as varchar) = ?
             and nullif(trim(practice_address_1), '') is not null
@@ -214,7 +214,7 @@ def _profile_locations(conn, npi: str) -> list[dict]:
         from doc
         left join roster r on r.org_pac_id = doc.org_pac_id and r.addr_key = doc.addr_key
         left join address_geocode g on g.addr_key = doc.addr_key
-        order by coalesce(r.roster_size, 0) asc
+        order by coalesce(r.roster_size, 0) asc, doc.addr_key, doc.org_pac_id
     """, [npi, npi])
 
 
@@ -596,7 +596,9 @@ def get_profiles_router(get_conn):
         out["industry_manufacturers"] = _rows(conn, """
             select Applicable_Manufacturer_or_Applicable_GPO_Making_Payment_Name manufacturer,
                    round(sum(Total_Amount_of_Payment_USDollars)) usd, count(*) n_payments,
-                   string_agg(distinct Name_of_Drug_or_Biological_or_Device_or_Medical_Supply_1, ', ') products
+                   string_agg(distinct Name_of_Drug_or_Biological_or_Device_or_Medical_Supply_1,
+                              ', ' order by Name_of_Drug_or_Biological_or_Device_or_Medical_Supply_1)
+                       products
             from raw_open_payments_general
             where CAST(Covered_Recipient_NPI as varchar) = ?
             group by 1 order by usd desc limit 5
@@ -605,7 +607,9 @@ def get_profiles_router(get_conn):
             select count(*) research_rows,
                    round(sum(Total_Amount_of_Payment_USDollars)) research_usd,
                    count(distinct Name_of_Study) n_studies,
-                   string_agg(distinct Applicable_Manufacturer_or_Applicable_GPO_Making_Payment_Name, '; ') sponsors
+                   string_agg(distinct Applicable_Manufacturer_or_Applicable_GPO_Making_Payment_Name,
+                              '; ' order by Applicable_Manufacturer_or_Applicable_GPO_Making_Payment_Name)
+                       sponsors
             from raw_open_payments_research
             where CAST(Covered_Recipient_NPI as varchar) = ?
                or CAST(Principal_Investigator_1_NPI as varchar) = ?
@@ -616,7 +620,9 @@ def get_profiles_router(get_conn):
         """, [npi] * 6)
         out["ownership"] = _row(conn, """
             select count(*) stakes, round(sum(Total_Amount_Invested_USDollars)) invested,
-                   string_agg(distinct Applicable_Manufacturer_or_Applicable_GPO_Making_Payment_Name, '; ') companies
+                   string_agg(distinct Applicable_Manufacturer_or_Applicable_GPO_Making_Payment_Name,
+                              '; ' order by Applicable_Manufacturer_or_Applicable_GPO_Making_Payment_Name)
+                       companies
             from raw_open_payments_ownership where CAST(Physician_NPI as varchar) = ?
         """, [npi])
 
@@ -626,6 +632,8 @@ def get_profiles_router(get_conn):
         out["locations"].sort(key=lambda l: (
             0 if l.get("state") == home_state else 1,
             l.get("roster_size") if l.get("roster_size") is not None else 10**9,
+            l.get("street") or "",
+            l.get("zip5") or "",
         ))
 
         out["groups"] = _affiliation_groups(conn, npi)

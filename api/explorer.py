@@ -340,7 +340,7 @@ PROVIDER_EVIDENCE_SOURCES: tuple[dict, ...] = (
         "proves": "The receiving enrollment's published Medicare practice locations.",
         "does_not_prove": "Which location the clinician personally uses most often.",
         "sql": """
-            SELECT p.*
+            SELECT DISTINCT p.*
             FROM raw_pecos_practice_location p
             JOIN raw_pecos_reassignment r
               ON CAST(r.RCV_BNFT_ENRLMT_ID AS VARCHAR) = CAST(p.ENRLMT_ID AS VARCHAR)
@@ -724,7 +724,7 @@ def _run_json_safe(conn, sql: str, params: list, limit: int = 50) -> TableData:
             projection.append(identifier)
     projected_sql = (
         f"SELECT {', '.join(projection)} "
-        f"FROM ({sql.strip().rstrip(';')}) AS provider_rows"
+        f"FROM ({sql.strip().rstrip(';')}) AS provider_rows ORDER BY ALL"
     )
     return _run(conn, projected_sql, params, limit)
 

@@ -94,6 +94,8 @@ Proceed with two independently reviewable changes:
 
 1. Stabilize existing response semantics: ordered list/string aggregates, deterministic market site
    representative values, explicit provider/site ID ordering, and published monetary precision.
+   This prerequisite is implemented in the follow-up stabilization change and must pass a fresh
+   three-trial canonical comparison before it becomes the mart parity oracle.
 2. Build `serving_practice_provider_sites` in an isolated candidate while retaining the stabilized
    raw query as the parity oracle.
 

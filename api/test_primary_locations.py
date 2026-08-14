@@ -410,6 +410,27 @@ def test_primary_search_attributes_each_npi_total_once_to_nppes_address():
     assert location["organization_contexts"][1]["primary_address_match_count"] == 0
 
 
+def test_primary_search_publishes_money_at_cent_precision():
+    connection = _database()
+    connection.execute(
+        'update raw_physician_by_provider set "Tot_Mdcr_Pymt_Amt" = '
+        'case "Rndrng_NPI" when \'1111111111\' then 100.004 '
+        'when \'2222222222\' then 200.004 else "Tot_Mdcr_Pymt_Amt" end'
+    )
+
+    response = _client(connection).get(
+        "/practices/search",
+        params={
+            "specialty": "Cardiology",
+            "zips": "80202",
+            "location_basis": "nppes_primary",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["results"][0]["partb_payments"] == 300.01
+
+
 def test_primary_search_filters_on_nppes_zip_and_rejects_invalid_boundaries():
     connection = _database()
     client = _client(connection)

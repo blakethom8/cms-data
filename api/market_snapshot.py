@@ -352,6 +352,7 @@ def get_market_snapshot_router(get_conn):
                 LEFT JOIN nppes_primary np ON np.npi = m.npi
             )
             SELECT * FROM joined {distance_filter}
+            ORDER BY npi, org_pac_id NULLS LAST, addr_key, phone NULLS LAST
         """
         params = base_params + distance_params
         if proximity:
@@ -451,6 +452,17 @@ def get_market_snapshot_router(get_conn):
                     "solo_names": [],
                 },
             )
+            for field, value in (
+                ("practice_name", row["org_name"] if org else None),
+                ("address", row["street"]),
+                ("city", row["city"]),
+                ("state", row["state"]),
+                ("zip5", row["zip5"]),
+                ("phone", row["phone"]),
+            ):
+                current = site[field]
+                if value is not None and (current is None or str(value) < str(current)):
+                    site[field] = value
             if npi not in site["npis"]:
                 site["npis"].add(npi)
                 site["partb_values"].append(row["partb_payments"])
@@ -484,14 +496,21 @@ def get_market_snapshot_router(get_conn):
 
         provider_models: list[SnapshotProvider] = []
         for entry in providers.values():
-            site_ids = entry.pop("primary_site_ids") + entry.pop("other_site_ids")
+            site_ids = sorted(entry.pop("primary_site_ids")) + sorted(
+                entry.pop("other_site_ids")
+            )
+            entry["org_pac_ids"].sort()
             provider_models.append(
                 SnapshotProvider(
                     **entry, site_ids=site_ids, door_count=len(site_ids)
                 )
             )
         provider_models.sort(
-            key=lambda p: (p.partb_payments is None, -(p.partb_payments or 0.0))
+            key=lambda p: (
+                p.partb_payments is None,
+                -(p.partb_payments or 0.0),
+                p.npi,
+            )
         )
 
         site_models: list[SnapshotSite] = []
@@ -536,7 +555,7 @@ def get_market_snapshot_router(get_conn):
                     partd_drug_cost=_sum_or_none(site["partd_values"]),
                 )
             )
-        site_models.sort(key=lambda s: -s.providers_here)
+        site_models.sort(key=lambda s: (-s.providers_here, s.site_id))
 
         by_npi = {p.npi: p for p in provider_models}
         org_models: list[SnapshotOrganization] = []

@@ -146,6 +146,10 @@ def _database() -> duckdb.DuckDBPyConnection:
 
 def _client() -> TestClient:
     connection = _database()
+    return _client_for(connection)
+
+
+def _client_for(connection: duckdb.DuckDBPyConnection) -> TestClient:
     app = FastAPI()
     app.include_router(get_market_snapshot_router(lambda: connection))
     return TestClient(app)
@@ -239,6 +243,20 @@ def test_provider_doors_and_nppes_primary_ordering():
     # Sorted by Part B descending, unknown dollars last.
     ordered = [p["npi"] for p in body["providers"]]
     assert ordered == ["2", "1", "3", "4"]
+
+
+def test_site_representative_values_are_deterministic_across_members() -> None:
+    connection = _database()
+    connection.execute(
+        "update raw_dac_national set \"City/Town\" = 'A DENVER', "
+        "\"Telephone Number\" = '2020000000' where \"NPI\" = '2'"
+    )
+
+    body = _snapshot(_client_for(connection), city=None)
+    site = next(row for row in body["sites"] if row["site_id"] == D1)
+
+    assert site["city"] == "A DENVER"
+    assert site["phone"] == "2020000000"
 
 
 def test_independent_bucket_rolls_up_solo_clinicians():

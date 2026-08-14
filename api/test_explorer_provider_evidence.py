@@ -78,10 +78,14 @@ def _client() -> TestClient:
         "INSERT INTO raw_pecos_enrollment VALUES (?, ?, ?)",
         [
             ("1710390513", "IND-1", None),
+            ("1710390513", "IND-2", None),
             ("1999999999", "ORG-ENROLL-1", "CEDARS GROUP"),
         ],
     )
-    connection.execute("INSERT INTO raw_pecos_reassignment VALUES ('IND-1', 'ORG-ENROLL-1')")
+    connection.executemany(
+        "INSERT INTO raw_pecos_reassignment VALUES (?, ?)",
+        [("IND-2", "ORG-ENROLL-1"), ("IND-1", "ORG-ENROLL-1")],
+    )
     connection.execute(
         "INSERT INTO raw_pecos_practice_location VALUES ('ORG-ENROLL-1', 'LOS ANGELES', 'CA', '90048')"
     )
@@ -121,7 +125,10 @@ def test_provider_evidence_follows_one_npi_across_source_grains() -> None:
     ]
 
     ppef = _source(payload, "ppef_reassignment")
-    assert ppef["providers"]["1710390513"]["rows"] == [["IND-1", "ORG-ENROLL-1"]]
+    assert ppef["providers"]["1710390513"]["rows"] == [
+        ["IND-1", "ORG-ENROLL-1"],
+        ["IND-2", "ORG-ENROLL-1"],
+    ]
 
     locations = _source(payload, "ppef_practice_location")
     assert locations["providers"]["1710390513"]["rows"] == [
