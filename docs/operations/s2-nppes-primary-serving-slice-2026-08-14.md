@@ -53,9 +53,16 @@ Focused tests prove:
 The focused API, transform, contract, and operations suite passed 50 tests. The complete API suite
 passed 483 tests with one expected skip. The final diff check reported no whitespace errors.
 
+The follow-on S2.6 builder adds `build-nppes-serving-practice-release` and the exact
+`serving_practice_nppes_additive_v1` comparison policy. Fixture validation passed 26 release tests,
+including rejection of a missing declared source period and a tampered changed-table allowlist.
+The complete suite passed 486 tests with one expected skip. The builder remains staging-only and
+the production manager does not accept its policy.
+
 ## Required before any production cutover
 
-1. Add an exact targeted-additive release policy whose allowlist contains only the two new tables.
+1. ~~Add an exact targeted-additive release policy whose allowlist contains only the two new
+   tables.~~ Completed in S2.6.
 2. Copy and verify the immutable selected baseline; never modify it in place.
 3. Build and validate an isolated production-data candidate under bounded resources.
 4. Prove all non-allowlisted tables unchanged with schema digests and logical row fingerprints.

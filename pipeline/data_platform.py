@@ -43,6 +43,7 @@ from .releases import (
     build_full_cms_warehouse_release,
     build_full_platform_warehouse_release,
     build_managed_dac_serving_practice_warehouse_release,
+    build_nppes_serving_practice_warehouse_release,
     build_ppef_warehouse_release,
     build_radar_warehouse_release,
     build_serving_practice_warehouse_release,
@@ -485,6 +486,34 @@ def _parser() -> argparse.ArgumentParser:
         help="DuckDB worker threads for the targeted build (default: 1)",
     )
     build_managed_dac_serving.add_argument("--json", action="store_true")
+    build_nppes_serving = subparsers.add_parser(
+        "build-nppes-serving-practice-release",
+        help="Build only the NPPES-primary practice serving tables",
+    )
+    build_nppes_serving.add_argument(
+        "--baseline-warehouse-release-id", required=True
+    )
+    build_nppes_serving.add_argument("--backup-manifest", required=True, type=Path)
+    build_nppes_serving.add_argument("--data-year", required=True, type=int)
+    build_nppes_serving.add_argument(
+        "--data-root", type=Path, default=DEFAULT_MANIFEST_PATH.parent
+    )
+    build_nppes_serving.add_argument(
+        "--environment", choices=[STAGING_ENVIRONMENT], required=True
+    )
+    build_nppes_serving.add_argument(
+        "--memory-limit-gb",
+        type=int,
+        default=12,
+        help="DuckDB memory ceiling for the targeted build (default: 12 GiB)",
+    )
+    build_nppes_serving.add_argument(
+        "--threads",
+        type=int,
+        default=1,
+        help="DuckDB worker threads for the targeted build (default: 1)",
+    )
+    build_nppes_serving.add_argument("--json", action="store_true")
     build_platform = subparsers.add_parser(
         "build-platform-release",
         help="Build all CMS, NPPES, and Open Payments runs into one staging candidate",
@@ -662,6 +691,7 @@ def main(argv: list[str] | None = None) -> int:
         "build-ppef-release",
         "build-serving-practice-release",
         "build-managed-dac-serving-practice-release",
+        "build-nppes-serving-practice-release",
         "build-platform-release",
         "build-radar-release",
         "prepare-aact-release",
@@ -719,6 +749,18 @@ def main(argv: list[str] | None = None) -> int:
                     threads=args.threads,
                 ).to_dict()
                 heading = "Managed DAC practice serving-mart release built"
+            elif args.command == "build-nppes-serving-practice-release":
+                payload = build_nppes_serving_practice_warehouse_release(
+                    data_root=args.data_root,
+                    baseline_warehouse_release_id=(
+                        args.baseline_warehouse_release_id
+                    ),
+                    backup_manifest_path=args.backup_manifest,
+                    data_year=args.data_year,
+                    memory_limit_gb=args.memory_limit_gb,
+                    threads=args.threads,
+                ).to_dict()
+                heading = "NPPES-primary practice serving-mart release built"
             elif args.command == "build-platform-release":
                 payload = build_full_platform_warehouse_release(
                     data_root=args.data_root,
