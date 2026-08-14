@@ -19,6 +19,7 @@ from fastapi import APIRouter, Query
 REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
 from pipeline.manifests import ManifestDocument, ManifestStore, RunManifest
 from pipeline.lineage import TRANSFORMS, raw_table_for_source, table_kind
+from pipeline.mart_contracts import inspect_mart_contracts
 from pipeline.source_registry import SOURCE_REGISTRY, SourceSpec
 
 
@@ -353,13 +354,7 @@ def get_operations_router(
         ).fetchall()
         tables = {name: int(size or 0) for name, size in table_rows}
         raw_tables = {name for name in tables if name.startswith("raw_")}
-        registered_marts = {
-            table
-            for spec in SOURCE_REGISTRY.values()
-            for table in spec.downstream_tables
-            if "." not in table and not table.startswith("raw_")
-        }
-        available_marts = registered_marts.intersection(tables)
+        mart_contracts = inspect_mart_contracts(connection)
 
         document, evidence_error = evidence()
         active_sources = sum(
@@ -386,7 +381,14 @@ def get_operations_router(
                 "duckdb_version": version_row[0] if version_row else None,
                 "table_count": len(tables),
                 "raw_table_count": len(raw_tables),
-                "data_mart_count": len(available_marts),
+                "data_mart_count": mart_contracts["available_count"],
+                "registered_mart_count": mart_contracts["registered_count"],
+                "available_mart_count": mart_contracts["available_count"],
+                "schema_valid_mart_count": mart_contracts["schema_valid_count"],
+                "serving_authorized_mart_count": mart_contracts[
+                    "serving_authorized_count"
+                ],
+                "mart_validation_scope": mart_contracts["validation_scope"],
                 "estimated_rows": sum(tables.values()),
             },
             "contracts": {
@@ -429,6 +431,20 @@ def get_operations_router(
                 _source_contract(spec, document, latest.get(source_id))
                 for source_id, spec in sorted(SOURCE_REGISTRY.items())
             ],
+        }
+
+    @router.get("/marts")
+    async def marts():
+        """Report declared mart contracts and cheap schema-only readiness."""
+
+        report = inspect_mart_contracts(get_conn())
+        return {
+            **report,
+            "generated_at": _utc_now(),
+            "note": (
+                "Serving inspection is schema-only; offline release validation proves "
+                "grain, values, parent coverage, and source-period evidence."
+            ),
         }
 
     @router.get("/lineage")

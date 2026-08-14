@@ -1693,6 +1693,11 @@
       "200": {}
     }
   },
+  "/operations/marts": {
+    "get": {
+      "200": {}
+    }
+  },
   "/operations/overview": {
     "get": {
       "200": {}
