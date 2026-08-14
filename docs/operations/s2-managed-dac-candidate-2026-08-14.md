@@ -1,8 +1,8 @@
 # S2 managed-DAC practice candidate — 2026-08-14
 
-> **Decision:** response parity, performance, capacity, immutable preparation, and isolated
-> production-bundle rehearsal pass for the first `cms_enrollment` practice-search serving mart.
-> The candidate remains unselected and no production cutover is authorized.
+> **Decision:** production cutover completed successfully for the first `cms_enrollment`
+> practice-search serving mart. The selected deployment is
+> `deployment-20260814T160153Z-45ab9d2d38`; its predecessor remains rollback-ready.
 
 ## Outcome
 
@@ -16,13 +16,14 @@ The corrected immutable warehouse candidate is
 - authorized serving code: `7fb735cdf0dac96dd26201277564be2740810170`;
 - `raw_dac_national`: 3,388,151 rows;
 - `serving_practice_provider_sites`: 3,212,860 rows; and
-- state: validation passed, promotion state `not_promoted`, serving authorization false.
+- state: validation passed, selected, promoted, and verified.
 
 The selected production deployment remained
 `deployment-20260811T155814Z-6baa26aa69` throughout the rehearsal. Its API PID stayed `3240475`,
 `NRestarts` stayed zero, and `/health` continued to report 7,395,713 core providers. Both isolated
 services were bound to loopback, run at reduced CPU/I/O priority, and stopped after evidence
-capture. Ports 18081 and 18082 were no longer listening at handoff.
+capture. Ports 18081 and 18082 were no longer listening at rehearsal handoff. The later approved
+cutover replaced that process once; production now runs the selected candidate as PID `3990931`.
 
 ## Managed source identity
 
@@ -187,8 +188,8 @@ changed.
 
 Promotion hardening merged through PR #52 as operations commit
 `d8567a340ffc1f665c39c01671273784ff224174`. It is installed as sealed package
-`production-ops/ops-d8567a340ffc1f665c39c01671273784ff224174-s2-hardening`, while
-`production-ops/current` deliberately remains on its predecessor until cutover approval. The
+`production-ops/ops-d8567a340ffc1f665c39c01671273784ff224174-s2-hardening`; the approved cutover
+atomically selected it through `production-ops/current`. The
 corrected post-copy preview passed with SHA-256
 `5ac73e742fd6184da37b012179b34f53da8ac44aba498d5391bbeac3ba1efbda`: actual and projected use are
 84.29%, 42,195,087,360 bytes remain free, zero additional candidate bytes are required, and the
@@ -196,14 +197,54 @@ active-plus-two rollback floor passes. Disk state is `critical` under the 80% wa
 remains below the separate 85% promotion block; there is insufficient headroom for another large
 warehouse candidate without a fresh retention review.
 
-The remaining boundary is explicit cutover approval. At that gate, reconfirm the live PID, selector,
-sentinel, hashes, capacity, and predecessor; atomically select the reviewed operations package only
-as part of the approved procedure; then run the one-shot cutover with the named smoke key. No
-selection, restart, or traffic change has occurred.
+## Approved production cutover
+
+The explicitly approved cutover completed on 2026-08-14. Immediately before selection, the
+candidate and predecessor artifact hashes, live PID and selector, absent transition sentinel,
+zero blocking transactions, and capacity/rollback floor were reverified. The archived systemd
+unit, environment-file metadata, and control-plane state preserve the pre-change boundary without
+capturing secret values.
+
+The first one-shot invocation used `http://10.77.0.1:8080` and failed closed before selection
+because production smoke requires an exact HTTP loopback origin. It exited `2`; the selector,
+PID `3240475`, and production traffic remained unchanged. Repeating the same approved procedure
+with `http://127.0.0.1:8080` and the named `command-center` smoke credential completed successfully:
+
+- selected deployment: `deployment-20260814T160153Z-45ab9d2d38`;
+- predecessor: `deployment-20260811T155814Z-6baa26aa69`, now superseded and rollback-ready;
+- selection and promotion time: `2026-08-14T16:47:27+00:00`;
+- verification time: `2026-08-14T16:48:41+00:00`;
+- production API PID: `3990931`, active with zero restarts;
+- final production smoke: all 15 checks passed, SHA-256
+  `c298ea18daa23806a9f172dbb618153ec725768e2f4ec5b417d974562b4a67a1`; and
+- one-shot result SHA-256:
+  `5b11071f62e84e98517155130b941db666d83818ac9e2342a1ee1d40063e8ab8`.
+
+The process resolves the immutable candidate code, runtime, and warehouse artifacts; the open
+database is the exact 20,951,347,200-byte candidate with the approved SHA-256. `GET /release`
+reports the candidate deployment, warehouse release, pipeline commit, 19 source vintages, and
+representation version 3. Its ETag is
+`"deployment-20260814T160153Z-45ab9d2d38:3"`, conditional retrieval returns `304`, and a live
+CMS-enrollment practice search returned `200` with the mart selected through deployment-local
+`auto`. Provider Search readiness remained `ready` with its CMS data check `ok`.
+
+The final retention preview reports 84.29% use with approximately 42.2 GB free, zero additional
+candidate bytes, and the active-plus-two floor intact. This is below the 85% promotion block but
+above the 80% warning threshold, so another large warehouse candidate requires a fresh retention
+review.
+
+One non-blocking metadata issue was captured. The control-plane ledger is verified at
+`2026-08-14T16:48:41+00:00`, but the live `/release` response reports `verified_at: null`. Smoke
+populated the process-local release metadata cache before the manager recorded verification, and
+the successful value remains cached for that process lifetime. Served release identity, data,
+hashes, ETag, and route behavior are correct. Production was not restarted a second time merely to
+refresh this timestamp; a follow-up should make successful metadata resolution refresh when the
+ledger transitions from unverified to verified.
 
 ## Evidence
 
 Machine-readable acquisition, release, comparison, raw/mart diagnostics, six final benchmark
 trials, preparation rehearsal, fail-closed smoke attempts, serving contract, transition dry-runs,
-source status, and pre-cutover retention evidence are retained under
+source status, cutover result, final production smoke, process and journal checks, Provider Search
+readiness, and pre/post-cutover retention evidence are retained under
 [`evidence/s2-managed-dac-2026-08-14`](evidence/s2-managed-dac-2026-08-14/).

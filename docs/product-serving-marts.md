@@ -33,11 +33,12 @@ The first route-specific contract is `serving_practice_provider_sites`, at one n
 and organization-or-solo key per NPI. It retains ordered specialty values, national Part B and Part
 D totals, geocodes, and row-level source period/run IDs. DAC, Part B, and Part D are registered
 managed sources and require release-manifest provenance. The selected production baseline predates
-managed DAC acquisition and its `raw_dac_national` table lacks those provenance columns, so it is
-not eligible as an S2 candidate input. The managed-DAC candidate passed parity and performance on
-2026-08-14, so `/practices/search` is now the declared consumer. Runtime capability selection uses
-the mart only when the selected immutable warehouse contains it; predecessors remain on the raw
-oracle without a global environment change.
+managed DAC acquisition and its `raw_dac_national` table lacks those provenance columns, so it was
+not eligible as an S2 candidate input. The managed-DAC candidate passed parity and performance and
+was selected in production on 2026-08-14, so `/practices/search` now consumes the mart for
+`cms_enrollment` searches. Runtime capability selection uses the mart only when the selected
+immutable warehouse contains it; predecessors remain on the raw oracle without a global
+environment change.
 
 The additive offline builder is `python -m pipeline.data_platform
 build-serving-practice-release`. It requires a named validated baseline release, a verified backup
@@ -49,7 +50,7 @@ allowlists only that raw table and `serving_practice_provider_sites`; every othe
 by row counts, schema digests, and order-independent logical row fingerprints so equal counts cannot
 mask drift. The production release manager accepts this policy only when the comparison and release
 both contain the exact two-table scope, matching positive row counts, and passed serving-mart
-validation. Cutover remains separately authorized.
+validation. The first production cutover was separately authorized and completed on 2026-08-14.
 
 ## Validation states
 
@@ -75,5 +76,5 @@ ingestion timestamps are never substituted for publisher periods.
 
 The [S2 execution plan](proposals/2026-08-s2-serving-marts-plan.md) begins with measured canonical
 plans, then builds the default practice-search serving mart as the first isolated vertical slice.
-Explorer remains source-faithful, Clinical Trials remains in AACT/PostgreSQL, and no mart work
-authorizes production cutover.
+That slice is now live. Explorer remains source-faithful, Clinical Trials remains in
+AACT/PostgreSQL, and every future mart cutover still requires separate authorization.

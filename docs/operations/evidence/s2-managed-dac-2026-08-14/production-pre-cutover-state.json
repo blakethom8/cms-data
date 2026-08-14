@@ -1,0 +1,15 @@
+{
+  "candidate_deployment_id": "deployment-20260814T160153Z-45ab9d2d38",
+  "candidate_sha256": "bf7d2381c8c9a683497a7dcc5d64c87ccfb3359fe5ee77d61e74ca3bffb1fa02",
+  "generated_at": "2026-08-14T16:44:04.941170+00:00",
+  "live_cwd": "/srv/cms-data-platform/production-artifacts/code/bcd338fa8670caa2c533ff47aa551b77077503d4-operations-evidence-1",
+  "live_executable": "/usr/bin/python3.12",
+  "live_open_warehouse": "/srv/cms-data-platform/production-artifacts/warehouses/warehouse-20260811T021837Z-f44c147e30/warehouse.duckdb",
+  "live_pid": 3240475,
+  "live_restarts": 0,
+  "operations_current": "/srv/cms-data-platform/production-ops/ops-9da4d5b901a8df43c90dd7790c58549f91bd6970",
+  "predecessor_sha256": "91e2ee4e22fd7b7f612765635e19601ce081730c8b0ddc634dc54d891a345ef2",
+  "schema_version": 1,
+  "selected_deployment_id": "deployment-20260811T155814Z-6baa26aa69",
+  "transition_sentinel": false
+}
