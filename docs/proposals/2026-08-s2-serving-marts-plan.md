@@ -1,7 +1,7 @@
 # S2 release-built serving marts plan
 
-> Status: S2.1-S2.3 merged; S2.4 prerequisite in progress — managed DAC acquisition and an isolated
-> same-source raw/mart candidate
+> Status: S2.1-S2.3 merged; S2.4 candidate evidence complete — parity and performance pass, while
+> the promotion-capacity gate blocks preparation and cutover
 >
 > Production boundary: do not select, rebuild, amend, or supersede prepared S1 deployment
 > `deployment-20260814T002255Z-11131e3630`. S2 candidates remain isolated and unselected until a
@@ -239,4 +239,17 @@ those headers with trailing tab characters and existing API SQL addresses the le
 This is an N/N-1 schema-compatibility failure, not a mart result. The candidate remains unselected.
 The managed loader now reconciles only leading/trailing whitespace differences to established raw
 column names, fails on ambiguous normalized names, and retains strict publisher-header acquisition.
-A new immutable candidate is required; the first candidate must not be amended in place.
+The first candidate was not amended in place.
+
+The corrected immutable candidate, `warehouse-20260814T025428Z-5dac630227`, passed the managed-DAC
+comparison: 40 non-allowlisted logical fingerprints were unchanged and only `raw_dac_national` and
+`serving_practice_provider_sites` changed. All four practice cases matched the raw backend byte-for-
+byte over three trials. After materializing the location slice before specialty-list evaluation,
+the focused three-trial workload lowered p95 by 39.4% at concurrency 1 and 48.0% at concurrency 12,
+with zero failures and higher throughput. The S2 correctness and performance gates therefore pass.
+
+The capacity gate does not pass. The read-only retention preview projects 90.08% utilization when
+supplied the exact 20,951,347,200-byte candidate, above the 85% promotion block. The candidate stays
+unselected, the API selector stays `raw`, and serving authorization stays false until reviewed
+capacity cleanup and a separate authorization/preparation change. See the
+[candidate record](../operations/s2-managed-dac-candidate-2026-08-14.md).

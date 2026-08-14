@@ -1,0 +1,218 @@
+{
+  "base_origin": "http://127.0.0.1:18082",
+  "concurrency_levels": [
+    1,
+    12
+  ],
+  "generated_at": "2026-08-14T03:15:37+00:00",
+  "levels": [
+    {
+      "by_request": {
+        "practice-cms-empty": {
+          "elapsed_seconds": 7.292,
+          "failures": 0,
+          "latency_ms": {
+            "max": 6.96,
+            "p50": 6.31,
+            "p95": 6.96,
+            "p99": 6.96
+          },
+          "pool_wait_ms": {
+            "max": 0.03,
+            "p50": 0.03,
+            "p95": 0.03,
+            "p99": 0.03,
+            "samples": 10
+          },
+          "requests": 10,
+          "response_bytes": 3100,
+          "status_counts": {
+            "200": 10
+          },
+          "throughput_rps": 1.37
+        },
+        "practice-cms-state": {
+          "elapsed_seconds": 7.292,
+          "failures": 0,
+          "latency_ms": {
+            "max": 215.82,
+            "p50": 207.28,
+            "p95": 213.11,
+            "p99": 215.82
+          },
+          "pool_wait_ms": {
+            "max": 0.04,
+            "p50": 0.02,
+            "p95": 0.03,
+            "p99": 0.04,
+            "samples": 30
+          },
+          "requests": 30,
+          "response_bytes": 807690,
+          "status_counts": {
+            "200": 30
+          },
+          "throughput_rps": 4.11
+        },
+        "practice-cms-zip-boundary": {
+          "elapsed_seconds": 7.292,
+          "failures": 0,
+          "latency_ms": {
+            "max": 54.87,
+            "p50": 50.28,
+            "p95": 53.02,
+            "p99": 54.87
+          },
+          "pool_wait_ms": {
+            "max": 0.04,
+            "p50": 0.03,
+            "p95": 0.03,
+            "p99": 0.04,
+            "samples": 20
+          },
+          "requests": 20,
+          "response_bytes": 99460,
+          "status_counts": {
+            "200": 20
+          },
+          "throughput_rps": 2.74
+        }
+      },
+      "concurrency": 1,
+      "elapsed_seconds": 7.292,
+      "failures": 0,
+      "latency_ms": {
+        "max": 215.82,
+        "p50": 202.9,
+        "p95": 210.8,
+        "p99": 213.11
+      },
+      "pool_wait_ms": {
+        "max": 0.04,
+        "p50": 0.02,
+        "p95": 0.03,
+        "p99": 0.04,
+        "samples": 60
+      },
+      "requests": 60,
+      "response_bytes": 910250,
+      "server_process": {
+        "cpu_percent": 333.11,
+        "process_id": 3850012,
+        "rss_end_bytes": 651608064,
+        "rss_peak_bytes": 658280448,
+        "rss_start_bytes": 648634368
+      },
+      "status_counts": {
+        "200": 60
+      },
+      "throughput_rps": 8.23
+    },
+    {
+      "by_request": {
+        "practice-cms-empty": {
+          "elapsed_seconds": 3.513,
+          "failures": 0,
+          "latency_ms": {
+            "max": 561.62,
+            "p50": 439.86,
+            "p95": 561.62,
+            "p99": 561.62
+          },
+          "pool_wait_ms": {
+            "max": 545.33,
+            "p50": 429.31,
+            "p95": 545.33,
+            "p99": 545.33,
+            "samples": 10
+          },
+          "requests": 10,
+          "response_bytes": 3100,
+          "status_counts": {
+            "200": 10
+          },
+          "throughput_rps": 2.85
+        },
+        "practice-cms-state": {
+          "elapsed_seconds": 3.513,
+          "failures": 0,
+          "latency_ms": {
+            "max": 1188.72,
+            "p50": 833.24,
+            "p95": 1150.89,
+            "p99": 1188.72
+          },
+          "pool_wait_ms": {
+            "max": 540.3,
+            "p50": 445.26,
+            "p95": 517.63,
+            "p99": 540.3,
+            "samples": 30
+          },
+          "requests": 30,
+          "response_bytes": 807690,
+          "status_counts": {
+            "200": 30
+          },
+          "throughput_rps": 8.54
+        },
+        "practice-cms-zip-boundary": {
+          "elapsed_seconds": 3.513,
+          "failures": 0,
+          "latency_ms": {
+            "max": 663.85,
+            "p50": 569.13,
+            "p95": 626.54,
+            "p99": 663.85
+          },
+          "pool_wait_ms": {
+            "max": 611.38,
+            "p50": 516.18,
+            "p95": 574.05,
+            "p99": 611.38,
+            "samples": 20
+          },
+          "requests": 20,
+          "response_bytes": 99460,
+          "status_counts": {
+            "200": 20
+          },
+          "throughput_rps": 5.69
+        }
+      },
+      "concurrency": 12,
+      "elapsed_seconds": 3.513,
+      "failures": 0,
+      "latency_ms": {
+        "max": 1188.72,
+        "p50": 607.07,
+        "p95": 999.95,
+        "p99": 1150.89
+      },
+      "pool_wait_ms": {
+        "max": 611.38,
+        "p50": 463.66,
+        "p95": 555.57,
+        "p99": 574.05,
+        "samples": 60
+      },
+      "requests": 60,
+      "response_bytes": 910250,
+      "server_process": {
+        "cpu_percent": 689.06,
+        "process_id": 3850012,
+        "rss_end_bytes": 654565376,
+        "rss_peak_bytes": 654565376,
+        "rss_start_bytes": 651608064
+      },
+      "status_counts": {
+        "200": 60
+      },
+      "throughput_rps": 17.08
+    }
+  ],
+  "requests_per_level": 60,
+  "schema_version": 1,
+  "timeout_seconds": 60.0,
+  "workload_sha256": "0f2f9cad574dfa3e4cff2410e5976ad1c6b2cc9e702f104b2be7867b3d362969"
+}

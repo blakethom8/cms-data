@@ -211,10 +211,12 @@ Acceptance gates:
 
 - [x] Capture `EXPLAIN ANALYZE` for canonical slow paths before design. See the
   [S2 query-plan baseline](../operations/s2-query-plan-baseline-2026-08-14.md).
-- [ ] Define each mart's grain, keys, source periods, lineage, null semantics, and validation.
-- [ ] Preserve raw source evidence and the discovery/profile/evidence endpoint separation.
-- [ ] Compare results against the existing implementation for representative and adversarial NPIs.
-- [ ] Demonstrate a material p95 or resource improvement before switching a route.
+- [x] Define each mart's grain, keys, source periods, lineage, null semantics, and validation.
+- [x] Preserve raw source evidence and the discovery/profile/evidence endpoint separation.
+- [x] Compare the first practice slice against the existing implementation over the canonical
+  corpus. See the [S2 candidate record](../operations/s2-managed-dac-candidate-2026-08-14.md).
+- [x] Demonstrate a material p95 improvement before switching the first route. The route remains
+  unswitched because the capacity and explicit cutover gates are separate.
 
 ### O1. End-to-end observability
 

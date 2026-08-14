@@ -1,0 +1,740 @@
+{
+  "base_origin": "http://127.0.0.1:18082",
+  "case_count": 14,
+  "case_manifest_sha256": "d61bc78e3ec116d4831345df2c9e5deaabad432dc98eccdef14e5b69dce6c762",
+  "cases": [
+    {
+      "expected_status": 200,
+      "family": "provider-profile",
+      "median_elapsed_ms": 783.69,
+      "name": "profile-rich",
+      "passed": false,
+      "path": "/profiles/1811967433",
+      "purpose": "Provider with broad utilization, industry, research, location, group, and hospital evidence",
+      "response_stable": false,
+      "trials": [
+        {
+          "elapsed_ms": 931.22,
+          "expected_status": 200,
+          "family": "provider-profile",
+          "name": "profile-rich",
+          "passed": true,
+          "path": "/profiles/1811967433",
+          "purpose": "Provider with broad utilization, industry, research, location, group, and hospital evidence",
+          "response_bytes": 8593,
+          "response_sha256": "e9f3f969ca2fcd45e359bc5afa1df3dd0d3b6ea702e5e9d282e10f27a96d0e9d",
+          "result_count": null,
+          "status_code": 200
+        },
+        {
+          "elapsed_ms": 783.69,
+          "expected_status": 200,
+          "family": "provider-profile",
+          "name": "profile-rich",
+          "passed": true,
+          "path": "/profiles/1811967433",
+          "purpose": "Provider with broad utilization, industry, research, location, group, and hospital evidence",
+          "response_bytes": 8593,
+          "response_sha256": "e9f3f969ca2fcd45e359bc5afa1df3dd0d3b6ea702e5e9d282e10f27a96d0e9d",
+          "result_count": null,
+          "status_code": 200
+        },
+        {
+          "elapsed_ms": 770.72,
+          "expected_status": 200,
+          "family": "provider-profile",
+          "name": "profile-rich",
+          "passed": true,
+          "path": "/profiles/1811967433",
+          "purpose": "Provider with broad utilization, industry, research, location, group, and hospital evidence",
+          "response_bytes": 8611,
+          "response_sha256": "9a1869888d143dce56ccfc6ca17accbc5f1e00f773e6fa0b518d9c9d84d82e3d",
+          "result_count": null,
+          "status_code": 200
+        }
+      ]
+    },
+    {
+      "expected_status": 200,
+      "family": "provider-profile",
+      "median_elapsed_ms": 587.44,
+      "name": "profile-standard",
+      "passed": true,
+      "path": "/profiles/1003005257",
+      "purpose": "Stable mixed-workload provider identity",
+      "response_stable": true,
+      "trials": [
+        {
+          "elapsed_ms": 590.21,
+          "expected_status": 200,
+          "family": "provider-profile",
+          "name": "profile-standard",
+          "passed": true,
+          "path": "/profiles/1003005257",
+          "purpose": "Stable mixed-workload provider identity",
+          "response_bytes": 4763,
+          "response_sha256": "e7ed71d1359d7fddc310785eeb7d5850db30da3bf46fb88f19fcac4f61db774e",
+          "result_count": null,
+          "status_code": 200
+        },
+        {
+          "elapsed_ms": 579.17,
+          "expected_status": 200,
+          "family": "provider-profile",
+          "name": "profile-standard",
+          "passed": true,
+          "path": "/profiles/1003005257",
+          "purpose": "Stable mixed-workload provider identity",
+          "response_bytes": 4763,
+          "response_sha256": "e7ed71d1359d7fddc310785eeb7d5850db30da3bf46fb88f19fcac4f61db774e",
+          "result_count": null,
+          "status_code": 200
+        },
+        {
+          "elapsed_ms": 587.44,
+          "expected_status": 200,
+          "family": "provider-profile",
+          "name": "profile-standard",
+          "passed": true,
+          "path": "/profiles/1003005257",
+          "purpose": "Stable mixed-workload provider identity",
+          "response_bytes": 4763,
+          "response_sha256": "e7ed71d1359d7fddc310785eeb7d5850db30da3bf46fb88f19fcac4f61db774e",
+          "result_count": null,
+          "status_code": 200
+        }
+      ]
+    },
+    {
+      "expected_status": 404,
+      "family": "provider-profile",
+      "median_elapsed_ms": 27.65,
+      "name": "profile-missing",
+      "passed": true,
+      "path": "/profiles/0000000000",
+      "purpose": "Missing-provider status and body semantics",
+      "response_stable": true,
+      "trials": [
+        {
+          "elapsed_ms": 27.1,
+          "expected_status": 404,
+          "family": "provider-profile",
+          "name": "profile-missing",
+          "passed": true,
+          "path": "/profiles/0000000000",
+          "purpose": "Missing-provider status and body semantics",
+          "response_bytes": 59,
+          "response_sha256": "e472f4af8401c514cd26c40007172780162d844cf1947bba9cd2e072ce4a779d",
+          "result_count": null,
+          "status_code": 404
+        },
+        {
+          "elapsed_ms": 27.65,
+          "expected_status": 404,
+          "family": "provider-profile",
+          "name": "profile-missing",
+          "passed": true,
+          "path": "/profiles/0000000000",
+          "purpose": "Missing-provider status and body semantics",
+          "response_bytes": 59,
+          "response_sha256": "e472f4af8401c514cd26c40007172780162d844cf1947bba9cd2e072ce4a779d",
+          "result_count": null,
+          "status_code": 404
+        },
+        {
+          "elapsed_ms": 28.65,
+          "expected_status": 404,
+          "family": "provider-profile",
+          "name": "profile-missing",
+          "passed": true,
+          "path": "/profiles/0000000000",
+          "purpose": "Missing-provider status and body semantics",
+          "response_bytes": 59,
+          "response_sha256": "e472f4af8401c514cd26c40007172780162d844cf1947bba9cd2e072ce4a779d",
+          "result_count": null,
+          "status_code": 404
+        }
+      ]
+    },
+    {
+      "expected_status": 200,
+      "family": "practice-search",
+      "median_elapsed_ms": 239.38,
+      "name": "practice-cms-state",
+      "passed": true,
+      "path": "/practices/search?specialty=Cardiology&state=OH&limit=25&location_basis=cms_enrollment",
+      "purpose": "First serving-mart slice using CMS enrollment doors",
+      "response_stable": true,
+      "trials": [
+        {
+          "elapsed_ms": 203.7,
+          "expected_status": 200,
+          "family": "practice-search",
+          "name": "practice-cms-state",
+          "passed": true,
+          "path": "/practices/search?specialty=Cardiology&state=OH&limit=25&location_basis=cms_enrollment",
+          "purpose": "First serving-mart slice using CMS enrollment doors",
+          "response_bytes": 26923,
+          "response_sha256": "7ca56ab3ce55928075da0fea6772d2627ff755ce3f75115f7f9c9936246be2cd",
+          "result_count": 25,
+          "status_code": 200
+        },
+        {
+          "elapsed_ms": 239.38,
+          "expected_status": 200,
+          "family": "practice-search",
+          "name": "practice-cms-state",
+          "passed": true,
+          "path": "/practices/search?specialty=Cardiology&state=OH&limit=25&location_basis=cms_enrollment",
+          "purpose": "First serving-mart slice using CMS enrollment doors",
+          "response_bytes": 26923,
+          "response_sha256": "7ca56ab3ce55928075da0fea6772d2627ff755ce3f75115f7f9c9936246be2cd",
+          "result_count": 25,
+          "status_code": 200
+        },
+        {
+          "elapsed_ms": 249.22,
+          "expected_status": 200,
+          "family": "practice-search",
+          "name": "practice-cms-state",
+          "passed": true,
+          "path": "/practices/search?specialty=Cardiology&state=OH&limit=25&location_basis=cms_enrollment",
+          "purpose": "First serving-mart slice using CMS enrollment doors",
+          "response_bytes": 26923,
+          "response_sha256": "7ca56ab3ce55928075da0fea6772d2627ff755ce3f75115f7f9c9936246be2cd",
+          "result_count": 25,
+          "status_code": 200
+        }
+      ]
+    },
+    {
+      "expected_status": 200,
+      "family": "practice-search",
+      "median_elapsed_ms": 1522.95,
+      "name": "practice-nppes-state",
+      "passed": true,
+      "path": "/practices/search?specialty=Cardiology&state=OH&limit=25&location_basis=nppes_primary",
+      "purpose": "Unchanged NPPES-primary comparison path",
+      "response_stable": true,
+      "trials": [
+        {
+          "elapsed_ms": 1522.95,
+          "expected_status": 200,
+          "family": "practice-search",
+          "name": "practice-nppes-state",
+          "passed": true,
+          "path": "/practices/search?specialty=Cardiology&state=OH&limit=25&location_basis=nppes_primary",
+          "purpose": "Unchanged NPPES-primary comparison path",
+          "response_bytes": 42251,
+          "response_sha256": "9bc5d941a1b708c55c7b395ad14ab1ce457ea6946c52a42b6ac4b894e0bc6d41",
+          "result_count": 25,
+          "status_code": 200
+        },
+        {
+          "elapsed_ms": 1467.82,
+          "expected_status": 200,
+          "family": "practice-search",
+          "name": "practice-nppes-state",
+          "passed": true,
+          "path": "/practices/search?specialty=Cardiology&state=OH&limit=25&location_basis=nppes_primary",
+          "purpose": "Unchanged NPPES-primary comparison path",
+          "response_bytes": 42251,
+          "response_sha256": "9bc5d941a1b708c55c7b395ad14ab1ce457ea6946c52a42b6ac4b894e0bc6d41",
+          "result_count": 25,
+          "status_code": 200
+        },
+        {
+          "elapsed_ms": 1541.18,
+          "expected_status": 200,
+          "family": "practice-search",
+          "name": "practice-nppes-state",
+          "passed": true,
+          "path": "/practices/search?specialty=Cardiology&state=OH&limit=25&location_basis=nppes_primary",
+          "purpose": "Unchanged NPPES-primary comparison path",
+          "response_bytes": 42251,
+          "response_sha256": "9bc5d941a1b708c55c7b395ad14ab1ce457ea6946c52a42b6ac4b894e0bc6d41",
+          "result_count": 25,
+          "status_code": 200
+        }
+      ]
+    },
+    {
+      "expected_status": 200,
+      "family": "practice-search",
+      "median_elapsed_ms": 58.18,
+      "name": "practice-cms-zip-boundary",
+      "passed": true,
+      "path": "/practices/search?specialties=Cardiology%2CInternal%20Medicine&zips=44101%2C44102%2C44103&limit=100&location_basis=cms_enrollment",
+      "purpose": "Bounded multi-specialty and multi-ZIP filter",
+      "response_stable": true,
+      "trials": [
+        {
+          "elapsed_ms": 58.18,
+          "expected_status": 200,
+          "family": "practice-search",
+          "name": "practice-cms-zip-boundary",
+          "passed": true,
+          "path": "/practices/search?specialties=Cardiology%2CInternal%20Medicine&zips=44101%2C44102%2C44103&limit=100&location_basis=cms_enrollment",
+          "purpose": "Bounded multi-specialty and multi-ZIP filter",
+          "response_bytes": 4973,
+          "response_sha256": "30365193f0e07899aefc07bdb006ac29605a4c6af6ee630089a65db47c9c022c",
+          "result_count": 5,
+          "status_code": 200
+        },
+        {
+          "elapsed_ms": 53.55,
+          "expected_status": 200,
+          "family": "practice-search",
+          "name": "practice-cms-zip-boundary",
+          "passed": true,
+          "path": "/practices/search?specialties=Cardiology%2CInternal%20Medicine&zips=44101%2C44102%2C44103&limit=100&location_basis=cms_enrollment",
+          "purpose": "Bounded multi-specialty and multi-ZIP filter",
+          "response_bytes": 4973,
+          "response_sha256": "30365193f0e07899aefc07bdb006ac29605a4c6af6ee630089a65db47c9c022c",
+          "result_count": 5,
+          "status_code": 200
+        },
+        {
+          "elapsed_ms": 149.42,
+          "expected_status": 200,
+          "family": "practice-search",
+          "name": "practice-cms-zip-boundary",
+          "passed": true,
+          "path": "/practices/search?specialties=Cardiology%2CInternal%20Medicine&zips=44101%2C44102%2C44103&limit=100&location_basis=cms_enrollment",
+          "purpose": "Bounded multi-specialty and multi-ZIP filter",
+          "response_bytes": 4973,
+          "response_sha256": "30365193f0e07899aefc07bdb006ac29605a4c6af6ee630089a65db47c9c022c",
+          "result_count": 5,
+          "status_code": 200
+        }
+      ]
+    },
+    {
+      "expected_status": 200,
+      "family": "practice-search",
+      "median_elapsed_ms": 7.18,
+      "name": "practice-cms-empty",
+      "passed": true,
+      "path": "/practices/search?specialty=Cardiology&zip=00000&limit=25&location_basis=cms_enrollment",
+      "purpose": "Empty practice result semantics",
+      "response_stable": true,
+      "trials": [
+        {
+          "elapsed_ms": 6.67,
+          "expected_status": 200,
+          "family": "practice-search",
+          "name": "practice-cms-empty",
+          "passed": true,
+          "path": "/practices/search?specialty=Cardiology&zip=00000&limit=25&location_basis=cms_enrollment",
+          "purpose": "Empty practice result semantics",
+          "response_bytes": 310,
+          "response_sha256": "eea3a55de08c906fb0717e208c1c903d57667cef6a357f46e9b28916a4d16b14",
+          "result_count": 0,
+          "status_code": 200
+        },
+        {
+          "elapsed_ms": 7.18,
+          "expected_status": 200,
+          "family": "practice-search",
+          "name": "practice-cms-empty",
+          "passed": true,
+          "path": "/practices/search?specialty=Cardiology&zip=00000&limit=25&location_basis=cms_enrollment",
+          "purpose": "Empty practice result semantics",
+          "response_bytes": 310,
+          "response_sha256": "eea3a55de08c906fb0717e208c1c903d57667cef6a357f46e9b28916a4d16b14",
+          "result_count": 0,
+          "status_code": 200
+        },
+        {
+          "elapsed_ms": 7.55,
+          "expected_status": 200,
+          "family": "practice-search",
+          "name": "practice-cms-empty",
+          "passed": true,
+          "path": "/practices/search?specialty=Cardiology&zip=00000&limit=25&location_basis=cms_enrollment",
+          "purpose": "Empty practice result semantics",
+          "response_bytes": 310,
+          "response_sha256": "eea3a55de08c906fb0717e208c1c903d57667cef6a357f46e9b28916a4d16b14",
+          "result_count": 0,
+          "status_code": 200
+        }
+      ]
+    },
+    {
+      "expected_status": 200,
+      "family": "market-snapshot",
+      "median_elapsed_ms": 588.63,
+      "name": "market-state",
+      "passed": true,
+      "path": "/practices/market-snapshot?specialty=Cardiology&state=OH",
+      "purpose": "Market aggregation over a broad state",
+      "response_stable": true,
+      "trials": [
+        {
+          "elapsed_ms": 559.62,
+          "expected_status": 200,
+          "family": "market-snapshot",
+          "name": "market-state",
+          "passed": true,
+          "path": "/practices/market-snapshot?specialty=Cardiology&state=OH",
+          "purpose": "Market aggregation over a broad state",
+          "response_bytes": 896417,
+          "response_sha256": "ce393df51b6ba477a7e01c6e033e92b06c35ed558580a472a970e634e86e2eb3",
+          "result_count": null,
+          "status_code": 200
+        },
+        {
+          "elapsed_ms": 596.87,
+          "expected_status": 200,
+          "family": "market-snapshot",
+          "name": "market-state",
+          "passed": true,
+          "path": "/practices/market-snapshot?specialty=Cardiology&state=OH",
+          "purpose": "Market aggregation over a broad state",
+          "response_bytes": 896417,
+          "response_sha256": "ce393df51b6ba477a7e01c6e033e92b06c35ed558580a472a970e634e86e2eb3",
+          "result_count": null,
+          "status_code": 200
+        },
+        {
+          "elapsed_ms": 588.63,
+          "expected_status": 200,
+          "family": "market-snapshot",
+          "name": "market-state",
+          "passed": true,
+          "path": "/practices/market-snapshot?specialty=Cardiology&state=OH",
+          "purpose": "Market aggregation over a broad state",
+          "response_bytes": 896417,
+          "response_sha256": "ce393df51b6ba477a7e01c6e033e92b06c35ed558580a472a970e634e86e2eb3",
+          "result_count": null,
+          "status_code": 200
+        }
+      ]
+    },
+    {
+      "expected_status": 200,
+      "family": "industry-search",
+      "median_elapsed_ms": 2346.36,
+      "name": "industry-search",
+      "passed": false,
+      "path": "/industry/search?specialty=CARDIOVASCULAR%20DISEASE%20%28CARDIOLOGY%29&state=OH&limit=100",
+      "purpose": "Industry relationship search and matched-versus-total metrics",
+      "response_stable": false,
+      "trials": [
+        {
+          "elapsed_ms": 2346.36,
+          "expected_status": 200,
+          "family": "industry-search",
+          "name": "industry-search",
+          "passed": true,
+          "path": "/industry/search?specialty=CARDIOVASCULAR%20DISEASE%20%28CARDIOLOGY%29&state=OH&limit=100",
+          "purpose": "Industry relationship search and matched-versus-total metrics",
+          "response_bytes": 58568,
+          "response_sha256": "34800ab832c9e3e184df3e8da1e724ff27daa76efecb48e13e130ffe2422f01b",
+          "result_count": 100,
+          "status_code": 200
+        },
+        {
+          "elapsed_ms": 2359.14,
+          "expected_status": 200,
+          "family": "industry-search",
+          "name": "industry-search",
+          "passed": true,
+          "path": "/industry/search?specialty=CARDIOVASCULAR%20DISEASE%20%28CARDIOLOGY%29&state=OH&limit=100",
+          "purpose": "Industry relationship search and matched-versus-total metrics",
+          "response_bytes": 58568,
+          "response_sha256": "bd020f0e1e68dbbbfebbbc90a205c2612db419aff670cea8dfe4b76a903b4dbb",
+          "result_count": 100,
+          "status_code": 200
+        },
+        {
+          "elapsed_ms": 2305.09,
+          "expected_status": 200,
+          "family": "industry-search",
+          "name": "industry-search",
+          "passed": true,
+          "path": "/industry/search?specialty=CARDIOVASCULAR%20DISEASE%20%28CARDIOLOGY%29&state=OH&limit=100",
+          "purpose": "Industry relationship search and matched-versus-total metrics",
+          "response_bytes": 58568,
+          "response_sha256": "34800ab832c9e3e184df3e8da1e724ff27daa76efecb48e13e130ffe2422f01b",
+          "result_count": 100,
+          "status_code": 200
+        }
+      ]
+    },
+    {
+      "expected_status": 200,
+      "family": "industry-options",
+      "median_elapsed_ms": 1603.21,
+      "name": "industry-options-manufacturer",
+      "passed": true,
+      "path": "/industry/options?field=manufacturer&q=pf&state=OH&limit=30",
+      "purpose": "Manufacturer facet aggregation",
+      "response_stable": true,
+      "trials": [
+        {
+          "elapsed_ms": 1573.53,
+          "expected_status": 200,
+          "family": "industry-options",
+          "name": "industry-options-manufacturer",
+          "passed": true,
+          "path": "/industry/options?field=manufacturer&q=pf&state=OH&limit=30",
+          "purpose": "Manufacturer facet aggregation",
+          "response_bytes": 122,
+          "response_sha256": "f3c854da7461e0341d523de546428844ab5e2467f0881026b2fcc8a5367c48d4",
+          "result_count": null,
+          "status_code": 200
+        },
+        {
+          "elapsed_ms": 1686.7,
+          "expected_status": 200,
+          "family": "industry-options",
+          "name": "industry-options-manufacturer",
+          "passed": true,
+          "path": "/industry/options?field=manufacturer&q=pf&state=OH&limit=30",
+          "purpose": "Manufacturer facet aggregation",
+          "response_bytes": 122,
+          "response_sha256": "f3c854da7461e0341d523de546428844ab5e2467f0881026b2fcc8a5367c48d4",
+          "result_count": null,
+          "status_code": 200
+        },
+        {
+          "elapsed_ms": 1603.21,
+          "expected_status": 200,
+          "family": "industry-options",
+          "name": "industry-options-manufacturer",
+          "passed": true,
+          "path": "/industry/options?field=manufacturer&q=pf&state=OH&limit=30",
+          "purpose": "Manufacturer facet aggregation",
+          "response_bytes": 122,
+          "response_sha256": "f3c854da7461e0341d523de546428844ab5e2467f0881026b2fcc8a5367c48d4",
+          "result_count": null,
+          "status_code": 200
+        }
+      ]
+    },
+    {
+      "expected_status": 200,
+      "family": "industry-detail",
+      "median_elapsed_ms": 612.67,
+      "name": "industry-detail",
+      "passed": true,
+      "path": "/industry/1811967433/detail",
+      "purpose": "Provider industry payments, manufacturers, products, and natures",
+      "response_stable": true,
+      "trials": [
+        {
+          "elapsed_ms": 619.49,
+          "expected_status": 200,
+          "family": "industry-detail",
+          "name": "industry-detail",
+          "passed": true,
+          "path": "/industry/1811967433/detail",
+          "purpose": "Provider industry payments, manufacturers, products, and natures",
+          "response_bytes": 4403,
+          "response_sha256": "7e7bf378999b3cebbcd8269dd2e734fa2e0e663e585f36ce41840fde7c7b282f",
+          "result_count": null,
+          "status_code": 200
+        },
+        {
+          "elapsed_ms": 564.67,
+          "expected_status": 200,
+          "family": "industry-detail",
+          "name": "industry-detail",
+          "passed": true,
+          "path": "/industry/1811967433/detail",
+          "purpose": "Provider industry payments, manufacturers, products, and natures",
+          "response_bytes": 4403,
+          "response_sha256": "7e7bf378999b3cebbcd8269dd2e734fa2e0e663e585f36ce41840fde7c7b282f",
+          "result_count": null,
+          "status_code": 200
+        },
+        {
+          "elapsed_ms": 612.67,
+          "expected_status": 200,
+          "family": "industry-detail",
+          "name": "industry-detail",
+          "passed": true,
+          "path": "/industry/1811967433/detail",
+          "purpose": "Provider industry payments, manufacturers, products, and natures",
+          "response_bytes": 4403,
+          "response_sha256": "7e7bf378999b3cebbcd8269dd2e734fa2e0e663e585f36ce41840fde7c7b282f",
+          "result_count": null,
+          "status_code": 200
+        }
+      ]
+    },
+    {
+      "expected_status": 200,
+      "family": "radar",
+      "median_elapsed_ms": 483.24,
+      "name": "radar-city",
+      "passed": true,
+      "path": "/radar/providers?city=Cleveland&state=OH&limit=100",
+      "purpose": "Broad city-scoped Radar state and event lookup",
+      "response_stable": true,
+      "trials": [
+        {
+          "elapsed_ms": 483.24,
+          "expected_status": 200,
+          "family": "radar",
+          "name": "radar-city",
+          "passed": true,
+          "path": "/radar/providers?city=Cleveland&state=OH&limit=100",
+          "purpose": "Broad city-scoped Radar state and event lookup",
+          "response_bytes": 87590,
+          "response_sha256": "5478df61c3b3197a0f6c8ede86672cce5e15434040102f32913276469d0ed388",
+          "result_count": 100,
+          "status_code": 200
+        },
+        {
+          "elapsed_ms": 465.1,
+          "expected_status": 200,
+          "family": "radar",
+          "name": "radar-city",
+          "passed": true,
+          "path": "/radar/providers?city=Cleveland&state=OH&limit=100",
+          "purpose": "Broad city-scoped Radar state and event lookup",
+          "response_bytes": 87590,
+          "response_sha256": "5478df61c3b3197a0f6c8ede86672cce5e15434040102f32913276469d0ed388",
+          "result_count": 100,
+          "status_code": 200
+        },
+        {
+          "elapsed_ms": 501.03,
+          "expected_status": 200,
+          "family": "radar",
+          "name": "radar-city",
+          "passed": true,
+          "path": "/radar/providers?city=Cleveland&state=OH&limit=100",
+          "purpose": "Broad city-scoped Radar state and event lookup",
+          "response_bytes": 87590,
+          "response_sha256": "5478df61c3b3197a0f6c8ede86672cce5e15434040102f32913276469d0ed388",
+          "result_count": 100,
+          "status_code": 200
+        }
+      ]
+    },
+    {
+      "expected_status": 200,
+      "family": "radar",
+      "median_elapsed_ms": 2378.63,
+      "name": "radar-zip-taxonomy",
+      "passed": true,
+      "path": "/radar/providers?zip5=44195&taxonomy_code=207LC0200X&limit=100",
+      "purpose": "ZIP and taxonomy Radar filtering",
+      "response_stable": true,
+      "trials": [
+        {
+          "elapsed_ms": 2378.63,
+          "expected_status": 200,
+          "family": "radar",
+          "name": "radar-zip-taxonomy",
+          "passed": true,
+          "path": "/radar/providers?zip5=44195&taxonomy_code=207LC0200X&limit=100",
+          "purpose": "ZIP and taxonomy Radar filtering",
+          "response_bytes": 974,
+          "response_sha256": "4add73016f13a1626df13abe23b625742d702d76613b1929208c6f0d6dbe97dc",
+          "result_count": 1,
+          "status_code": 200
+        },
+        {
+          "elapsed_ms": 2352.82,
+          "expected_status": 200,
+          "family": "radar",
+          "name": "radar-zip-taxonomy",
+          "passed": true,
+          "path": "/radar/providers?zip5=44195&taxonomy_code=207LC0200X&limit=100",
+          "purpose": "ZIP and taxonomy Radar filtering",
+          "response_bytes": 974,
+          "response_sha256": "4add73016f13a1626df13abe23b625742d702d76613b1929208c6f0d6dbe97dc",
+          "result_count": 1,
+          "status_code": 200
+        },
+        {
+          "elapsed_ms": 2476.26,
+          "expected_status": 200,
+          "family": "radar",
+          "name": "radar-zip-taxonomy",
+          "passed": true,
+          "path": "/radar/providers?zip5=44195&taxonomy_code=207LC0200X&limit=100",
+          "purpose": "ZIP and taxonomy Radar filtering",
+          "response_bytes": 974,
+          "response_sha256": "4add73016f13a1626df13abe23b625742d702d76613b1929208c6f0d6dbe97dc",
+          "result_count": 1,
+          "status_code": 200
+        }
+      ]
+    },
+    {
+      "expected_status": 200,
+      "family": "explorer-evidence",
+      "median_elapsed_ms": 10184.51,
+      "name": "explorer-ten-npi",
+      "passed": true,
+      "path": "/explorer/provider-evidence?npis=1003005257%2C1811967433%2C1194759803%2C1326205873%2C1043244296%2C1780065508%2C1881985521%2C1326164633%2C1831159714%2C0000000000",
+      "purpose": "Maximum bounded source-faithful evidence request",
+      "response_stable": true,
+      "trials": [
+        {
+          "elapsed_ms": 10184.51,
+          "expected_status": 200,
+          "family": "explorer-evidence",
+          "name": "explorer-ten-npi",
+          "passed": true,
+          "path": "/explorer/provider-evidence?npis=1003005257%2C1811967433%2C1194759803%2C1326205873%2C1043244296%2C1780065508%2C1881985521%2C1326164633%2C1831159714%2C0000000000",
+          "purpose": "Maximum bounded source-faithful evidence request",
+          "response_bytes": 437294,
+          "response_sha256": "e3241a7c8bc01042a3492e292f2c63d9070bac34b49b2413b2b8007713936f18",
+          "result_count": null,
+          "status_code": 200
+        },
+        {
+          "elapsed_ms": 10205.56,
+          "expected_status": 200,
+          "family": "explorer-evidence",
+          "name": "explorer-ten-npi",
+          "passed": true,
+          "path": "/explorer/provider-evidence?npis=1003005257%2C1811967433%2C1194759803%2C1326205873%2C1043244296%2C1780065508%2C1881985521%2C1326164633%2C1831159714%2C0000000000",
+          "purpose": "Maximum bounded source-faithful evidence request",
+          "response_bytes": 437294,
+          "response_sha256": "e3241a7c8bc01042a3492e292f2c63d9070bac34b49b2413b2b8007713936f18",
+          "result_count": null,
+          "status_code": 200
+        },
+        {
+          "elapsed_ms": 10147.28,
+          "expected_status": 200,
+          "family": "explorer-evidence",
+          "name": "explorer-ten-npi",
+          "passed": true,
+          "path": "/explorer/provider-evidence?npis=1003005257%2C1811967433%2C1194759803%2C1326205873%2C1043244296%2C1780065508%2C1881985521%2C1326164633%2C1831159714%2C0000000000",
+          "purpose": "Maximum bounded source-faithful evidence request",
+          "response_bytes": 437294,
+          "response_sha256": "e3241a7c8bc01042a3492e292f2c63d9070bac34b49b2413b2b8007713936f18",
+          "result_count": null,
+          "status_code": 200
+        }
+      ]
+    }
+  ],
+  "failure_count": 2,
+  "generated_at": "2026-08-14T03:17:29+00:00",
+  "identity": {
+    "code_commit": "91174f823a7a936e16408a1fdc177442fb30add1",
+    "deployment_id": "isolated-s2-candidate-mart-v6",
+    "executor_settings": {
+      "backend": "mart",
+      "duckdb_memory_limit": "2GB",
+      "duckdb_threads": 4,
+      "pool_size": 4
+    },
+    "warehouse_release_id": "warehouse-20260814T025428Z-5dac630227",
+    "warehouse_sha256": "bf7d2381c8c9a683497a7dcc5d64c87ccfb3359fe5ee77d61e74ca3bffb1fa02"
+  },
+  "schema_version": 1,
+  "stability_failure_count": 2,
+  "status_failure_count": 0,
+  "timeout_seconds": 60.0,
+  "trial_count": 3
+}
