@@ -20,6 +20,7 @@ When documents disagree, the operating model and the source code win.
 | [product-serving-marts.md](product-serving-marts.md) | Executable contract reference for the twelve registered marts and the measured S2 route-migration boundary. |
 | [operations/api-concurrency-benchmark.md](operations/api-concurrency-benchmark.md) | Reproducible mixed-load benchmark and S2 canonical diagnostic corpus. |
 | [operations/s2-canonical-baseline-2026-08-14.md](operations/s2-canonical-baseline-2026-08-14.md) | First S2 canonical behavior baseline, determinism findings, and plan-capture blockers. |
+| [operations/s2-query-plan-baseline-2026-08-14.md](operations/s2-query-plan-baseline-2026-08-14.md) | Exact canonical SQL plans, query fanout, operator work, and determinism diagnosis. |
 | [proposals/2026-08-s2-serving-marts-plan.md](proposals/2026-08-s2-serving-marts-plan.md) | S2 delivery sequence, baseline evidence, first practice-search slice, and route-switch gates. |
 | [security/arbitrary-sql-boundary.md](security/arbitrary-sql-boundary.md) | `/query` caller inventory, operator-only authorization, typed replacement, rollout, and rollback contract. |
 | [proposals/2026-08-data-platform-roadmap.md](proposals/2026-08-data-platform-roadmap.md) | Current production-readiness and product-data roadmap: priorities, sequencing, acceptance gates, issue mapping, and operating cadence. |

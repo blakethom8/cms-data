@@ -51,13 +51,15 @@ mart by assumption.
 
 ## Required follow-up before a practice route switch
 
-1. Capture per-query `EXPLAIN (ANALYZE, FORMAT JSON)` evidence for the six unstable cases and the
-   two expensive stable cases, attached to this exact case-manifest identity.
-2. Identify which unordered list/aggregate fields caused byte drift. Define and test their intended
-   ordering before using exact response digests as a parity gate.
-3. Add discovered practice roster and site-profile cases after the search response selects a real
+The first two investigations are complete in the
+[S2 query-plan baseline](s2-query-plan-baseline-2026-08-14.md). It captured all 452 route queries
+and identified the exact unstable response fields. Remaining work is:
+
+1. Define and test the intended ordering, representative-value, and monetary-precision semantics
+   before using exact response digests as a parity gate.
+2. Add discovered practice roster and site-profile cases after the search response selects a real
    site, so drill-downs use the same site identity rather than a hand-maintained address.
-4. Re-run the corpus against an isolated serving-mart candidate on the same warehouse. A mart route
+3. Re-run the corpus against an isolated serving-mart candidate on the same warehouse. A mart route
    cannot pass while status, counts, ordering, null behavior, or response shape differ.
 
 HTTP timing is not operator-plan evidence. No serving-mart DDL or route implementation should be

@@ -1,6 +1,6 @@
 # S2 release-built serving marts plan
 
-> Status: S2.1 complete; S2.2 canonical case capture active
+> Status: S2.1 complete; S2.2 behavior and query-plan baselines complete
 >
 > Production boundary: do not select, rebuild, amend, or supersede prepared S1 deployment
 > `deployment-20260814T002255Z-11131e3630`. S2 candidates remain isolated and unselected until a
@@ -196,6 +196,8 @@ ranking and discovery-universe semantics.
 
 Every PR is independently testable and reversible. No S2 PR authorizes a production cutover.
 
-S2.2 is delivered in two fail-closed increments: the first registers and captures the exact HTTP
-case corpus with immutable warehouse identity; the second adds per-query `EXPLAIN ANALYZE` evidence
-for those same case IDs. A response timing is never represented as an operator plan.
+S2.2 was delivered in two fail-closed increments: the first registered and captured the exact HTTP
+case corpus with immutable warehouse identity; the second attached per-query `EXPLAIN ANALYZE`
+evidence to those same case IDs. A response timing is never represented as an operator plan. The
+result also established a response-stabilization prerequisite before the Phase 2 parity oracle can
+be authoritative.
