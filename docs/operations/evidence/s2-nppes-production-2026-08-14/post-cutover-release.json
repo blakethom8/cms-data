@@ -1,0 +1,33 @@
+{
+  "build": {
+    "checksum": "2bcc92d44014b62e2bc0c4c42d3c1b814827668ed653b13ffe565ceea7aac9d3",
+    "pipeline_ref": "55d31add1ad2751ba803486d6a22ce45bc0aa840",
+    "warehouse_release_id": "warehouse-20260814T183948Z-e5ff46dce9"
+  },
+  "compatibility": "current",
+  "promoted_at": "2026-08-14T20:21:26+00:00",
+  "release_id": "deployment-20260814T201311Z-0325c353c9",
+  "representation_version": 3,
+  "source_vintages": {
+    "aact_clinical_trials_snapshot": "2026-07-21",
+    "cms_dac_national": "2026-07-31",
+    "cms_dme_by_referring_provider": "2023-01-01/2023-12-31",
+    "cms_hospital_enrollments": "2026-05-01/2026-05-31",
+    "cms_order_and_referring": "2026-07-12/2026-07-18",
+    "cms_part_d_by_provider": "2024-01-01/2024-12-31",
+    "cms_part_d_by_provider_and_drug": "2024-01-01/2024-12-31",
+    "cms_pecos_practice_location": "2026-01-01/2026-03-31",
+    "cms_pecos_public_provider_enrollment": "2026-01-01/2026-03-31",
+    "cms_pecos_reassignment": "2026-01-01/2026-03-31",
+    "cms_physician_by_provider": "2024-01-01/2024-12-31",
+    "cms_physician_by_provider_and_service": "2024-01-01/2024-12-31",
+    "cms_qpp_experience": "2024-01-01/2024-12-31",
+    "cms_revalidation_group_reassignment": "2026-07-01/2026-07-31",
+    "nppes_monthly_v2": "2026-07-13",
+    "nppes_weekly_incremental_v2": "2026-07-27/2026-08-02",
+    "open_payments_general": "2025-01-01/2025-12-31",
+    "open_payments_ownership": "2025-01-01/2025-12-31",
+    "open_payments_research": "2025-01-01/2025-12-31"
+  },
+  "verified_at": "2026-08-14T20:22:39+00:00"
+}

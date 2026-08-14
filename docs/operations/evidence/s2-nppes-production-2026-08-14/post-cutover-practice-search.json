@@ -1,0 +1,7 @@
+{
+  "elapsed_ms": 203.5,
+  "path": "/practices/search?location_basis=nppes_primary&state=CA&specialty=Cardiology&limit=10",
+  "returned": 10,
+  "status": 200,
+  "total": 1129
+}

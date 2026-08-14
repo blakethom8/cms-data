@@ -225,9 +225,10 @@ Acceptance gates:
   through deployment-local capability selection.
 - [x] Build and validate the second, NPPES-primary practice candidate against production data. See
   the [candidate record](../operations/s2-nppes-primary-candidate-2026-08-14.md).
-- [ ] Recover capacity for its required distinct production artifact, then complete deployment
-  smoke, rollback dry-runs, and a separately authorized cutover. The current projection is 90.85%
-  against the 85% promotion block.
+- [x] Recover capacity for its required distinct production artifact, complete deployment smoke and
+  rollback dry-runs, and perform the separately authorized cutover. Production now selects verified
+  deployment `deployment-20260814T201311Z-0325c353c9`; see the
+  [cutover record](../operations/s2-nppes-primary-production-cutover-2026-08-14.md).
 
 ### O1. End-to-end observability
 
