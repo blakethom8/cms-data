@@ -26,7 +26,9 @@ def _dac_payload(*, organization_members: str = "20") -> bytes:
         "Ind_enrl_ID": "ENROLL-I",
         "Provider Last Name": "Rivera",
         "Provider First Name": "Jamie",
+        "Cred": "MD",
         "pri_spec": "Cardiology",
+        "Telehlth": "Y",
         "Facility Name": "Cardio Group",
         "org_pac_id": "PAC-O",
         "num_org_mem": organization_members,
@@ -179,7 +181,14 @@ def test_load_managed_dac_preserves_schema_and_records_provenance(
     try:
         connection.execute("SET TimeZone = 'UTC'")
         connection.execute(
-            'CREATE TABLE raw_dac_national ("NPI" BIGINT, num_org_mem INTEGER)'
+            '''
+            CREATE TABLE raw_dac_national (
+                "NPI" BIGINT,
+                num_org_mem INTEGER,
+                "Cred\t\t\t\t" VARCHAR,
+                "Telehlth\t\t\t\t" VARCHAR
+            )
+            '''
         )
         counts = load_cms_raw_tables(
             connection,
@@ -188,8 +197,9 @@ def test_load_managed_dac_preserves_schema_and_records_provenance(
         )
         row = connection.execute(
             '''
-            SELECT "NPI", num_org_mem, source_run_id, source_release_id,
-                   source_data_period, CAST(ingested_at AS VARCHAR)
+            SELECT "NPI", num_org_mem, "Cred\t\t\t\t", "Telehlth\t\t\t\t",
+                   source_run_id, source_release_id, source_data_period,
+                   CAST(ingested_at AS VARCHAR)
             FROM raw_dac_national
             '''
         ).fetchone()
@@ -206,6 +216,8 @@ def test_load_managed_dac_preserves_schema_and_records_provenance(
     assert row == (
         1234567890,
         20,
+        "MD",
+        "Y",
         manifest.run_id,
         manifest.release_id,
         manifest.source_data_period,
@@ -213,6 +225,10 @@ def test_load_managed_dac_preserves_schema_and_records_provenance(
     )
     assert types["NPI"] == "BIGINT"
     assert types["num_org_mem"] == "INTEGER"
+    assert types["Cred\t\t\t\t"] == "VARCHAR"
+    assert types["Telehlth\t\t\t\t"] == "VARCHAR"
+    assert "Cred" not in types
+    assert "Telehlth" not in types
     assert types["source_run_id"] == "VARCHAR"
     assert types["ingested_at"] == "TIMESTAMP WITH TIME ZONE"
 

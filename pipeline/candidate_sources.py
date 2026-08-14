@@ -44,7 +44,7 @@ def _quoted_identifier(value: str) -> str:
     return '"' + value.replace('"', '""') + '"'
 
 
-def _existing_column_types(
+def _existing_columns(
     connection: duckdb.DuckDBPyConnection,
     table: str,
 ) -> dict[str, str]:
@@ -55,7 +55,63 @@ def _existing_column_types(
         ).fetchall()
     except duckdb.CatalogException:
         return {}
-    return {str(row[1]).casefold(): str(row[2]) for row in rows}
+    return {str(row[1]): str(row[2]) for row in rows}
+
+
+def _preserve_existing_column_names(
+    connection: duckdb.DuckDBPyConnection,
+    incoming_table: str,
+    existing_columns: dict[str, str],
+) -> None:
+    """Retain established names when publisher headers only trim whitespace.
+
+    Older DAC files contained trailing tab characters in two headers. Current
+    CMS files correctly publish the trimmed names, while existing API SQL must
+    remain compatible with the selected warehouse during an N/N-1 transition.
+    Only leading/trailing whitespace differences are reconciled; ambiguous or
+    genuinely renamed columns fail closed.
+    """
+    established_by_trimmed: dict[str, str] = {}
+    for column in existing_columns:
+        normalized = column.strip().casefold()
+        previous = established_by_trimmed.get(normalized)
+        if previous is not None and previous != column:
+            raise ReleaseError(
+                "Existing raw schema has ambiguous whitespace-normalized columns: "
+                f"{previous!r}, {column!r}"
+            )
+        established_by_trimmed[normalized] = column
+
+    incoming_rows = connection.execute(
+        f"PRAGMA table_info({_quoted_identifier(incoming_table)})"
+    ).fetchall()
+    incoming = {str(row[1]) for row in incoming_rows}
+    normalized_incoming: dict[str, str] = {}
+    for column in incoming:
+        normalized = column.strip().casefold()
+        previous = normalized_incoming.get(normalized)
+        if previous is not None and previous != column:
+            raise ReleaseError(
+                "Publisher schema has ambiguous whitespace-normalized columns: "
+                f"{previous!r}, {column!r}"
+            )
+        normalized_incoming[normalized] = column
+
+    for column in sorted(incoming):
+        established = established_by_trimmed.get(column.strip().casefold())
+        if established is None or established == column:
+            continue
+        if established in incoming:
+            raise ReleaseError(
+                f"Publisher schema cannot preserve established column {established!r}"
+            )
+        connection.execute(
+            f"ALTER TABLE {_quoted_identifier(incoming_table)} "
+            f"RENAME COLUMN {_quoted_identifier(column)} "
+            f"TO {_quoted_identifier(established)}"
+        )
+        incoming.remove(column)
+        incoming.add(established)
 
 
 def _typed_replacements(
@@ -226,7 +282,7 @@ def load_cms_raw_tables(
             quoted_table = _quoted_identifier(table)
             temporary = _quoted_identifier(f"{table}__candidate_load")
             typed_temporary = _quoted_identifier(f"{table}__candidate_typed")
-            existing_types = _existing_column_types(connection, table)
+            existing_columns = _existing_columns(connection, table)
             connection.execute(f"DROP TABLE IF EXISTS {temporary}")
             connection.execute(f"DROP TABLE IF EXISTS {typed_temporary}")
             with _utf8_artifact(data_root, manifest, artifact) as load_artifact:
@@ -270,6 +326,15 @@ def load_cms_raw_tables(
                 raise ReleaseError(
                     f"Loaded {loaded} rows for {manifest.source_id}; expected {expected}"
                 )
+            _preserve_existing_column_names(
+                connection,
+                f"{table}__candidate_load",
+                existing_columns,
+            )
+            existing_types = {
+                column.casefold(): column_type
+                for column, column_type in existing_columns.items()
+            }
             replacements = _typed_replacements(
                 connection,
                 f"{table}__candidate_load",
