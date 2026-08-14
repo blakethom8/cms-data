@@ -1,0 +1,143 @@
+{
+  "case_count": 14,
+  "case_manifest_sha256": "d61bc78e3ec116d4831345df2c9e5deaabad432dc98eccdef14e5b69dce6c762",
+  "cases": [
+    {
+      "mart_median_elapsed_ms": 10230.91,
+      "name": "explorer-ten-npi",
+      "passed": true,
+      "raw_median_elapsed_ms": 10375.68,
+      "response_bytes": 437294,
+      "response_sha256": "e3241a7c8bc01042a3492e292f2c63d9070bac34b49b2413b2b8007713936f18",
+      "status_code": 200
+    },
+    {
+      "mart_median_elapsed_ms": 568.76,
+      "name": "industry-detail",
+      "passed": true,
+      "raw_median_elapsed_ms": 572.22,
+      "response_bytes": 4403,
+      "response_sha256": "7e7bf378999b3cebbcd8269dd2e734fa2e0e663e585f36ce41840fde7c7b282f",
+      "status_code": 200
+    },
+    {
+      "mart_median_elapsed_ms": 1676.04,
+      "name": "industry-options-manufacturer",
+      "passed": true,
+      "raw_median_elapsed_ms": 1649.83,
+      "response_bytes": 122,
+      "response_sha256": "f3c854da7461e0341d523de546428844ab5e2467f0881026b2fcc8a5367c48d4",
+      "status_code": 200
+    },
+    {
+      "mart_median_elapsed_ms": 2360.9,
+      "name": "industry-search",
+      "passed": true,
+      "raw_median_elapsed_ms": 2379.52,
+      "response_bytes": 58568,
+      "response_sha256": "34800ab832c9e3e184df3e8da1e724ff27daa76efecb48e13e130ffe2422f01b",
+      "status_code": 200
+    },
+    {
+      "mart_median_elapsed_ms": 619.62,
+      "name": "market-state",
+      "passed": true,
+      "raw_median_elapsed_ms": 577.65,
+      "response_bytes": 896417,
+      "response_sha256": "ce393df51b6ba477a7e01c6e033e92b06c35ed558580a472a970e634e86e2eb3",
+      "status_code": 200
+    },
+    {
+      "mart_median_elapsed_ms": 6.26,
+      "name": "practice-cms-empty",
+      "passed": true,
+      "raw_median_elapsed_ms": 6.59,
+      "response_bytes": 310,
+      "response_sha256": "eea3a55de08c906fb0717e208c1c903d57667cef6a357f46e9b28916a4d16b14",
+      "status_code": 200
+    },
+    {
+      "mart_median_elapsed_ms": 258.01,
+      "name": "practice-cms-state",
+      "passed": true,
+      "raw_median_elapsed_ms": 254.8,
+      "response_bytes": 26923,
+      "response_sha256": "7ca56ab3ce55928075da0fea6772d2627ff755ce3f75115f7f9c9936246be2cd",
+      "status_code": 200
+    },
+    {
+      "mart_median_elapsed_ms": 53.27,
+      "name": "practice-cms-zip-boundary",
+      "passed": true,
+      "raw_median_elapsed_ms": 55.76,
+      "response_bytes": 4973,
+      "response_sha256": "30365193f0e07899aefc07bdb006ac29605a4c6af6ee630089a65db47c9c022c",
+      "status_code": 200
+    },
+    {
+      "mart_median_elapsed_ms": 145.21,
+      "name": "practice-nppes-state",
+      "passed": true,
+      "raw_median_elapsed_ms": 1499.16,
+      "response_bytes": 42251,
+      "response_sha256": "9bc5d941a1b708c55c7b395ad14ab1ce457ea6946c52a42b6ac4b894e0bc6d41",
+      "status_code": 200
+    },
+    {
+      "mart_median_elapsed_ms": 27.1,
+      "name": "profile-missing",
+      "passed": true,
+      "raw_median_elapsed_ms": 27.13,
+      "response_bytes": 59,
+      "response_sha256": "e472f4af8401c514cd26c40007172780162d844cf1947bba9cd2e072ce4a779d",
+      "status_code": 404
+    },
+    {
+      "mart_median_elapsed_ms": 776.87,
+      "name": "profile-rich",
+      "passed": false,
+      "raw_median_elapsed_ms": 804.26,
+      "response_bytes": 8611,
+      "response_sha256": "9a1869888d143dce56ccfc6ca17accbc5f1e00f773e6fa0b518d9c9d84d82e3d",
+      "status_code": 200
+    },
+    {
+      "mart_median_elapsed_ms": 591.58,
+      "name": "profile-standard",
+      "passed": true,
+      "raw_median_elapsed_ms": 583.26,
+      "response_bytes": 4763,
+      "response_sha256": "e7ed71d1359d7fddc310785eeb7d5850db30da3bf46fb88f19fcac4f61db774e",
+      "status_code": 200
+    },
+    {
+      "mart_median_elapsed_ms": 488.95,
+      "name": "radar-city",
+      "passed": true,
+      "raw_median_elapsed_ms": 517.53,
+      "response_bytes": 87590,
+      "response_sha256": "5478df61c3b3197a0f6c8ede86672cce5e15434040102f32913276469d0ed388",
+      "status_code": 200
+    },
+    {
+      "mart_median_elapsed_ms": 2392.15,
+      "name": "radar-zip-taxonomy",
+      "passed": true,
+      "raw_median_elapsed_ms": 2456.14,
+      "response_bytes": 974,
+      "response_sha256": "4add73016f13a1626df13abe23b625742d702d76613b1929208c6f0d6dbe97dc",
+      "status_code": 200
+    }
+  ],
+  "code_commit": "55d31add1ad2751ba803486d6a22ce45bc0aa840",
+  "mart_failure_count": 0,
+  "mismatches": [
+    "profile-rich"
+  ],
+  "passed": false,
+  "raw_failure_count": 0,
+  "schema_version": 1,
+  "trial_count": 3,
+  "warehouse_release_id": "warehouse-20260814T183948Z-e5ff46dce9",
+  "warehouse_sha256": "2bcc92d44014b62e2bc0c4c42d3c1b814827668ed653b13ffe565ceea7aac9d3"
+}

@@ -1,0 +1,176 @@
+{
+  "code_commit": "55d31add1ad2751ba803486d6a22ce45bc0aa840",
+  "levels": [
+    {
+      "concurrency": 1,
+      "mart": {
+        "failures": 0,
+        "p50_ms": 138.72,
+        "p95_ms": 257.33,
+        "p99_ms": 267.67,
+        "pool_wait_p95_ms": 0.05,
+        "rss_peak_bytes": 510124032,
+        "throughput_rps": 6.56,
+        "trial_failures": [
+          0,
+          0,
+          0
+        ]
+      },
+      "p95_reduction_percent": 83.7,
+      "raw": {
+        "failures": 0,
+        "p50_ms": 1487.79,
+        "p95_ms": 1579.14,
+        "p99_ms": 1581.87,
+        "pool_wait_p95_ms": 0.05,
+        "rss_peak_bytes": 1036500992,
+        "throughput_rps": 0.68,
+        "trial_failures": [
+          0,
+          0,
+          0
+        ]
+      },
+      "throughput_increase_percent": 864.7
+    },
+    {
+      "concurrency": 2,
+      "mart": {
+        "failures": 0,
+        "p50_ms": 193.98,
+        "p95_ms": 369.44,
+        "p99_ms": 376.81,
+        "pool_wait_p95_ms": 0.04,
+        "rss_peak_bytes": 512409600,
+        "throughput_rps": 9.81,
+        "trial_failures": [
+          0,
+          0,
+          0
+        ]
+      },
+      "p95_reduction_percent": 87.5,
+      "raw": {
+        "failures": 0,
+        "p50_ms": 2307.04,
+        "p95_ms": 2961.65,
+        "p99_ms": 3031.68,
+        "pool_wait_p95_ms": 0.04,
+        "rss_peak_bytes": 1033789440,
+        "throughput_rps": 0.88,
+        "trial_failures": [
+          0,
+          0,
+          0
+        ]
+      },
+      "throughput_increase_percent": 1014.8
+    },
+    {
+      "concurrency": 4,
+      "mart": {
+        "failures": 0,
+        "p50_ms": 268.3,
+        "p95_ms": 516.85,
+        "p99_ms": 531.08,
+        "pool_wait_p95_ms": 0.03,
+        "rss_peak_bytes": 505348096,
+        "throughput_rps": 13.94,
+        "trial_failures": [
+          0,
+          0,
+          0
+        ]
+      },
+      "p95_reduction_percent": 88.3,
+      "raw": {
+        "failures": 0,
+        "p50_ms": 3217.49,
+        "p95_ms": 4426.42,
+        "p99_ms": 4513.69,
+        "pool_wait_p95_ms": 0.04,
+        "rss_peak_bytes": 1061163008,
+        "throughput_rps": 1.23,
+        "trial_failures": [
+          0,
+          0,
+          0
+        ]
+      },
+      "throughput_increase_percent": 1033.3
+    },
+    {
+      "concurrency": 8,
+      "mart": {
+        "failures": 0,
+        "p50_ms": 528.67,
+        "p95_ms": 810.53,
+        "p99_ms": 843.87,
+        "pool_wait_p95_ms": 363.6,
+        "rss_peak_bytes": 509304832,
+        "throughput_rps": 14.0,
+        "trial_failures": [
+          0,
+          0,
+          0
+        ]
+      },
+      "p95_reduction_percent": 84.8,
+      "raw": {
+        "failures": 28,
+        "p50_ms": 3305.44,
+        "p95_ms": 5315.39,
+        "p99_ms": 5685.04,
+        "pool_wait_p95_ms": 2000.0,
+        "rss_peak_bytes": 1073033216,
+        "throughput_rps": 2.28,
+        "trial_failures": [
+          28,
+          28,
+          28
+        ]
+      },
+      "throughput_increase_percent": 514.0
+    },
+    {
+      "concurrency": 12,
+      "mart": {
+        "failures": 0,
+        "p50_ms": 812.17,
+        "p95_ms": 1014.84,
+        "p99_ms": 1088.84,
+        "pool_wait_p95_ms": 648.68,
+        "rss_peak_bytes": 518574080,
+        "throughput_rps": 13.93,
+        "trial_failures": [
+          0,
+          0,
+          0
+        ]
+      },
+      "p95_reduction_percent": 80.0,
+      "raw": {
+        "failures": 41,
+        "p50_ms": 2004.82,
+        "p95_ms": 5083.93,
+        "p99_ms": 5548.79,
+        "pool_wait_p95_ms": 2000.0,
+        "rss_peak_bytes": 1056952320,
+        "throughput_rps": 3.67,
+        "trial_failures": [
+          41,
+          40,
+          42
+        ]
+      },
+      "throughput_increase_percent": 279.6
+    }
+  ],
+  "requests_per_level": 60,
+  "schema_version": 1,
+  "trial_count": 3,
+  "warehouse_release_id": "warehouse-20260814T183948Z-e5ff46dce9",
+  "warehouse_sha256": "2bcc92d44014b62e2bc0c4c42d3c1b814827668ed653b13ffe565ceea7aac9d3",
+  "workload_sha256": "ebf80f371f071f99ce4df9a177024ee13c505c896a58e2ad521dcefadf899c17"
+}

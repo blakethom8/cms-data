@@ -1,0 +1,67 @@
+{
+  "case_manifest_sha256": "a240acd11301afb82a663af6d011346d749c06264d7493e57ac53dd4c2151c9a",
+  "cases": [
+    {
+      "mart_median_elapsed_ms": 13.75,
+      "name": "nppes-empty",
+      "passed": true,
+      "raw_median_elapsed_ms": 1233.17,
+      "response_bytes": 309,
+      "response_sha256": "001d4430ef14ba87719b2aaf8384771bf8517e380c735cf6acad49fddcecb8dd",
+      "result_count": 0,
+      "trial_parity": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "mart_median_elapsed_ms": 250.4,
+      "name": "nppes-multi-zip-specialty",
+      "passed": true,
+      "raw_median_elapsed_ms": 1542.93,
+      "response_bytes": 2425,
+      "response_sha256": "e6dde3a1dd425e6ee25f196952efef50d28c3ec66903c7798326330e375a5ca7",
+      "result_count": 2,
+      "trial_parity": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "mart_median_elapsed_ms": 102.31,
+      "name": "nppes-proximity",
+      "passed": true,
+      "raw_median_elapsed_ms": 1456.78,
+      "response_bytes": 17789,
+      "response_sha256": "b9ebd60a9d1b67928a4ba3a8d53be23526cc8d4c77f2e620735add5a46b0ccdf",
+      "result_count": 12,
+      "trial_parity": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "mart_median_elapsed_ms": 146.61,
+      "name": "nppes-state",
+      "passed": true,
+      "raw_median_elapsed_ms": 1527.22,
+      "response_bytes": 42251,
+      "response_sha256": "9bc5d941a1b708c55c7b395ad14ab1ce457ea6946c52a42b6ac4b894e0bc6d41",
+      "result_count": 25,
+      "trial_parity": [
+        true,
+        true,
+        true
+      ]
+    }
+  ],
+  "code_commit": "55d31add1ad2751ba803486d6a22ce45bc0aa840",
+  "passed": true,
+  "schema_version": 1,
+  "trial_count": 3,
+  "warehouse_release_id": "warehouse-20260814T183948Z-e5ff46dce9",
+  "warehouse_sha256": "2bcc92d44014b62e2bc0c4c42d3c1b814827668ed653b13ffe565ceea7aac9d3"
+}

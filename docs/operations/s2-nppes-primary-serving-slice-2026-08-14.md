@@ -65,16 +65,26 @@ now accepts `--code-commit` for this case and validates an exact 40-character he
 missing, abbreviated, or malformed values still fail closed. No warehouse copy or partial database
 was created by the rejected invocation.
 
+The follow-on isolated production-data run is complete. It produced validated staging release
+`warehouse-20260814T183948Z-e5ff46dce9`; 42 invariant logical fingerprints, focused byte parity,
+paired operator plans, and the three-trial concurrency workload passed. The required distinct
+production-artifact copy projects 90.85% disk use and is blocked by the 85% capacity gate, so no
+deployment was prepared and production remains unchanged. See the
+[candidate record](s2-nppes-primary-candidate-2026-08-14.md).
+
 ## Required before any production cutover
 
 1. ~~Add an exact targeted-additive release policy whose allowlist contains only the two new
    tables.~~ Completed in S2.6.
-2. Copy and verify the immutable selected baseline; never modify it in place.
-3. Build and validate an isolated production-data candidate under bounded resources.
-4. Prove all non-allowlisted tables unchanged with schema digests and logical row fingerprints.
-5. Run the full canonical raw-versus-mart parity corpus against the same candidate.
-6. Capture query profiles and three-trial HTTP medians at concurrency 1/2/4/8/12.
-7. Pass the S2 correctness, performance, memory, capacity, smoke, and rollback gates.
-8. Produce a written recommendation and obtain separate explicit authorization before selection.
+2. ~~Copy and verify the immutable selected baseline; never modify it in place.~~ Completed.
+3. ~~Build and validate an isolated production-data candidate under bounded resources.~~ Completed.
+4. ~~Prove all non-allowlisted tables unchanged with schema digests and logical row fingerprints.~~
+   Completed for 42 invariant tables.
+5. ~~Run the full canonical raw-versus-mart parity corpus against the same candidate.~~ Completed;
+   focused route parity is exact and the unrelated profile process-order caveat is recorded.
+6. ~~Capture query profiles and three-trial HTTP medians at concurrency 1/2/4/8/12.~~ Completed.
+7. Pass the remaining capacity, deployment smoke, and rollback gates. Correctness, performance,
+   memory, and staging comparison pass; capacity currently blocks preparation.
+8. Obtain separate explicit authorization before selection after every gate passes.
 
 This record does not authorize deployment, warehouse selection, or production cutover.

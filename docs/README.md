@@ -22,6 +22,7 @@ When documents disagree, the operating model and the source code win.
 | [operations/s2-canonical-baseline-2026-08-14.md](operations/s2-canonical-baseline-2026-08-14.md) | First S2 canonical behavior baseline, determinism findings, and plan-capture blockers. |
 | [operations/s2-managed-dac-candidate-2026-08-14.md](operations/s2-managed-dac-candidate-2026-08-14.md) | Managed DAC candidate identity, raw/mart parity and performance evidence, and the blocking capacity gate. |
 | [operations/s2-nppes-primary-serving-slice-2026-08-14.md](operations/s2-nppes-primary-serving-slice-2026-08-14.md) | NPPES-primary two-table serving design, local parity evidence, safety boundary, and remaining production gates. |
+| [operations/s2-nppes-primary-candidate-2026-08-14.md](operations/s2-nppes-primary-candidate-2026-08-14.md) | Isolated NPPES-primary production-data candidate, exact parity, operator plans, concurrency results, and blocking capacity decision. |
 | [operations/storage-retention-cleanup-2026-08-14.md](operations/storage-retention-cleanup-2026-08-14.md) | Approved superseded-warehouse cleanup, retained-copy proof, capacity recovery, and operator learnings. |
 | [operations/s2-query-plan-baseline-2026-08-14.md](operations/s2-query-plan-baseline-2026-08-14.md) | Exact canonical SQL plans, query fanout, operator work, and determinism diagnosis. |
 | [proposals/2026-08-s2-serving-marts-plan.md](proposals/2026-08-s2-serving-marts-plan.md) | S2 delivery sequence, baseline evidence, first practice-search slice, and route-switch gates. |

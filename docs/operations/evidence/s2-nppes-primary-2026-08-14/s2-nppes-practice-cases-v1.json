@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "name": "nppes-state",
+      "family": "practice-search",
+      "path": "/practices/search?specialty=Cardiology&state=OH&limit=25&location_basis=nppes_primary",
+      "expected_status": 200,
+      "result_count_field": "returned_count",
+      "purpose": "Broad state search over deterministic NPPES primary sites"
+    },
+    {
+      "name": "nppes-multi-zip-specialty",
+      "family": "practice-search",
+      "path": "/practices/search?specialties=Cardiology%2CInternal%20Medicine&zips=44101%2C44102%2C44103&limit=100&location_basis=nppes_primary",
+      "expected_status": 200,
+      "result_count_field": "returned_count",
+      "purpose": "Bounded multi-specialty and multi-ZIP filtering"
+    },
+    {
+      "name": "nppes-proximity",
+      "family": "practice-search",
+      "path": "/practices/search?specialty=Cardiology&lat=41.4993&lng=-81.6944&radius_miles=10&limit=50&location_basis=nppes_primary",
+      "expected_status": 200,
+      "result_count_field": "returned_count",
+      "purpose": "Geocode boundary, exact radius, distance rounding, and ordering"
+    },
+    {
+      "name": "nppes-empty",
+      "family": "practice-search",
+      "path": "/practices/search?specialty=Cardiology&zip=00000&limit=25&location_basis=nppes_primary",
+      "expected_status": 200,
+      "result_count_field": "returned_count",
+      "purpose": "Empty result and truncation semantics"
+    }
+  ]
+}

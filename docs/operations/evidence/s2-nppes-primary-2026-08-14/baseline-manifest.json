@@ -1,0 +1,24 @@
+{
+  "backup_id": "s2-nppes-selected-baseline-20260814T183600Z",
+  "backup_identity": {
+    "byte_size": 20951347200,
+    "device": 2049,
+    "inode": 4727800,
+    "mtime_ns": 1786676216481842954
+  },
+  "backup_path": "/srv/cms-data-platform/data/releases/warehouse-20260814T025428Z-5dac630227/warehouse.duckdb",
+  "created_at": "2026-08-14T18:36:00+00:00",
+  "schema_version": 1,
+  "sha256": "bf7d2381c8c9a683497a7dcc5d64c87ccfb3359fe5ee77d61e74ca3bffb1fa02",
+  "source_identity": {
+    "byte_size": 20951347200,
+    "device": 2049,
+    "inode": 4605223,
+    "mtime_ns": 1786723070262621747
+  },
+  "source_path": "/srv/cms-data-platform/production-artifacts/warehouses/warehouse-20260814T025428Z-5dac630227/warehouse.duckdb",
+  "validation": {
+    "read_only_open": "passed",
+    "staging_and_production_sha256_match": "passed"
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "command": "build-nppes-serving-practice-release",
+  "environment": "staging",
+  "error": "A full pipeline Git commit is required to build a release"
+}
