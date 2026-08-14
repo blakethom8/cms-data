@@ -209,7 +209,8 @@ rollups. A mart is justified only by measured query cost or clearer semantics.
 
 Acceptance gates:
 
-- [ ] Capture `EXPLAIN ANALYZE` for canonical slow paths before design.
+- [x] Capture `EXPLAIN ANALYZE` for canonical slow paths before design. See the
+  [S2 query-plan baseline](../operations/s2-query-plan-baseline-2026-08-14.md).
 - [ ] Define each mart's grain, keys, source periods, lineage, null semantics, and validation.
 - [ ] Preserve raw source evidence and the discovery/profile/evidence endpoint separation.
 - [ ] Compare results against the existing implementation for representative and adversarial NPIs.

@@ -79,6 +79,7 @@ fails if its declared identity is wrong; it never writes the API key to evidence
 It runs three trials by default and fails if a status is wrong or response bytes drift between
 trials. The warehouse path must be a regular non-symlink file with no write permission bits.
 
-The canonical corpus is a behavior/performance baseline, not yet operator-plan evidence. SQL
-`EXPLAIN ANALYZE` capture is the next S2.2 increment and must attach each observed query to the same
-case, warehouse hash, code commit, and executor settings. Do not infer query cost from HTTP latency.
+The canonical corpus is paired with the
+[`S2 query-plan baseline`](s2-query-plan-baseline-2026-08-14.md). The read-only plan harness attaches
+each exact SQL statement, bound parameter digest, and JSON `EXPLAIN ANALYZE` result to the same case,
+warehouse hash, code commit, and executor settings. HTTP latency and operator time remain distinct.
