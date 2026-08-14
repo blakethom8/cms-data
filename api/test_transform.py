@@ -14,6 +14,7 @@ from pipeline.transform import (
     build_provider_drug_detail,
     build_provider_quality_scores,
     clear_refresh_targets,
+    build_serving_provider_profile_core_tables,
     build_serving_practice_nppes_tables,
     build_serving_practice_provider_sites,
 )
@@ -433,6 +434,87 @@ def test_nppes_serving_transform_rejects_missing_nppes_provenance() -> None:
             build_serving_practice_nppes_tables(connection, 2026)
     finally:
         connection.close()
+
+
+def test_provider_profile_locations_preserve_null_zip_source_rows() -> None:
+    connection = _connection()
+    try:
+        connection.execute(
+            '''
+            CREATE TABLE raw_nppes (
+                npi VARCHAR, first_name VARCHAR, last_name VARCHAR,
+                credentials VARCHAR, practice_address_1 VARCHAR,
+                practice_address_2 VARCHAR, practice_city VARCHAR,
+                practice_state VARCHAR, practice_zip VARCHAR,
+                practice_phone VARCHAR, taxonomy_1 VARCHAR,
+                source_run_id VARCHAR, source_data_period VARCHAR
+            );
+            INSERT INTO raw_nppes VALUES
+                ('1234567890', 'Jamie', 'Rivera', 'MD', '10 MAIN ST', NULL,
+                 'Kowloon', 'HONG KONG', NULL, '8522387208', '207RC0000X',
+                 'nppes-run', '2026-08');
+
+            CREATE TABLE raw_dac_national (
+                "NPI" VARCHAR, "Provider First Name" VARCHAR,
+                "Provider Last Name" VARCHAR, "Cred\t\t\t\t" VARCHAR,
+                pri_spec VARCHAR, sec_spec_all VARCHAR, "City/Town" VARCHAR,
+                "State" VARCHAR, Med_sch VARCHAR, Grd_yr INTEGER,
+                "Telehlth\t\t\t\t" VARCHAR, "Facility Name" VARCHAR,
+                org_pac_id VARCHAR, num_org_mem INTEGER, adr_ln_1 VARCHAR,
+                adr_ln_2 VARCHAR, "ZIP Code" VARCHAR,
+                "Telephone Number" VARCHAR, source_run_id VARCHAR,
+                source_data_period VARCHAR
+            );
+            INSERT INTO raw_dac_national VALUES
+                ('1234567890', 'Jamie', 'Rivera', 'MD', 'Cardiology', NULL,
+                 'Kowloon', 'HONG KONG', NULL, NULL, 'N', 'International Group',
+                 'PAC-1', 10, '10 MAIN ST', NULL, NULL, '8522387208',
+                 'dac-run', '2026-07');
+
+            CREATE TABLE raw_reassignment (
+                "Individual NPI" VARCHAR, "Group PAC ID" VARCHAR,
+                "Group Legal Business Name" VARCHAR,
+                "Group Reassignments and Physician Assistants" BIGINT,
+                source_run_id VARCHAR, source_data_period VARCHAR
+            );
+            CREATE TABLE nucc_taxonomy (
+                taxonomy_code VARCHAR, classification VARCHAR,
+                specialization VARCHAR
+            );
+            INSERT INTO nucc_taxonomy VALUES
+                ('207RC0000X', 'Internal Medicine', 'Cardiovascular Disease');
+            CREATE TABLE address_geocode (
+                addr_key VARCHAR, lat DOUBLE, lng DOUBLE
+            );
+            '''
+        )
+
+        counts = build_serving_provider_profile_core_tables(connection, 2026)
+        locations = connection.execute(
+            """
+            SELECT addr_key, street, zip5, roster_size, sources
+            FROM serving_provider_profile_locations
+            ORDER BY sources
+            """
+        ).fetchall()
+    finally:
+        connection.close()
+
+    assert counts == {
+        "serving_provider_profile_headers": 1,
+        "serving_provider_profile_locations": 2,
+        "serving_provider_profile_groups": 1,
+    }
+    assert locations == [
+        ("~MISSING_ZIP_DAC~", "10 MAIN ST", None, None, "dac"),
+        (
+            "~MISSING_ZIP_NPPES~",
+            "10 MAIN ST",
+            None,
+            None,
+            "nppes",
+        ),
+    ]
 
 
 def test_provider_evidence_outputs_keep_address_and_organization_sources_separate() -> None:
