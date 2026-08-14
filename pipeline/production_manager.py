@@ -483,14 +483,92 @@ def _validate_warehouse_release(
         or evidence_mismatches != []
     ):
         raise ProductionError("Warehouse comparison contains failed requirements or differences")
-    if comparison.get("comparison_policy") not in {
+    comparison_policy = comparison.get("comparison_policy")
+    if comparison_policy not in {
         "hospital_affiliations_v1",
         "full_cms_v1",
         "full_platform_v1",
         "ppef_additive_v1",
         "nppes_radar_targeted_v1",
+        "serving_practice_managed_dac_v1",
     }:
         raise ProductionError("Warehouse comparison has an unsupported policy")
+    if comparison_policy == "serving_practice_managed_dac_v1":
+        expected_changed_tables = {
+            "raw_dac_national",
+            "serving_practice_provider_sites",
+        }
+        changed_tables = comparison.get("changed_tables")
+        table_counts = release.get("table_counts")
+        validation_details = release.get("validation_details")
+        release_changed_tables = (
+            validation_details.get("changed_tables")
+            if isinstance(validation_details, dict)
+            else None
+        )
+        if (
+            not isinstance(changed_tables, dict)
+            or set(changed_tables) != expected_changed_tables
+        ):
+            raise ProductionError("Managed DAC comparison changed-table scope is invalid")
+        if (
+            not isinstance(table_counts, dict)
+            or set(table_counts) != expected_changed_tables
+        ):
+            raise ProductionError("Managed DAC release table-count scope is invalid")
+        if not isinstance(validation_details, dict) or (
+            validation_details.get("comparison_policy") != comparison_policy
+            or not isinstance(release_changed_tables, list)
+            or set(release_changed_tables) != expected_changed_tables
+        ):
+            raise ProductionError("Managed DAC release validation scope is invalid")
+        for table in expected_changed_tables:
+            changed_table = changed_tables[table]
+            candidate_rows = (
+                changed_table.get("candidate_rows")
+                if isinstance(changed_table, dict)
+                else None
+            )
+            if (
+                not isinstance(changed_table, dict)
+                or not isinstance(candidate_rows, int)
+                or candidate_rows <= 0
+                or table_counts.get(table) != candidate_rows
+            ):
+                raise ProductionError("Managed DAC candidate table counts are invalid")
+        mart_validation = validation_details.get("mart_contract_validation")
+        marts = (
+            mart_validation.get("marts")
+            if isinstance(mart_validation, dict)
+            else None
+        )
+        serving_mart = next(
+            (
+                mart
+                for mart in marts or []
+                if isinstance(mart, dict)
+                and mart.get("table") == "serving_practice_provider_sites"
+            ),
+            None,
+        )
+        row_validation_failures = (
+            serving_mart.get("row_validation_failures")
+            if isinstance(serving_mart, dict)
+            else None
+        )
+        if (
+            not isinstance(mart_validation, dict)
+            or mart_validation.get("passed") is not True
+            or not isinstance(serving_mart, dict)
+            or serving_mart.get("schema_valid") is not True
+            or serving_mart.get("data_valid") is not True
+            or serving_mart.get("issues") != []
+            or serving_mart.get("row_count")
+            != table_counts["serving_practice_provider_sites"]
+            or not isinstance(row_validation_failures, dict)
+            or any(row_validation_failures.values())
+        ):
+            raise ProductionError("Managed DAC serving-mart validation is invalid")
     comparison_candidate = comparison.get("candidate")
     if not isinstance(comparison_candidate, dict):
         raise ProductionError("Warehouse comparison candidate is missing or malformed")

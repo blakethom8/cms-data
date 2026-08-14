@@ -72,6 +72,9 @@ def test_registered_marts_have_complete_source_and_lineage_contracts() -> None:
     assert table_kind("kol_summary") == "summary"
     assert table_kind("nppes_radar_events") == "summary"
     assert table_kind("serving_practice_provider_sites") == "serving"
+    assert MART_CONTRACT_BY_TABLE[
+        "serving_practice_provider_sites"
+    ].authorized_routes == ("/practices/search",)
     assert table_kind("core_providers") == "mart"
 
 

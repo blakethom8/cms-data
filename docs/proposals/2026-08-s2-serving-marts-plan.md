@@ -1,7 +1,7 @@
 # S2 release-built serving marts plan
 
-> Status: S2.1-S2.3 merged; S2.4 candidate evidence complete — parity and performance pass, while
-> the promotion-capacity gate blocks preparation and cutover
+> Status: S2.1-S2.4 evidence complete — parity, performance, capacity, and route authorization pass;
+> immutable deployment preparation remains before the explicit cutover gate
 >
 > Production boundary: do not select, rebuild, amend, or supersede prepared S1 deployment
 > `deployment-20260814T002255Z-11131e3630`. S2 candidates remain isolated and unselected until a
@@ -248,8 +248,14 @@ byte over three trials. After materializing the location slice before specialty-
 the focused three-trial workload lowered p95 by 39.4% at concurrency 1 and 48.0% at concurrency 12,
 with zero failures and higher throughput. The S2 correctness and performance gates therefore pass.
 
-The capacity gate does not pass. The read-only retention preview projects 90.08% utilization when
-supplied the exact 20,951,347,200-byte candidate, above the 85% promotion block. The candidate stays
-unselected, the API selector stays `raw`, and serving authorization stays false until reviewed
-capacity cleanup and a separate authorization/preparation change. See the
+The initial capacity gate did not pass: the read-only preview projected 90.08% utilization when
+supplied the exact 20,951,347,200-byte candidate. After explicit review and deletion of only the
+failed unpromoted first candidate, the preview passes at 78.5% current and 84.28% projected use,
+with the rollback floor intact.
+
+`/practices/search` is now the declared consumer. Deployment-local capability selection chooses the
+mart only when the selected warehouse contains it, so old warehouses remain on raw without a global
+environment change. The production manager accepts the managed-DAC policy only with its exact
+two-table scope, matching row counts, and passed mart validation. The successful candidate remains
+unselected pending immutable deployment preparation and the separate cutover approval. See the
 [candidate record](../operations/s2-managed-dac-candidate-2026-08-14.md).

@@ -11,7 +11,9 @@ This directory supports the
   evidence.
 - `raw-benchmark-trial-*.json` and `mart-benchmark-trial-*.json` are the three comparable focused
   performance trials per backend.
-- `retention-preview.json` records the read-only capacity block and review-only inventory.
+- `retention-preview.json` records the initial capacity block and review-only inventory.
+- `retention-preview-after-cleanup.json` records the passing gate after the failed candidate was
+  explicitly reviewed and removed.
 
 The generated artifacts intentionally retain exact loopback origins, process IDs, warehouse paths,
 release IDs, hashes, and timestamps needed to audit the rehearsal. They contain no API keys or
