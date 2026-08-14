@@ -80,8 +80,11 @@ Independent post-cutover checks proved:
 - Provider Search reports `ready` with its CMS data check `ok`; and
 - the predecessor is `superseded`, verified, and available for rollback.
 
-Post-cutover disk use remains 84.29%, below the 85% promotion block but above the 80% critical
-threshold. No further large warehouse build or copy should proceed without a new retention review.
+Post-cutover disk use was 84.29%, below the 85% promotion block but above the 80% critical
+threshold. The subsequent approved
+[`storage-retention cleanup`](storage-retention-cleanup-2026-08-14.md) removed one superseded
+warehouse artifact outside the rollback floor and reduced use to 78.99%. Every further large
+warehouse build or copy still requires a new retention review.
 
 ## Evidence
 

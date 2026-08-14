@@ -1,0 +1,2 @@
+device=2049 inode=4487991 links=2 bytes=4096 blocks=8 owner=root:dataops mode=550 path=/srv/cms-data-platform/production-artifacts/warehouses/warehouse-20260723T000948Z-24c46c1cda
+device=2049 inode=4487992 links=1 bytes=20091252736 blocks=37555864 owner=root:dataops mode=440 path=/srv/cms-data-platform/production-artifacts/warehouses/warehouse-20260723T000948Z-24c46c1cda/warehouse.duckdb

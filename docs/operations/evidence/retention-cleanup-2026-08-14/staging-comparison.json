@@ -1,0 +1,129 @@
+{
+  "baseline": {
+    "byte_size": 20093349888,
+    "database_path": "/srv/cms-data-platform/production-artifacts/warehouses/warehouse-20260722T010607Z-ce61bf5add/warehouse.duckdb",
+    "sha256": "32b5031d875ad3a1c32df1c31a2d62396c3d23d0ba811ec2bcf4c480bb76ed94"
+  },
+  "candidate": {
+    "byte_size": 20091252736,
+    "database_path": "/srv/cms-data-platform/refresh-20260721/releases/warehouse-20260723T000948Z-24c46c1cda/warehouse.duckdb",
+    "sha256": "b8af099ef264883160797e8d5799b788681e085a53db912975de702e52f59ed7"
+  },
+  "changed_tables": {
+    "pecos_enrollment_practice_locations": {
+      "baseline_rows": null,
+      "candidate_rows": 1080813
+    },
+    "pecos_provider_organizations": {
+      "baseline_rows": null,
+      "candidate_rows": 3857023
+    },
+    "raw_pecos_practice_location": {
+      "baseline_rows": null,
+      "candidate_rows": 1080813
+    },
+    "raw_pecos_reassignment": {
+      "baseline_rows": null,
+      "candidate_rows": 3857023
+    }
+  },
+  "comparison_policy": "ppef_additive_v1",
+  "duckdb_version": "1.4.4",
+  "evidence_mismatches": [],
+  "failed_requirements": [],
+  "generated_at": "2026-07-23T00:14:21+00:00",
+  "pipeline_code_commit": "8f7ddc466a1a1c8f44ce115fa75048cac08f30fc",
+  "representative_affiliations": [
+    {
+      "affiliation_source": "cms_reassignment_legal_name_state",
+      "confidence_level": "medium",
+      "hospital_name": "MERITUS MEDICAL CENTER INC",
+      "hospital_npi": "1942281266",
+      "hospital_state": "MD",
+      "npi": "1003000126"
+    },
+    {
+      "affiliation_source": "cms_reassignment_legal_name_state",
+      "confidence_level": "medium",
+      "hospital_name": "THE CLEVELAND CLINIC FOUNDATION",
+      "hospital_npi": "1679525919",
+      "hospital_state": "OH",
+      "npi": "1003005257"
+    },
+    {
+      "affiliation_source": "cms_reassignment_legal_name_state",
+      "confidence_level": "medium",
+      "hospital_name": "HENDERSON COUNTY HOSPITAL CORPORATION",
+      "hospital_npi": "1144247982",
+      "hospital_state": "NC",
+      "npi": "1003006149"
+    },
+    {
+      "affiliation_source": "cms_reassignment_legal_name_state",
+      "confidence_level": "medium",
+      "hospital_name": "INNOVIS HEALTH LLC",
+      "hospital_npi": "1215125463",
+      "hospital_state": "ND",
+      "npi": "1003006651"
+    },
+    {
+      "affiliation_source": "cms_reassignment_legal_name_state",
+      "confidence_level": "medium",
+      "hospital_name": "ST MARYS REGIONAL HEALTH CENTER",
+      "hospital_npi": "1679561088",
+      "hospital_state": "MN",
+      "npi": "1003006651"
+    },
+    {
+      "affiliation_source": "cms_reassignment_legal_name_state",
+      "confidence_level": "medium",
+      "hospital_name": "SAINT ALPHONSUS REGIONAL MEDICAL CENTER INC",
+      "hospital_npi": "1992736649",
+      "hospital_state": "ID",
+      "npi": "1003006768"
+    },
+    {
+      "affiliation_source": "cms_reassignment_legal_name_state",
+      "confidence_level": "medium",
+      "hospital_name": "FRIO HOSPITAL ASSOCIATION",
+      "hospital_npi": "1447574819",
+      "hospital_state": "TX",
+      "npi": "1003007295"
+    },
+    {
+      "affiliation_source": "cms_reassignment_legal_name_state",
+      "confidence_level": "medium",
+      "hospital_name": "ANIMAS SURGICAL HOSPITAL LLC",
+      "hospital_npi": "1508842964",
+      "hospital_state": "CO",
+      "npi": "1003007360"
+    },
+    {
+      "affiliation_source": "cms_reassignment_legal_name_state",
+      "confidence_level": "medium",
+      "hospital_name": "LEGACY MERIDIAN PARK HOSPITAL",
+      "hospital_npi": "1184647620",
+      "hospital_state": "OR",
+      "npi": "1003007907"
+    },
+    {
+      "affiliation_source": "cms_reassignment_legal_name_state",
+      "confidence_level": "medium",
+      "hospital_name": "LEGACY MOUNT HOOD MEDICAL CENTER",
+      "hospital_npi": "1255354700",
+      "hospital_state": "OR",
+      "npi": "1003007907"
+    }
+  ],
+  "required_candidate_counts": {
+    "core_providers": 7373208,
+    "hospital_affiliations": 139775,
+    "practice_locations": 2341984,
+    "raw_hospital_enrollments": 9175
+  },
+  "schema_version": 2,
+  "state": "passed",
+  "unchanged_table_count": 37,
+  "unexpected_differences": [],
+  "warehouse_release_id": "warehouse-20260723T000948Z-24c46c1cda"
+}

@@ -120,13 +120,19 @@ Acceptance gates:
 
 - [ ] Attribute growth by production deployments, warehouse releases, refresh workspaces, downloads,
   AACT snapshots, reporting exports, Docker data, logs, and other material directories.
-- [ ] Define minimum free-space and percentage thresholds for warning, critical, and promotion block.
+- [x] Define minimum free-space and percentage thresholds for warning, critical, and promotion block.
 - [ ] Define retention separately for active/rollback releases, verified baselines, downloads,
   failed candidates, refresh workspaces, reports, and logs.
-- [ ] Add a read-only retention preview that names exact candidate paths, sizes, evidence state, and
+- [x] Add a read-only retention preview that names exact candidate paths, sizes, evidence state, and
   recoverability before any deletion.
-- [ ] Rehearse the approved cleanup against non-production material, then perform production cleanup
+- [x] Rehearse the approved cleanup against non-production material, then perform production cleanup
   only with explicit approval and a dated record.
+
+The first approved production cleanup is recorded in
+[`operations/storage-retention-cleanup-2026-08-14.md`](../operations/storage-retention-cleanup-2026-08-14.md).
+The remaining gates are comprehensive attribution outside the managed platform roots and
+category-specific retention for downloads, failed candidates, refresh workspaces, reports, logs,
+and off-host recovery copies.
 
 ### H3. Backup and restore proof
 

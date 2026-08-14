@@ -1,0 +1,25 @@
+{
+  "backup_id": "20260811T015700Z-radar-serving-baseline",
+  "backup_identity": {
+    "byte_size": 20091252736,
+    "device": 2049,
+    "inode": 4727755,
+    "mtime_ns": 1786413383070309942
+  },
+  "backup_path": "/srv/cms-data-platform/backups/20260811T015700Z-radar-serving-baseline/warehouse.duckdb",
+  "created_at": "2026-08-11T01:56:23+00:00",
+  "schema_version": 1,
+  "sha256": "b8af099ef264883160797e8d5799b788681e085a53db912975de702e52f59ed7",
+  "source_identity": {
+    "byte_size": 20091252736,
+    "device": 2049,
+    "inode": 4487992,
+    "mtime_ns": 1784765799473895146
+  },
+  "source_path": "/srv/cms-data-platform/production-artifacts/warehouses/warehouse-20260723T000948Z-24c46c1cda/warehouse.duckdb",
+  "validation": {
+    "core_providers": 7373208,
+    "read_only_open": "passed",
+    "table_count": 41
+  }
+}
