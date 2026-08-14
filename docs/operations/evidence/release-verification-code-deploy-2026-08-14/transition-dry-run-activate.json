@@ -1,0 +1,26 @@
+{
+  "artifact_root": "/srv/cms-data-platform/production-artifacts",
+  "code_commit": "b80d56510757770f1f6f6d90492053948567b08b",
+  "code_fingerprint": "sha256:b58e72bb30a0f4b15735d237e5a4fc315a7e2717d9e220608075f9afa07ca490",
+  "deployment_id": "deployment-20260814T172445Z-3cd965d04e",
+  "deployment_kind": "warehouse_release",
+  "error_summary": null,
+  "prepared_at": "2026-08-14T17:24:45+00:00",
+  "previous_deployment_id": "deployment-20260814T160153Z-45ab9d2d38",
+  "rollback_at": null,
+  "runtime_fingerprint": "sha256:82370f7e4b25f1a907a92eda5c1097302a6f88936ad59319206b4ade3cc7c347",
+  "selected_at": null,
+  "state": "prepared",
+  "superseded_at": null,
+  "targets": {
+    "code": "/srv/cms-data-platform/production-artifacts/code/b80d56510757770f1f6f6d90492053948567b08b-release-verification-1",
+    "runtime": "/srv/cms-data-platform/production-artifacts/runtimes/runtime-candidate-8985e8a-c26024b3",
+    "warehouse": "/srv/cms-data-platform/production-artifacts/warehouses/warehouse-20260814T025428Z-5dac630227/warehouse.duckdb"
+  },
+  "verification_summary": {},
+  "verified_at": null,
+  "warehouse_byte_size": 20951347200,
+  "warehouse_pipeline_commit": "bc7b114187071691f55bb18bf182c3a3477a78bd",
+  "warehouse_release_id": "warehouse-20260814T025428Z-5dac630227",
+  "warehouse_sha256": "bf7d2381c8c9a683497a7dcc5d64c87ccfb3359fe5ee77d61e74ca3bffb1fa02"
+}

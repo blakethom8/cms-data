@@ -1,0 +1,29 @@
+{
+  "files": [
+    {
+      "byte_size": 531,
+      "group_gid": 1000,
+      "mode": "0o440",
+      "owner_uid": 0,
+      "path": "/etc/cms-data/cms-api.env",
+      "sha256": "cd06ff40b5cb782add66997f14228190e6c3706629e7e4e70d3aed8061fe8eb3"
+    },
+    {
+      "byte_size": 294,
+      "group_gid": 1000,
+      "mode": "0o640",
+      "owner_uid": 0,
+      "path": "/etc/aact/reader.env",
+      "sha256": "df59c050660355ae1d2e4ac6b511ae152aad2f193f6dc2dc4085f8ebbab2f78b"
+    },
+    {
+      "byte_size": 117,
+      "group_gid": 1000,
+      "mode": "0o640",
+      "owner_uid": 0,
+      "path": "/etc/cms-data/production-release.env",
+      "sha256": "16dd8d5a3eaeef8c6a93e362b38ba889c602d095c71e4931446f1ef778fe5110"
+    }
+  ],
+  "schema_version": 1
+}

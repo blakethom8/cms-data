@@ -1,8 +1,9 @@
 # S2 managed-DAC practice candidate — 2026-08-14
 
 > **Decision:** production cutover completed successfully for the first `cms_enrollment`
-> practice-search serving mart. The selected deployment is
-> `deployment-20260814T160153Z-45ab9d2d38`; its predecessor remains rollback-ready.
+> practice-search serving mart. A subsequent code-only release-verification deployment is now
+> selected as `deployment-20260814T172445Z-3cd965d04e`; the original S2 deployment
+> `deployment-20260814T160153Z-45ab9d2d38` remains verified and rollback-ready.
 
 ## Outcome
 
@@ -23,7 +24,8 @@ The selected production deployment remained
 `NRestarts` stayed zero, and `/health` continued to report 7,395,713 core providers. Both isolated
 services were bound to loopback, run at reduced CPU/I/O priority, and stopped after evidence
 capture. Ports 18081 and 18082 were no longer listening at rehearsal handoff. The later approved
-cutover replaced that process once; production now runs the selected candidate as PID `3990931`.
+cutover replaced that process once as PID `3990931`. The later release-verification code-only
+deployment reused the same runtime and warehouse and now runs as PID `4002795`.
 
 ## Managed source identity
 
@@ -233,15 +235,30 @@ candidate bytes, and the active-plus-two floor intact. This is below the 85% pro
 above the 80% warning threshold, so another large warehouse candidate requires a fresh retention
 review.
 
-One non-blocking metadata issue was captured. The control-plane ledger is verified at
+One non-blocking metadata issue was captured during the initial S2 cutover. The control-plane
+ledger is verified at
 `2026-08-14T16:48:41+00:00`, but the live `/release` response reports `verified_at: null`. Smoke
 populated the process-local release metadata cache before the manager recorded verification, and
 the successful value remains cached for that process lifetime. Served release identity, data,
 hashes, ETag, and route behavior are correct. Production was not restarted a second time merely to
 refresh this timestamp. The follow-up serving-code change makes a selected-but-unverified resolver
 refresh only `verified_at` from the same deployment's ledger and refuses metadata from a repointed
-bundle. The cutover process retains its original cached value until the next normal immutable code
-deployment; no standalone production restart was introduced for this informational field.
+bundle.
+
+## Code-only release-verification follow-up
+
+PR #55 landed that correction as serving commit `b80d56510757770f1f6f6d90492053948567b08b`.
+The approved immutable code-only cutover selected
+`deployment-20260814T172445Z-3cd965d04e` at `2026-08-14T17:33:41+00:00`. It reused the exact S2
+warehouse and runtime, changed no schema, data, dependency lock, API contract, or Provider Search
+RPC, and preserved `deployment-20260814T160153Z-45ab9d2d38` as its verified rollback predecessor.
+
+The new process reports the expected `verified_at: 2026-08-14T17:34:46+00:00`. `/release` sends
+`Cache-Control: no-store` without an ETag and returns a fresh `200` even when presented with a data
+route ETag. Data routes retain deployment-scoped ETags and conditional `304` responses. The final
+15-check smoke passed, Provider Search remained ready with CMS data `ok`, and the production
+service is active on PID `4002795` with zero restarts. The complete follow-up record is
+[`release-verification-code-deploy-2026-08-14.md`](release-verification-code-deploy-2026-08-14.md).
 
 ## Evidence
 

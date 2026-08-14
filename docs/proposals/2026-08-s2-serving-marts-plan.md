@@ -3,8 +3,9 @@
 > Status: S2.1-S2.4 complete; the explicitly approved production cutover completed successfully on
 > 2026-08-14 and the first practice-search serving mart is live
 >
-> Production state: `deployment-20260814T160153Z-45ab9d2d38` is selected and verified;
-> `deployment-20260811T155814Z-6baa26aa69` remains the rollback-ready predecessor.
+> Production state: code-only deployment `deployment-20260814T172445Z-3cd965d04e` is selected and
+> verified; S2 deployment `deployment-20260814T160153Z-45ab9d2d38` remains the rollback-ready
+> predecessor. Both use the same live S2 warehouse and serving mart.
 
 ## Decision
 
@@ -267,3 +268,9 @@ post-copy capacity counts only bytes not already allocated. The corrected capaci
 cutover selected and verified the candidate, the production smoke passed all 15 checks, and
 Provider Search remained ready. See the
 [candidate record](../operations/s2-managed-dac-candidate-2026-08-14.md).
+
+A subsequent immutable code-only deployment landed the `/release` verification-cache correction
+from PR #55 without changing the warehouse, schema, dependencies, API contract, or Provider Search
+RPCs. Production now selects `deployment-20260814T172445Z-3cd965d04e`; the original S2 deployment
+is its verified rollback predecessor. See the
+[code-only deployment record](../operations/release-verification-code-deploy-2026-08-14.md).

@@ -1,0 +1,12 @@
+{
+  "aact_transition_sentinel": false,
+  "cwd": "/srv/cms-data-platform/production-artifacts/code/b80d56510757770f1f6f6d90492053948567b08b-release-verification-1",
+  "executable": "/usr/bin/python3.12",
+  "nrestarts": 0,
+  "pid": 4002795,
+  "schema_version": 1,
+  "selector": "/srv/cms-data-platform/production/releases/deployment-20260814T172445Z-3cd965d04e",
+  "transition_sentinel": false,
+  "warehouse": "/srv/cms-data-platform/production-artifacts/warehouses/warehouse-20260814T025428Z-5dac630227/warehouse.duckdb",
+  "warehouse_open": true
+}
