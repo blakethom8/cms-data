@@ -2001,8 +2001,14 @@ def build_nppes_serving_practice_warehouse_release(
         backup_manifest_path
     )
     commit = code_commit or pipeline_commit()
-    if commit is None:
-        raise ReleaseError("A full pipeline Git commit is required to build a release")
+    if (
+        commit is None
+        or len(commit) != 40
+        or any(character not in "0123456789abcdef" for character in commit.lower())
+    ):
+        raise ReleaseError(
+            "A full 40-character pipeline Git commit is required to build a release"
+        )
     release_store_path = _release_store_path(data_root)
     document = WarehouseReleaseStore(release_store_path).load()
     baseline_release = _find_release(document, baseline_warehouse_release_id)

@@ -981,7 +981,7 @@ def test_nppes_serving_release_cli_builds_staging_candidate(
     data_root, backup_manifest, baseline_release_id = (
         _nppes_serving_practice_baseline(tmp_path)
     )
-    monkeypatch.setattr("pipeline.releases.pipeline_commit", lambda: CODE_COMMIT)
+    monkeypatch.setattr("pipeline.releases.pipeline_commit", lambda: None)
 
     exit_code = main(
         [
@@ -996,6 +996,8 @@ def test_nppes_serving_release_cli_builds_staging_candidate(
             str(data_root),
             "--data-year",
             "2026",
+            "--code-commit",
+            CODE_COMMIT,
             "--memory-limit-gb",
             "1",
             "--threads",
@@ -1009,6 +1011,25 @@ def test_nppes_serving_release_cli_builds_staging_candidate(
     assert payload["release"]["validation_details"]["comparison_policy"] == (
         "serving_practice_nppes_additive_v1"
     )
+
+
+def test_nppes_serving_release_rejects_non_full_explicit_commit(
+    tmp_path: Path,
+) -> None:
+    data_root, backup_manifest, baseline_release_id = (
+        _nppes_serving_practice_baseline(tmp_path)
+    )
+
+    with pytest.raises(ReleaseError, match="full 40-character pipeline Git commit"):
+        build_nppes_serving_practice_warehouse_release(
+            data_root=data_root,
+            baseline_warehouse_release_id=baseline_release_id,
+            backup_manifest_path=backup_manifest,
+            data_year=2026,
+            code_commit="not-a-full-commit",
+            memory_limit_gb=1,
+            threads=1,
+        )
 
 
 def test_managed_dac_serving_dependency_provenance_fails_closed() -> None:
