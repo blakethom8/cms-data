@@ -72,6 +72,10 @@ def _database() -> duckdb.DuckDBPyConnection:
              'Internal Medicine', 'LOS ANGELES', 'CA', 'UCLA', 2005, 'Y',
              'CARDIO GROUP', 'PAC-1', 20, '10 MAIN ST', 'SUITE 200',
              '90001', '111', 'dac-run', '2026-07'),
+            ('1111111111', 'JANE', 'SMITH', 'MD', 'Internal Medicine',
+             'Cardiology', 'PASADENA', 'CA', 'USC', 2004, 'N',
+             'CARDIO GROUP', 'PAC-1', 20, '10 MAIN ST', 'SUITE 200',
+             '90001', '111', 'dac-run', '2026-07'),
             ('2222222222', 'ALEX', 'RIVER', 'DO', 'Cardiology', NULL,
              'LOS ANGELES', 'CA', 'USC', 2010, 'N', 'CARDIO GROUP',
              'PAC-1', 20, '10 MAIN ST', NULL, '90001', '222',
@@ -120,6 +124,9 @@ def test_profile_core_marts_are_idempotent_and_byte_shape_equivalent() -> None:
         "PAC-0",
         "PAC-2",
     ]
+    assert raw["header"]["specialty"] == "Cardiology"
+    assert raw["header"]["secondary_specialties"] == "Internal Medicine"
+    assert raw["header"]["med_school"] == "UCLA"
     assert counts == {
         "serving_provider_profile_headers": 2,
         "serving_provider_profile_locations": 2,
@@ -240,7 +247,7 @@ def test_profile_auto_selector_falls_back_or_uses_the_complete_capability(
         (
             "raw_dac_national",
             "source_run_id",
-            '"NPI" = \'1111111111\'',
+            '"NPI" = \'1111111111\' AND pri_spec = \'Cardiology\'',
             "DAC",
         ),
         (
