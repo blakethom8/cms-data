@@ -174,6 +174,29 @@ def test_preview_rejects_unsafe_threshold_order(
         )
 
 
+def test_preview_accepts_zero_bytes_after_candidate_artifact_is_allocated(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    platform_root, _ = _platform(tmp_path, monkeypatch)
+
+    report = retention.build_retention_preview(platform_root, candidate_bytes=0)
+
+    assert report["promotion_capacity_gate"]["required_candidate_bytes"] == 0
+    assert report["promotion_capacity_gate"]["projected_used_percent"] == report["disk"][
+        "used_percent"
+    ]
+    assert report["promotion_capacity_gate"]["allowed"] is True
+
+
+def test_preview_rejects_negative_candidate_bytes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    platform_root, _ = _platform(tmp_path, monkeypatch)
+
+    with pytest.raises(retention.RetentionError, match="non-negative"):
+        retention.build_retention_preview(platform_root, candidate_bytes=-1)
+
+
 def test_preview_fails_closed_when_selected_pointer_does_not_match_ledger(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

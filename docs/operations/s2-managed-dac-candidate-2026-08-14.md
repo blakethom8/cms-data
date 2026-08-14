@@ -1,8 +1,8 @@
 # S2 managed-DAC practice candidate — 2026-08-14
 
-> **Decision:** response parity, performance, and post-cleanup capacity pass for the first
-> `cms_enrollment` practice-search serving mart. The candidate remains unselected and no production
-> cutover is authorized.
+> **Decision:** response parity, performance, capacity, immutable preparation, and isolated
+> production-bundle rehearsal pass for the first `cms_enrollment` practice-search serving mart.
+> The candidate remains unselected and no production cutover is authorized.
 
 ## Outcome
 
@@ -13,7 +13,7 @@ The corrected immutable warehouse candidate is
   `bf7d2381c8c9a683497a7dcc5d64c87ccfb3359fe5ee77d61e74ca3bffb1fa02`;
 - size: 20,951,347,200 bytes;
 - release-build code: `bc7b114187071691f55bb18bf182c3a3477a78bd`;
-- route-test code: `91174f823a7a936e16408a1fdc177442fb30add1`;
+- authorized serving code: `7fb735cdf0dac96dd26201277564be2740810170`;
 - `raw_dac_national`: 3,388,151 rows;
 - `serving_practice_provider_sites`: 3,212,860 rows; and
 - state: validation passed, promotion state `not_promoted`, serving authorization false.
@@ -54,12 +54,14 @@ invalid state/ZIP values, empty specialty lists, invalid organization identity r
 source-value provenance gaps. The candidate is 381,681,664 bytes (1.86%) larger than the selected
 warehouse.
 
-The first candidate, `warehouse-20260814T023853Z-9b87f3e486`, remains preserved and unselected. It
-passed the warehouse comparison but failed API compatibility because the current CMS file publishes
-`Cred` and `Telehlth` while the legacy physical table used whitespace-suffixed names. The managed
-loader now preserves established physical names only when publisher columns differ by unambiguous
-leading/trailing whitespace and fails closed on ambiguous normalization. The corrected candidate
-was rebuilt rather than amended.
+The first candidate, `warehouse-20260814T023853Z-9b87f3e486`, passed the warehouse comparison but
+failed API compatibility because the current CMS file publishes `Cred` and `Telehlth` while the
+legacy physical table used whitespace-suffixed names. The managed loader now preserves established
+physical names only when publisher columns differ by unambiguous leading/trailing whitespace and
+fails closed on ambiguous normalization. The corrected candidate was rebuilt rather than amended.
+After the corrected candidate passed and the failed release was proven unpromoted, unreferenced,
+closed by every process, and outside the rollback floor, explicit approval authorized deletion of
+only the failed release directory.
 
 ## Response parity
 
@@ -128,6 +130,70 @@ counts, and passed mart validation. The API's deployment-local `auto` selector u
 the selected immutable warehouse contains it and falls back to raw for predecessor warehouses.
 This avoids a global configuration change that could break rollback. Preparation, selection, and
 cutover remain separate steps.
+
+## Immutable production bundle rehearsal
+
+Authorization merged through PR #51 as serving commit
+`7fb735cdf0dac96dd26201277564be2740810170`. The API dependency lock is unchanged from the selected
+serving commit, so preparation reused runtime
+`runtime-candidate-8985e8a-c26024b3` with fingerprint
+`sha256:82370f7e4b25f1a907a92eda5c1097302a6f88936ad59319206b4ade3cc7c347`.
+The clean detached code artifact is root-owned and sealed at
+`production-artifacts/code/7fb735cdf0dac96dd26201277564be2740810170-s2-managed-dac-1`; its
+fingerprint is `sha256:61173ba25fdde0f510f1ebf6d7cf2ac2a5dd604f59972f521951229ce67f2398`.
+
+The staging warehouse was copied to a distinct, non-reflinked production inode at
+`production-artifacts/warehouses/warehouse-20260814T025428Z-5dac630227/warehouse.duckdb`. The copy
+is `root:dataops` mode `0440`, has link count one, and matches the approved size and SHA-256 above.
+Prepare dry-run passed, then real preparation created unselected deployment
+`deployment-20260814T160153Z-45ab9d2d38`, targeting verified predecessor
+`deployment-20260811T155814Z-6baa26aa69`.
+
+The deployment-scoped source snapshot contains the predecessor's complete 20-record provenance plus
+the new active DAC run, rather than incorrectly reducing the snapshot to the targeted builder's
+dependency closure. Its 21-record SHA-256 is
+`ea88ca04e7be81288d44dd31e4034d2fe377dfe53674f423d197d8d4f0af19fb`. Offline fixture discovery
+found all 19 source families and no unknown/unavailable sources; fixtures intentionally reported all
+19 stale. Live discovery completed without error and reported 8 current, 11 stale, and zero unknown
+or unavailable sources. Those 11 existing freshness findings are advisory and are not introduced by
+the DAC candidate.
+
+The isolated candidate ran as `dataops` on `127.0.0.1:18080` with its bundle warehouse path bound at
+process execution. The final canonical smoke passed all 15 checks and is sealed with SHA-256
+`5e38d8ccc5863b1b2021401e2c24f56cd7631fbcc941538ac0e1c26340f19b13`. A separate read-only check
+proved configuration `auto` resolves to `mart`, all 17 required mart columns are present, and the raw
+and mart row counts match release evidence; its SHA-256 is
+`deab8de2dba8dc7f68c9d51c2e9fd7ce4ff1655a38574cc529f2502801610f32`. The serving-contract check
+proved the candidate release ID, warehouse SHA/pipeline identity, 19 source vintages,
+representation version 3, candidate ETag, and a `304` conditional response; its SHA-256 is
+`e0596923a0df6c66b3ee3f3bc17d484247eaa618b96c65e7f2861b1cf526a09a`.
+
+Three fail-closed smoke attempts were retained rather than hidden. The first showed that this
+targeted release's manifest lacked inherited `smoke_table_counts`. The second correctly received
+`403` after raw/mart tables were incorrectly added to the arbitrary-SQL count set. The third showed
+that the legacy shared key cannot call `/query`; the passing run used the existing allowlisted
+`command-center` scoped key without exposing its value. Follow-up hardening makes targeted builders
+inherit query-authorized baseline smoke counts, requires a named smoke consumer in the runbook, and
+treats `--candidate-bytes` as additional unallocated storage so a prepared artifact is not counted
+twice.
+
+Activation and rollback dry-runs both passed, with evidence SHA-256 values
+`379a6b2510b1f1d27362e2253487fad86357bae208de876adfbd19558809e8ca` and
+`5cfa961253725a724b0cb7011892311bf2648a043df6db2cb44e14c1cc7c0812`. The rehearsal process then
+stopped, port 18080 was released, and the sealed code remained clean with zero writable or bytecode
+paths. Production still selects the verified predecessor on PID `3240475` with zero restarts; the
+control plane is healthy, the transition sentinel is absent, and `production-ops/current` was not
+changed.
+
+The independent production warehouse copy raises actual filesystem use to about 84.28%, which is
+below the 85% promotion threshold and already includes every candidate byte. The pre-copy gate had
+already proved the same final utilization. A new post-copy preview must therefore pass `0`
+additional candidate bytes after the retention hardening lands; passing 20,951,347,200 again would
+double-count an artifact that is already allocated.
+
+The remaining boundary is explicit cutover approval. Before asking for it, land the promotion
+hardening, run the corrected post-copy capacity preview, install but do not select the immutable
+operations package, reconfirm all hashes and live state, and preserve the prepared predecessor link.
 
 ## Evidence
 
