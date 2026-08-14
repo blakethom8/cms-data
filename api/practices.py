@@ -984,7 +984,7 @@ def get_practices_router(
                 ["candidate_specialty ILIKE ?"] * len(patterns)
             )
             sql = f"""
-            with matched as (
+            with matched as materialized (
                 select m.*,
                        list_filter(
                            m.specialties,
