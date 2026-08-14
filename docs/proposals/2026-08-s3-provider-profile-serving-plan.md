@@ -1,11 +1,11 @@
 # S3 provider-profile serving marts plan
 
-> **Last reviewed: 2026-08-14** · **Status: S3.1 merged; S3.2 preflight capacity-blocked**
+> **Last reviewed: 2026-08-14** · **Status: S3.2 evaluated; core slice retained staging-only**
 >
 > **Production state:** unchanged. Provider-profile core queries still default to the raw oracle.
-> No provider-profile candidate has been built from production data, prepared, or selected.
-> The [production-data preflight](../operations/s3-provider-profile-preflight-2026-08-14.md) proves
-> source readiness and records the capacity prerequisite and a raw-oracle parity fix.
+> One isolated candidate was built and evaluated, but was never prepared or selected. It missed the
+> complete-route performance gates and is superseded by a deterministic-header fix. See the
+> [candidate evaluation](../operations/s3-provider-profile-candidate-2026-08-14.md).
 
 ## Decision
 
@@ -90,6 +90,19 @@ Before considering authorization:
 
 If only the three component queries improve but the full profile does not materially improve, keep
 the code dormant and proceed to the next profile projection rather than cutting over prematurely.
+
+### S3.2 result
+
+That is the measured outcome. The core slice improved provider-profile p95 by 22.10% at concurrency
+1 but only 8.57% at concurrency 12, versus a 20% requirement at both levels. Complete-profile
+operator time fell 24.18% for the rich case and 17.97% for the standard case, below the alternate
+30% gate. The mart cut mixed-workload concurrency-12 overloads from 21 to 10 across three trials,
+but did not eliminate them. Production remains raw.
+
+The evaluation also found and fixed stable group ordering and deterministic coherent DAC header
+selection. Because the latter merged after the candidate build, the candidate is not compatible
+with current parity semantics. The next candidate must include that fix plus the utilization,
+top-services, and top-drugs slice before these gates are rerun.
 
 ## S3.3 — explicit authorization and cutover
 

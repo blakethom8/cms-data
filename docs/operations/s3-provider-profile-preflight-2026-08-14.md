@@ -1,10 +1,11 @@
 # S3 provider-profile production-data preflight — 2026-08-14
 
-> **Decision update:** source readiness, capacity, and explicit reassignment-source provenance now
-> pass. The first production-data build failed closed on two NPPES international addresses with no
-> ZIP; its incomplete copy was removed after preserving failure evidence. Production traffic, the
-> selected deployment, and its warehouse were not changed. No valid staging candidate, production
-> artifact, deployment, or route switch was created.
+> **Decision update:** source readiness, capacity, and explicit reassignment-source provenance
+> passed. The first build failed closed on two NPPES international addresses with no ZIP; the fix
+> and retry produced a valid isolated candidate. Its later evaluation did not pass the complete-
+> route performance gates and found a deterministic-header correction that supersedes its contents.
+> It was not prepared, authorized, or selected. See the
+> [candidate evaluation](s3-provider-profile-candidate-2026-08-14.md).
 
 ## Starting identity
 
@@ -157,11 +158,13 @@ internal missing-ZIP sentinels only for the mart key. The visible street, city, 
 null ZIP remain unchanged; DAC and NPPES null keys cannot incorrectly merge; and a null-key DAC row
 still cannot acquire roster evidence through a join that is null in the raw query.
 
-## Next safe sequence
+## Completed continuation
 
-1. Merge and seal the missing-ZIP key fix after the full suite and CI pass.
-2. Re-run the exact candidate-capacity preview and build one isolated provider-profile candidate
-   with the already adopted explicit reassignment run.
-3. Validate its exact three-table scope, contracts, invariant fingerprints, actual size, raw/mart
-   parity, query plans, and concurrency results.
-4. Stop before production preparation, policy authorization, or cutover and present the evidence.
+PR #69 merged the missing-ZIP fix, and the retry built candidate
+`warehouse-20260814T222518Z-62c1707278`. Exact scope, contracts, fingerprints, parity, plans,
+concurrency, integrity, and capacity were evaluated. PRs #70 and #71 fixed deterministic group
+ordering and coherent DAC header selection discovered by those gates. The candidate did not meet
+the complete-route latency or operator-work threshold, so work stopped before production
+preparation, policy authorization, or cutover. The next development slice is utilization summary,
+top services, and top drugs; the full outcome and measurements are in the
+[candidate evaluation](s3-provider-profile-candidate-2026-08-14.md).

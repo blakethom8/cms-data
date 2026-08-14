@@ -92,9 +92,12 @@ baseline, matching verified backup, full source commit, complete NPPES/DAC/reass
 periods, and bounded resources. The `serving_provider_profile_core_additive_v1` comparison policy
 allows exactly those three tables to differ and fingerprints every invariant table. The API contains
 a complete-capability selector, but `raw` remains the default and the production manager does not
-yet authorize this policy. Production-data parity, performance, capacity, and rollback evidence are
-the next gates. Hospital affiliations stay on their existing path until their legacy source inputs
-have managed manifest coverage. See the
+yet authorize this policy. The first production-data candidate validated all three contracts and
+showed material component and route gains, but missed both complete-route performance gates and was
+superseded by a deterministic DAC-header fix. It was not prepared or selected. The next candidate
+will add utilization, top-services, and top-drugs projections before repeating parity, performance,
+capacity, and rollback gates. Hospital affiliations stay on their existing path until their legacy
+source inputs have managed manifest coverage. See the
 [S3 provider-profile plan](proposals/2026-08-s3-provider-profile-serving-plan.md).
 
 ## Validation states
@@ -129,5 +132,5 @@ authorization.
 
 The [S3 provider-profile plan](proposals/2026-08-s3-provider-profile-serving-plan.md) extends that
 pattern without changing the public endpoint. Three core/access projections are implemented and
-fixture-parity tested, but remain staging-only until production-data evidence justifies a separate
-authorization and cutover.
+fixture-parity tested. Their first production-data evaluation improved latency but did not meet the
+route-switch threshold, so they remain staging-only while the next profile slice is developed.
