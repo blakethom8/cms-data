@@ -727,6 +727,16 @@ def test_managed_dac_serving_release_replaces_only_dac_and_builds_mart(
     document.releases[0].validation_details["source_periods"] = {
         "nppes_monthly_v2": "2026-08"
     }
+    baseline_smoke_counts = {
+        "core_providers": 7,
+        "nppes_radar_events": 3,
+        "nppes_radar_provider_state": 8,
+        "nppes_radar_releases": 2,
+        "raw_nppes": 9,
+    }
+    document.releases[0].validation_details[
+        "smoke_table_counts"
+    ] = baseline_smoke_counts
     store.save(document)
     dac_manifest = _stage_managed_dac(data_root)
 
@@ -766,6 +776,7 @@ def test_managed_dac_serving_release_replaces_only_dac_and_builds_mart(
     assert details["source_periods"]["cms_dac_national"] == "2026-07-31"
     assert details["source_periods"]["cms_physician_by_provider"] == "2024"
     assert details["source_periods"]["cms_part_d_by_provider"] == "2024"
+    assert details["smoke_table_counts"] == baseline_smoke_counts
     candidate = duckdb.connect(str(result.database_path), read_only=True)
     try:
         raw = candidate.execute(

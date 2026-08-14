@@ -329,8 +329,8 @@ def build_retention_preview(
     required_candidate_bytes = (
         selected.warehouse_byte_size if candidate_bytes is None else candidate_bytes
     )
-    if required_candidate_bytes <= 0:
-        raise RetentionError("candidate_bytes must be positive")
+    if required_candidate_bytes < 0:
+        raise RetentionError("candidate_bytes must be non-negative")
     projected_used_percent = (disk.used + required_candidate_bytes) / disk.total * 100
     if used_percent >= critical_percent:
         disk_state = "critical"
@@ -432,7 +432,14 @@ def build_parser() -> argparse.ArgumentParser:
     preview.add_argument("--platform-root", required=True, type=Path)
     preview.add_argument("--production-root", type=Path)
     preview.add_argument("--keep-previous", type=int, default=DEFAULT_KEEP_PREVIOUS)
-    preview.add_argument("--candidate-bytes", type=int)
+    preview.add_argument(
+        "--candidate-bytes",
+        type=int,
+        help=(
+            "additional candidate bytes not already allocated on this filesystem; "
+            "use 0 after the immutable production artifact has been copied"
+        ),
+    )
     preview.add_argument("--warning-percent", type=float, default=DEFAULT_WARNING_PERCENT)
     preview.add_argument("--critical-percent", type=float, default=DEFAULT_CRITICAL_PERCENT)
     preview.add_argument(

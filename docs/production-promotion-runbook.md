@@ -116,6 +116,7 @@ serves its original paths.
   --production-root /srv/cms-data-platform/production \
   --release-bundle /srv/cms-data-platform/production/releases/ROLLBACK_DEPLOYMENT_ID \
   --process-id ROLLBACK_REHEARSAL_PID \
+  --api-key-env CMS_SMOKE_API_KEY \
   --expected-core-providers ROLLBACK_CORE_COUNT \
   --expected-hospital-affiliations ROLLBACK_AFFILIATION_COUNT \
   --expected-affiliated-providers ROLLBACK_AFFILIATED_PROVIDER_COUNT \
@@ -156,6 +157,17 @@ Repeat without `--dry-run`, then start the prepared candidate bundle on a second
 port and run the same smoke command with candidate counts and `--release-bundle` pointing to the
 prepared bundle. Stop the temporary process after it passes. Export `PYTHONDONTWRITEBYTECODE=1` for
 every Python smoke, benchmark, or diagnostic command that imports from an immutable release checkout.
+The smoke key must resolve to a named consumer authorized by `CMS_QUERY_CONSUMERS` (normally
+`command-center`); the legacy shared key can prove normal routes but correctly receives `403` from
+the bounded warehouse-count query. Load the named key from the protected environment into
+`CMS_SMOKE_API_KEY` without printing it, and pass `--api-key-env CMS_SMOKE_API_KEY` to rehearsal and
+cutover.
+
+Targeted release manifests must retain the baseline's query-authorized `smoke_table_counts` even
+when their own `table_counts` contains only changed tables. Do not add raw or serving-only tables to
+the arbitrary-SQL smoke count set merely to count them: the query boundary should continue to reject
+those tables. Validate targeted changed-table counts from the sealed release/comparison evidence and
+a separate direct read-only candidate check instead.
 After sealing, check Git cleanliness with `GIT_OPTIONAL_LOCKS=0 git status --porcelain=v1`; a normal
 status invocation may refresh `.git/index` and violate the no-writable-path invariant.
 
@@ -184,17 +196,19 @@ rollback bundle.
 Immediately before changes, reconfirm the live PID, current database path/SHA-256, rollback artifact
 hashes, candidate artifact hashes, free disk, and clean production journal. Any mismatch stops.
 
-Run the retention and capacity preview from the selected immutable bundle, supplying the prepared
-candidate's byte size. Exit 1 blocks promotion because the rollback floor or projected disk gate is
-not satisfied; exit 2 means the preview itself could not prove a safe result. The command is
-read-only and has no delete mode.
+Run the retention and capacity preview from the selected immutable bundle, supplying only candidate
+bytes that are not already allocated on this filesystem. Use the exact candidate byte size before
+the independent production copy exists, and `0` after that immutable copy has been created and
+verified. Counting an already allocated artifact again produces a false projection. Exit 1 blocks
+promotion because the rollback floor or projected disk gate is not satisfied; exit 2 means the
+preview itself could not prove a safe result. The command is read-only and has no delete mode.
 
 ```bash
 cd /srv/cms-data-platform/production/release-current/code
 /srv/cms-data-platform/production/release-current/runtime/bin/python \
   -m pipeline.retention preview \
   --platform-root /srv/cms-data-platform \
-  --candidate-bytes CANDIDATE_WAREHOUSE_BYTES \
+  --candidate-bytes ADDITIONAL_UNALLOCATED_CANDIDATE_BYTES \
   --json
 ```
 
@@ -224,6 +238,7 @@ PYTHONPATH=/srv/cms-data-platform/production-ops/current \
   -m pipeline.production_cutover \
   --production-root /srv/cms-data-platform/production \
   --deployment-id CANDIDATE_DEPLOYMENT_ID \
+  --api-key-env CMS_SMOKE_API_KEY \
   --candidate-core-providers CANDIDATE_CORE_COUNT \
   --candidate-hospital-affiliations CANDIDATE_AFFILIATION_COUNT \
   --candidate-affiliated-providers CANDIDATE_AFFILIATED_PROVIDER_COUNT \

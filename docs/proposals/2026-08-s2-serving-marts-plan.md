@@ -256,6 +256,13 @@ with the rollback floor intact.
 `/practices/search` is now the declared consumer. Deployment-local capability selection chooses the
 mart only when the selected warehouse contains it, so old warehouses remain on raw without a global
 environment change. The production manager accepts the managed-DAC policy only with its exact
-two-table scope, matching row counts, and passed mart validation. The successful candidate remains
-unselected pending immutable deployment preparation and the separate cutover approval. See the
+two-table scope, matching row counts, and passed mart validation.
+
+The successful candidate is prepared as immutable deployment
+`deployment-20260814T160153Z-45ab9d2d38`. Its isolated bundle passed the complete 15-check smoke,
+deployment-local `auto` selection resolved to the mart, serving identity/ETag checks passed, and
+activation plus rollback dry-runs passed. Preparation also exposed and documented three reusable
+promotion hardening items: targeted releases inherit baseline smoke counts, smoke uses a named
+operator key, and post-copy capacity counts only bytes not already allocated. Production remains on
+the verified predecessor pending the separate cutover approval. See the
 [candidate record](../operations/s2-managed-dac-candidate-2026-08-14.md).

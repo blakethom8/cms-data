@@ -2035,6 +2035,22 @@ def build_managed_dac_serving_practice_warehouse_release(
             "cms_part_d_by_provider": partd_period,
         }
     )
+    inherited_smoke_counts = baseline_release.validation_details.get(
+        "smoke_table_counts"
+    )
+    if inherited_smoke_counts is not None and (
+        not isinstance(inherited_smoke_counts, dict)
+        or not inherited_smoke_counts
+        or any(
+            not isinstance(name, str)
+            or not name
+            or not isinstance(count, int)
+            or isinstance(count, bool)
+            or count < 0
+            for name, count in inherited_smoke_counts.items()
+        )
+    ):
+        raise ReleaseError("Managed DAC baseline has invalid smoke table-count evidence")
     source_run_ids = tuple(
         sorted(
             {
@@ -2123,6 +2139,15 @@ def build_managed_dac_serving_practice_warehouse_release(
                         SERVING_PRACTICE_MANAGED_DAC_CHANGED_TABLES
                     ),
                     "changed_table_counts": dict(sorted(table_counts.items())),
+                    **(
+                        {
+                            "smoke_table_counts": dict(
+                                sorted(inherited_smoke_counts.items())
+                            )
+                        }
+                        if isinstance(inherited_smoke_counts, dict)
+                        else {}
+                    ),
                     "baseline_dependency_provenance": {
                         "cms_physician_by_provider": {
                             "source_run_id": partb_run_id,
