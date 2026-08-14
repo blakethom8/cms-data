@@ -246,6 +246,137 @@ MART_CONTRACTS: tuple[MartSpec, ...] = (
         ),
     ),
     MartSpec(
+        table="serving_provider_profile_headers",
+        transform_ids=("build_serving_provider_profile_core_tables",),
+        grain="one NPPES-first provider profile identity row per NPI",
+        key_columns=("npi",),
+        upstream_tables=("raw_nppes", "raw_dac_national", "nucc_taxonomy"),
+        source_ids=(
+            "nppes_monthly_v2",
+            "nppes_weekly_incremental_v2",
+            "cms_dac_national",
+        ),
+        required_columns=(
+            "npi",
+            "nppes_source_data_periods",
+            "nppes_source_run_ids",
+            "dac_source_data_periods",
+            "dac_source_run_ids",
+            "data_year",
+        ),
+        source_period_policy=(
+            "NPPES and DAC identity rows retain contributing run/period arrays; "
+            "taxonomy labels use release-manifest provenance"
+        ),
+        provenance_scope="row_and_release_manifest",
+        kind="serving",
+        npi_parent_table=None,
+        row_validations=(
+            (
+                "missing_identity_provenance",
+                "(len(nppes_source_data_periods) = 0 OR len(nppes_source_run_ids) = 0) "
+                "AND (len(dac_source_data_periods) = 0 OR len(dac_source_run_ids) = 0)",
+            ),
+            (
+                "mismatched_nppes_provenance",
+                "(len(nppes_source_data_periods) = 0) <> (len(nppes_source_run_ids) = 0)",
+            ),
+            (
+                "mismatched_dac_provenance",
+                "(len(dac_source_data_periods) = 0) <> (len(dac_source_run_ids) = 0)",
+            ),
+        ),
+    ),
+    MartSpec(
+        table="serving_provider_profile_locations",
+        transform_ids=("build_serving_provider_profile_core_tables",),
+        grain="one normalized DAC or NPPES practice address per provider NPI",
+        key_columns=("npi", "addr_key"),
+        upstream_tables=("raw_nppes", "raw_dac_national", "address_geocode"),
+        source_ids=(
+            "nppes_monthly_v2",
+            "nppes_weekly_incremental_v2",
+            "cms_dac_national",
+        ),
+        required_columns=(
+            "npi",
+            "addr_key",
+            "sources",
+            "nppes_source_data_periods",
+            "nppes_source_run_ids",
+            "dac_source_data_periods",
+            "dac_source_run_ids",
+            "data_year",
+        ),
+        source_period_policy=(
+            "each merged address retains the contributing NPPES and DAC run/period arrays"
+        ),
+        provenance_scope="row_and_release_manifest",
+        kind="serving",
+        npi_parent_table="serving_provider_profile_headers",
+        row_validations=(
+            (
+                "missing_nppes_provenance",
+                "sources IN ('nppes', 'dac + nppes') AND "
+                "(len(nppes_source_data_periods) = 0 OR len(nppes_source_run_ids) = 0)",
+            ),
+            (
+                "missing_dac_provenance",
+                "sources IN ('dac', 'dac + nppes') AND "
+                "(len(dac_source_data_periods) = 0 OR len(dac_source_run_ids) = 0)",
+            ),
+            (
+                "invalid_source_label",
+                "sources NOT IN ('dac', 'nppes', 'dac + nppes')",
+            ),
+        ),
+    ),
+    MartSpec(
+        table="serving_provider_profile_groups",
+        transform_ids=("build_serving_provider_profile_core_tables",),
+        grain="one provider NPI by CMS PAC organization context",
+        key_columns=("npi", "group_id"),
+        upstream_tables=("raw_dac_national", "raw_reassignment"),
+        source_ids=(
+            "cms_dac_national",
+            "cms_revalidation_group_reassignment",
+        ),
+        required_columns=(
+            "npi",
+            "group_id",
+            "n_addresses",
+            "sources",
+            "dac_source_data_periods",
+            "dac_source_run_ids",
+            "reassignment_source_data_periods",
+            "reassignment_source_run_ids",
+            "data_year",
+        ),
+        source_period_policy=(
+            "each organization context retains contributing DAC and reassignment run/period arrays"
+        ),
+        provenance_scope="row_and_release_manifest",
+        kind="serving",
+        npi_parent_table="serving_provider_profile_headers",
+        row_validations=(
+            (
+                "missing_dac_provenance",
+                "sources IN ('dac', 'dac + reassignment') AND "
+                "(len(dac_source_data_periods) = 0 OR len(dac_source_run_ids) = 0)",
+            ),
+            (
+                "missing_reassignment_provenance",
+                "sources IN ('reassignment', 'dac + reassignment') AND "
+                "(len(reassignment_source_data_periods) = 0 "
+                "OR len(reassignment_source_run_ids) = 0)",
+            ),
+            (
+                "invalid_source_label",
+                "sources NOT IN ('dac', 'reassignment', 'dac + reassignment')",
+            ),
+        ),
+    ),
+    MartSpec(
         table="utilization_metrics",
         transform_ids=("build_utilization_metrics",),
         grain="one provider NPI by metric year",

@@ -1,6 +1,6 @@
 # CMS data platform production roadmap
 
-> **Last reviewed: 2026-08-13** · **Status: active execution authority**
+> **Last reviewed: 2026-08-14** · **Status: active execution authority**
 > **Planning horizon:** August–October 2026
 
 **Program issue:** [#24 — stabilize and scale the CMS data platform](https://github.com/blakethom8/cms-data/issues/24)
@@ -76,7 +76,7 @@ must preserve the immutable read-only serving model.
 | H4 | P0 | Restrict arbitrary SQL serving | active | Provider Search and public dashboard credentials cannot reach arbitrary SQL; approved operator access is separately bounded | [#19](https://github.com/blakethom8/cms-data/issues/19) |
 | H5 | P0 | Host maintenance and access hardening | active | Controlled reboot passes pre/post smoke; SSH/firewall/log-retention decisions are recorded | [#20](https://github.com/blakethom8/cms-data/issues/20) |
 | S1 | P1 | Bounded DuckDB concurrency | active | Repeatable load test proves concurrent requests no longer serialize on one shared connection and resource ceilings hold | [#21](https://github.com/blakethom8/cms-data/issues/21) |
-| S2 | P1 | Product serving marts | active | Profile and practice queries use release-built marts where measurements prove benefit; provenance and raw evidence remain intact | [S2 plan](2026-08-s2-serving-marts-plan.md) |
+| S2 | P1 | Product serving marts | active | Profile and practice queries use release-built marts where measurements prove benefit; provenance and raw evidence remain intact | [S2 practice plan](2026-08-s2-serving-marts-plan.md); [S3 profile plan](2026-08-s3-provider-profile-serving-plan.md) |
 | O1 | P1 | End-to-end request observability | active | Request IDs join Provider Search and CMS logs; route/status/consumer/release latency is queryable | [#22](https://github.com/blakethom8/cms-data/issues/22) |
 | C1 | P1 | Release-aware consumer caching | active | Provider Search caches CMS GETs by release and representation, conditionally revalidates, and records release identity with derived evidence | [provider-search#344](https://github.com/blakethom8/provider-search/issues/344) |
 | E1 | P1 | CMS development/pre-production lane | active | `ps-dev` and `ps-prod` are isolated; the exact tested candidate is promoted; N/N-1 and rollback tests pass | [#23](https://github.com/blakethom8/cms-data/issues/23) |

@@ -45,6 +45,7 @@ from .releases import (
     build_managed_dac_serving_practice_warehouse_release,
     build_nppes_serving_practice_warehouse_release,
     build_ppef_warehouse_release,
+    build_provider_profile_core_warehouse_release,
     build_radar_warehouse_release,
     build_serving_practice_warehouse_release,
     build_warehouse_release,
@@ -518,6 +519,38 @@ def _parser() -> argparse.ArgumentParser:
         help="DuckDB worker threads for the targeted build (default: 1)",
     )
     build_nppes_serving.add_argument("--json", action="store_true")
+    build_profile_core = subparsers.add_parser(
+        "build-provider-profile-core-release",
+        help="Build only the provider-profile header, location, and group serving tables",
+    )
+    build_profile_core.add_argument(
+        "--baseline-warehouse-release-id", required=True
+    )
+    build_profile_core.add_argument("--backup-manifest", required=True, type=Path)
+    build_profile_core.add_argument("--data-year", required=True, type=int)
+    build_profile_core.add_argument(
+        "--code-commit",
+        help="Exact 40-character Git commit for a sealed source archive",
+    )
+    build_profile_core.add_argument(
+        "--data-root", type=Path, default=DEFAULT_MANIFEST_PATH.parent
+    )
+    build_profile_core.add_argument(
+        "--environment", choices=[STAGING_ENVIRONMENT], required=True
+    )
+    build_profile_core.add_argument(
+        "--memory-limit-gb",
+        type=int,
+        default=12,
+        help="DuckDB memory ceiling for the targeted build (default: 12 GiB)",
+    )
+    build_profile_core.add_argument(
+        "--threads",
+        type=int,
+        default=1,
+        help="DuckDB worker threads for the targeted build (default: 1)",
+    )
+    build_profile_core.add_argument("--json", action="store_true")
     build_platform = subparsers.add_parser(
         "build-platform-release",
         help="Build all CMS, NPPES, and Open Payments runs into one staging candidate",
@@ -696,6 +729,7 @@ def main(argv: list[str] | None = None) -> int:
         "build-serving-practice-release",
         "build-managed-dac-serving-practice-release",
         "build-nppes-serving-practice-release",
+        "build-provider-profile-core-release",
         "build-platform-release",
         "build-radar-release",
         "prepare-aact-release",
@@ -766,6 +800,19 @@ def main(argv: list[str] | None = None) -> int:
                     threads=args.threads,
                 ).to_dict()
                 heading = "NPPES-primary practice serving-mart release built"
+            elif args.command == "build-provider-profile-core-release":
+                payload = build_provider_profile_core_warehouse_release(
+                    data_root=args.data_root,
+                    baseline_warehouse_release_id=(
+                        args.baseline_warehouse_release_id
+                    ),
+                    backup_manifest_path=args.backup_manifest,
+                    data_year=args.data_year,
+                    code_commit=args.code_commit,
+                    memory_limit_gb=args.memory_limit_gb,
+                    threads=args.threads,
+                ).to_dict()
+                heading = "Provider-profile core serving-mart release built"
             elif args.command == "build-platform-release":
                 payload = build_full_platform_warehouse_release(
                     data_root=args.data_root,

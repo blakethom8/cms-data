@@ -29,6 +29,7 @@ from pipeline.releases import (
     HOSPITAL_COLUMN_MAP,
     NPPES_SERVING_PRACTICE_CHANGED_TABLES,
     PPEF_CHANGED_TABLES,
+    PROVIDER_PROFILE_CORE_CHANGED_TABLES,
     SERVING_PRACTICE_CHANGED_TABLES,
     SERVING_PRACTICE_MANAGED_DAC_CHANGED_TABLES,
     ReleaseError,
@@ -44,6 +45,7 @@ from pipeline.releases import (
     build_managed_dac_serving_practice_warehouse_release,
     build_nppes_serving_practice_warehouse_release,
     build_ppef_warehouse_release,
+    build_provider_profile_core_warehouse_release,
     build_serving_practice_warehouse_release,
     build_warehouse_release,
     compare_warehouse_release,
@@ -680,6 +682,71 @@ def _nppes_serving_practice_baseline(tmp_path: Path) -> tuple[Path, Path, str]:
     return data_root, backup_manifest, baseline_release_id
 
 
+def _provider_profile_core_baseline(tmp_path: Path) -> tuple[Path, Path, str]:
+    data_root, backup_manifest, baseline_release_id = (
+        _nppes_serving_practice_baseline(tmp_path)
+    )
+    backup_document = json.loads(backup_manifest.read_text())
+    baseline = Path(backup_document["backup_path"])
+    connection = duckdb.connect(str(baseline))
+    try:
+        connection.execute(
+            '''
+            ALTER TABLE raw_nppes ADD COLUMN practice_address_2 VARCHAR;
+            ALTER TABLE raw_nppes ADD COLUMN taxonomy_1 VARCHAR;
+            UPDATE raw_nppes SET practice_address_2 = 'SUITE 100',
+                                 taxonomy_1 = '207RC0000X';
+
+            ALTER TABLE raw_dac_national ADD COLUMN "Cred\t\t\t\t" VARCHAR;
+            ALTER TABLE raw_dac_national ADD COLUMN sec_spec_all VARCHAR;
+            ALTER TABLE raw_dac_national ADD COLUMN Med_sch VARCHAR;
+            ALTER TABLE raw_dac_national ADD COLUMN Grd_yr INTEGER;
+            ALTER TABLE raw_dac_national ADD COLUMN "Telehlth\t\t\t\t" VARCHAR;
+            ALTER TABLE raw_dac_national ADD COLUMN adr_ln_2 VARCHAR;
+            UPDATE raw_dac_national
+            SET "Cred\t\t\t\t" = 'MD', sec_spec_all = 'Internal Medicine',
+                Med_sch = 'Example University', Grd_yr = 2005,
+                "Telehlth\t\t\t\t" = 'Y', adr_ln_2 = 'SUITE 100';
+
+            CREATE TABLE raw_reassignment (
+                "Individual NPI" VARCHAR, "Group PAC ID" VARCHAR,
+                "Group Legal Business Name" VARCHAR,
+                "Group Reassignments and Physician Assistants" BIGINT,
+                source_run_id VARCHAR, source_data_period VARCHAR
+            );
+            INSERT INTO raw_reassignment VALUES
+                ('1234567890', 'PAC-1', 'Cardio Group Legal', 25,
+                 'reassign-run', '2026-07');
+            CREATE TABLE nucc_taxonomy (
+                taxonomy_code VARCHAR, classification VARCHAR,
+                specialization VARCHAR
+            );
+            INSERT INTO nucc_taxonomy VALUES
+                ('207RC0000X', 'Internal Medicine', 'Cardiovascular Disease');
+            CHECKPOINT;
+            '''
+        )
+    finally:
+        connection.close()
+
+    digest = sha256_file(baseline)
+    backup_document["backup_identity"]["byte_size"] = baseline.stat().st_size
+    backup_document["sha256"] = digest
+    backup_manifest.write_text(json.dumps(backup_document))
+    store = WarehouseReleaseStore(data_root / "warehouse-releases.json")
+    document = store.load()
+    release = document.releases[0]
+    release.source_run_ids = (*release.source_run_ids, "reassign-run")
+    release.byte_size = baseline.stat().st_size
+    release.sha256 = digest
+    release.baseline_sha256 = digest
+    release.validation_details["source_periods"].update(
+        {"cms_revalidation_group_reassignment": "2026-07"}
+    )
+    store.save(document)
+    return data_root, backup_manifest, baseline_release_id
+
+
 def _stage_managed_dac(data_root: Path) -> RunManifest:
     source_id = "cms_dac_national"
     run_id = "20260814T030000Z-dac"
@@ -943,6 +1010,157 @@ def test_nppes_serving_release_adds_exact_two_table_scope(tmp_path: Path) -> Non
             warehouse_release_id=result.release.warehouse_release_id,
             backup_manifest_path=backup_manifest,
         )
+
+
+def test_provider_profile_core_release_adds_exact_three_table_scope(
+    tmp_path: Path,
+) -> None:
+    data_root, backup_manifest, baseline_release_id = (
+        _provider_profile_core_baseline(tmp_path)
+    )
+
+    result = build_provider_profile_core_warehouse_release(
+        data_root=data_root,
+        baseline_warehouse_release_id=baseline_release_id,
+        backup_manifest_path=backup_manifest,
+        data_year=2026,
+        code_commit=CODE_COMMIT,
+        memory_limit_gb=1,
+        threads=1,
+    )
+    comparison = compare_warehouse_release(
+        data_root=data_root,
+        warehouse_release_id=result.release.warehouse_release_id,
+        backup_manifest_path=backup_manifest,
+    )
+
+    assert comparison["state"] == "passed"
+    assert comparison["comparison_policy"] == (
+        "serving_provider_profile_core_additive_v1"
+    )
+    assert comparison["unexpected_differences"] == []
+    assert set(comparison["changed_tables"]) == PROVIDER_PROFILE_CORE_CHANGED_TABLES
+    assert result.release.table_counts == {
+        "serving_provider_profile_groups": 1,
+        "serving_provider_profile_headers": 1,
+        "serving_provider_profile_locations": 1,
+    }
+    details = result.release.validation_details
+    assert details["baseline_warehouse_release_id"] == baseline_release_id
+    assert details["mart_contract_validation"]["passed"] is True
+    candidate = duckdb.connect(str(result.database_path), read_only=True)
+    try:
+        header = candidate.execute(
+            "SELECT npi, specialty, nppes_source_run_ids, dac_source_run_ids "
+            "FROM serving_provider_profile_headers"
+        ).fetchone()
+        location = candidate.execute(
+            "SELECT npi, addr_key, sources "
+            "FROM serving_provider_profile_locations"
+        ).fetchone()
+        group = candidate.execute(
+            "SELECT npi, group_id, sources "
+            "FROM serving_provider_profile_groups"
+        ).fetchone()
+        marker = candidate.execute("SELECT value FROM baseline_marker").fetchone()[0]
+    finally:
+        candidate.close()
+    assert header == (
+        "1234567890",
+        "Cardiology",
+        ["nppes-run"],
+        ["dac-run"],
+    )
+    assert location == ("1234567890", "10 MAIN ST|90001", "dac + nppes")
+    assert group == ("1234567890", "PAC-1", "dac + reassignment")
+    assert marker == "preserved"
+
+    store = WarehouseReleaseStore(data_root / "warehouse-releases.json")
+    document = store.load()
+    candidate_release = next(
+        release
+        for release in document.releases
+        if release.warehouse_release_id == result.release.warehouse_release_id
+    )
+    candidate_release.validation_details["changed_tables"].append("baseline_marker")
+    store.save(document)
+    with pytest.raises(ReleaseError, match="invalid changed-table allowlist"):
+        compare_warehouse_release(
+            data_root=data_root,
+            warehouse_release_id=result.release.warehouse_release_id,
+            backup_manifest_path=backup_manifest,
+        )
+
+
+def test_provider_profile_core_release_requires_every_declared_source_period(
+    tmp_path: Path,
+) -> None:
+    data_root, backup_manifest, baseline_release_id = (
+        _provider_profile_core_baseline(tmp_path)
+    )
+    store = WarehouseReleaseStore(data_root / "warehouse-releases.json")
+    document = store.load()
+    del document.releases[0].validation_details["source_periods"][
+        "cms_revalidation_group_reassignment"
+    ]
+    store.save(document)
+
+    with pytest.raises(
+        ReleaseError,
+        match=(
+            "lacks required source periods: "
+            "cms_revalidation_group_reassignment"
+        ),
+    ):
+        build_provider_profile_core_warehouse_release(
+            data_root=data_root,
+            baseline_warehouse_release_id=baseline_release_id,
+            backup_manifest_path=backup_manifest,
+            data_year=2026,
+            code_commit=CODE_COMMIT,
+            memory_limit_gb=1,
+            threads=1,
+        )
+
+
+def test_provider_profile_core_release_cli_builds_staging_candidate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    data_root, backup_manifest, baseline_release_id = (
+        _provider_profile_core_baseline(tmp_path)
+    )
+    monkeypatch.setattr("pipeline.releases.pipeline_commit", lambda: None)
+
+    exit_code = main(
+        [
+            "build-provider-profile-core-release",
+            "--environment",
+            "staging",
+            "--baseline-warehouse-release-id",
+            baseline_release_id,
+            "--backup-manifest",
+            str(backup_manifest),
+            "--data-root",
+            str(data_root),
+            "--data-year",
+            "2026",
+            "--code-commit",
+            CODE_COMMIT,
+            "--memory-limit-gb",
+            "1",
+            "--threads",
+            "1",
+            "--json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == EXIT_HEALTHY
+    assert payload["release"]["validation_details"]["comparison_policy"] == (
+        "serving_provider_profile_core_additive_v1"
+    )
 
 
 def test_nppes_serving_release_requires_every_declared_source_period(

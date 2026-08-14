@@ -86,6 +86,23 @@ TRANSFORMS: tuple[TransformSpec, ...] = (
         "Selects one deterministic NPPES primary site per Medicare NPI and materializes its non-additive CMS organization contexts.",
     ),
     TransformSpec(
+        "build_serving_provider_profile_core_tables",
+        "Build provider profile core serving rows",
+        (
+            "raw_nppes",
+            "raw_dac_national",
+            "raw_reassignment",
+            "nucc_taxonomy",
+            "address_geocode",
+        ),
+        (
+            "serving_provider_profile_headers",
+            "serving_provider_profile_locations",
+            "serving_provider_profile_groups",
+        ),
+        "Prejoins NPPES-first profile identity, normalized DAC/NPPES doors, and non-additive CMS organization contexts.",
+    ),
+    TransformSpec(
         "build_pecos_provider_organizations",
         "Build provider-organization bridge",
         ("raw_pecos_reassignment", "raw_pecos_enrollment"),

@@ -25,6 +25,9 @@ EXPECTED_MARTS = {
     "serving_practice_provider_sites",
     "serving_practice_nppes_provider_sites",
     "serving_practice_nppes_org_memberships",
+    "serving_provider_profile_headers",
+    "serving_provider_profile_locations",
+    "serving_provider_profile_groups",
     "utilization_metrics",
     "industry_relationships",
     "hospital_affiliations",
@@ -55,7 +58,7 @@ def _spec(**overrides) -> MartSpec:
 
 
 def test_registered_marts_have_complete_source_and_lineage_contracts() -> None:
-    assert len(MART_CONTRACTS) == 15
+    assert len(MART_CONTRACTS) == 18
     assert set(MART_CONTRACT_BY_TABLE) == EXPECTED_MARTS
 
     transforms = {transform.transform_id: transform for transform in TRANSFORMS}
@@ -76,6 +79,9 @@ def test_registered_marts_have_complete_source_and_lineage_contracts() -> None:
     assert table_kind("serving_practice_provider_sites") == "serving"
     assert table_kind("serving_practice_nppes_provider_sites") == "serving"
     assert table_kind("serving_practice_nppes_org_memberships") == "serving"
+    assert table_kind("serving_provider_profile_headers") == "serving"
+    assert table_kind("serving_provider_profile_locations") == "serving"
+    assert table_kind("serving_provider_profile_groups") == "serving"
     assert MART_CONTRACT_BY_TABLE[
         "serving_practice_provider_sites"
     ].authorized_routes == ("/practices/search",)
@@ -90,7 +96,7 @@ def test_schema_inspection_does_not_claim_missing_marts_are_ready() -> None:
     finally:
         connection.close()
 
-    assert report["registered_count"] == 15
+    assert report["registered_count"] == 18
     assert report["available_count"] == 1
     assert report["schema_valid_count"] == 0
     assert report["serving_authorized_count"] == 0

@@ -171,6 +171,78 @@ CREATE INDEX IF NOT EXISTS idx_serving_nppes_memberships_addr
 
 
 ------------------------------------------------------------
+-- S3 serving tables: provider profile core and access lenses
+-- Header grain: one NPPES-first identity row per provider NPI
+-- Location grain: one normalized DAC/NPPES address per provider NPI
+-- Group grain: one provider NPI x CMS PAC organization context
+------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS serving_provider_profile_headers (
+    npi                         VARCHAR(10) PRIMARY KEY,
+    name                        VARCHAR,
+    credentials                 VARCHAR,
+    specialty                   VARCHAR,
+    secondary_specialties       VARCHAR,
+    city                        VARCHAR,
+    state                       VARCHAR(2),
+    med_school                  VARCHAR,
+    grad_year                   INTEGER,
+    telehealth                  BOOLEAN,
+    nppes_source_data_periods   VARCHAR[] NOT NULL,
+    nppes_source_run_ids        VARCHAR[] NOT NULL,
+    dac_source_data_periods     VARCHAR[] NOT NULL,
+    dac_source_run_ids          VARCHAR[] NOT NULL,
+    data_year                   INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_serving_profile_headers_state
+    ON serving_provider_profile_headers(state);
+
+CREATE TABLE IF NOT EXISTS serving_provider_profile_locations (
+    npi                         VARCHAR(10) NOT NULL,
+    addr_key                    VARCHAR NOT NULL,
+    street                      VARCHAR,
+    suites                      VARCHAR[],
+    city                        VARCHAR,
+    state                       VARCHAR(2),
+    zip5                        VARCHAR(5),
+    phone                       VARCHAR,
+    roster_size                 BIGINT,
+    latitude                    DOUBLE,
+    longitude                   DOUBLE,
+    likely_flagship             BOOLEAN,
+    sources                     VARCHAR NOT NULL,
+    nppes_source_data_periods   VARCHAR[] NOT NULL,
+    nppes_source_run_ids        VARCHAR[] NOT NULL,
+    dac_source_data_periods     VARCHAR[] NOT NULL,
+    dac_source_run_ids          VARCHAR[] NOT NULL,
+    data_year                   INTEGER NOT NULL,
+    PRIMARY KEY (npi, addr_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_serving_profile_locations_npi
+    ON serving_provider_profile_locations(npi);
+
+CREATE TABLE IF NOT EXISTS serving_provider_profile_groups (
+    npi                              VARCHAR(10) NOT NULL,
+    group_id                         VARCHAR NOT NULL,
+    group_name                       VARCHAR,
+    group_size                       INTEGER,
+    n_addresses                      BIGINT NOT NULL,
+    reassignment_size                BIGINT,
+    sources                          VARCHAR NOT NULL,
+    dac_source_data_periods          VARCHAR[] NOT NULL,
+    dac_source_run_ids               VARCHAR[] NOT NULL,
+    reassignment_source_data_periods VARCHAR[] NOT NULL,
+    reassignment_source_run_ids      VARCHAR[] NOT NULL,
+    data_year                        INTEGER NOT NULL,
+    PRIMARY KEY (npi, group_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_serving_profile_groups_npi
+    ON serving_provider_profile_groups(npi);
+
+
+------------------------------------------------------------
 -- Tables 2b/2c: PECOS benefit-reassignment relationships
 -- Sources: PPEF enrollment + reassignment + practice location
 ------------------------------------------------------------

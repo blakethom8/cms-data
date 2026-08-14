@@ -286,6 +286,30 @@ def test_prepare_accepts_validated_s2_nppes_practice_policy_after_authorization(
     assert deployment.state == production.DeploymentState.PREPARED
 
 
+def test_prepare_rejects_provider_profile_policy_before_authorization(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paths, _ = _bootstrap_verified(tmp_path, monkeypatch)
+    _write_release(
+        paths, comparison_policy="serving_provider_profile_core_additive_v1"
+    )
+
+    with pytest.raises(
+        production.ProductionError,
+        match="Warehouse comparison has an unsupported policy",
+    ):
+        production.prepare_release(
+            paths["production"],
+            paths["artifacts"],
+            paths["data"],
+            paths["candidate_code"],
+            paths["candidate_runtime"],
+            paths["candidate_db"],
+            RELEASE_ID,
+        )
+
+
 @pytest.mark.parametrize(
     "invalid_field",
     ("comparison_changed_tables", "release_changed_tables", "mart_validation"),
