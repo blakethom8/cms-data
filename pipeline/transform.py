@@ -398,6 +398,338 @@ def build_serving_practice_provider_sites(
     return count
 
 
+def _ensure_serving_practice_nppes_tables(
+    con: duckdb.DuckDBPyConnection,
+) -> None:
+    con.execute(
+        """
+        CREATE TABLE IF NOT EXISTS serving_practice_nppes_provider_sites (
+            npi VARCHAR(10) PRIMARY KEY, addr_key VARCHAR NOT NULL,
+            addr_norm VARCHAR NOT NULL, address VARCHAR(255) NOT NULL,
+            city VARCHAR(100) NOT NULL, state VARCHAR(2) NOT NULL,
+            zip5 VARCHAR(5) NOT NULL, phone VARCHAR(30),
+            first_name VARCHAR(100), last_name VARCHAR(255),
+            credentials VARCHAR(50), specialties VARCHAR[] NOT NULL,
+            latitude DOUBLE, longitude DOUBLE, partb_payments DOUBLE,
+            partb_services DOUBLE, partb_beneficiaries DOUBLE,
+            partd_drug_cost DOUBLE, nppes_source_data_period VARCHAR NOT NULL,
+            nppes_source_run_id VARCHAR NOT NULL,
+            partb_source_data_periods VARCHAR[] NOT NULL,
+            partb_source_run_ids VARCHAR[] NOT NULL,
+            partd_source_data_periods VARCHAR[] NOT NULL,
+            partd_source_run_ids VARCHAR[] NOT NULL,
+            data_year INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_serving_nppes_sites_state
+            ON serving_practice_nppes_provider_sites(state);
+        CREATE INDEX IF NOT EXISTS idx_serving_nppes_sites_zip5
+            ON serving_practice_nppes_provider_sites(zip5);
+        CREATE INDEX IF NOT EXISTS idx_serving_nppes_sites_addr
+            ON serving_practice_nppes_provider_sites(addr_key);
+
+        CREATE TABLE IF NOT EXISTS serving_practice_nppes_org_memberships (
+            addr_key VARCHAR NOT NULL, npi VARCHAR(10) NOT NULL,
+            org_pac_id VARCHAR NOT NULL, practice_name VARCHAR(255),
+            group_size_national INTEGER, primary_address_match BOOLEAN NOT NULL,
+            dac_source_data_periods VARCHAR[] NOT NULL,
+            dac_source_run_ids VARCHAR[] NOT NULL,
+            data_year INTEGER NOT NULL,
+            PRIMARY KEY (addr_key, npi, org_pac_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_serving_nppes_memberships_npi
+            ON serving_practice_nppes_org_memberships(npi);
+        CREATE INDEX IF NOT EXISTS idx_serving_nppes_memberships_addr
+            ON serving_practice_nppes_org_memberships(addr_key);
+        """
+    )
+
+
+def build_serving_practice_nppes_tables(
+    con: duckdb.DuckDBPyConnection, data_year: int
+) -> dict[str, int]:
+    """Build NPPES-primary provider sites and non-additive organization context.
+
+    The provider table assigns each Medicare NPI's national totals to exactly
+    one deterministic active NPPES practice address. The separate membership
+    bridge preserves every CMS organization context without duplicating those
+    provider totals.
+    """
+    required_columns = {
+        "raw_nppes": {
+            "npi",
+            "first_name",
+            "last_name",
+            "credentials",
+            "practice_address_1",
+            "practice_city",
+            "practice_state",
+            "practice_zip",
+            "practice_phone",
+            "deactivation_date",
+            "source_run_id",
+            "source_data_period",
+        },
+        "raw_physician_by_provider": {
+            "Rndrng_NPI",
+            "Rndrng_Prvdr_Type",
+            "Tot_Mdcr_Pymt_Amt",
+            "Tot_Srvcs",
+            "Tot_Benes",
+            "source_run_id",
+            "source_data_period",
+        },
+        "raw_part_d_by_provider": {
+            "PRSCRBR_NPI",
+            "Tot_Drug_Cst",
+            "source_run_id",
+            "source_data_period",
+        },
+        "raw_dac_national": {
+            "NPI",
+            "Facility Name",
+            "org_pac_id",
+            "num_org_mem",
+            "adr_ln_1",
+            "ZIP Code",
+            "source_run_id",
+            "source_data_period",
+        },
+        "address_geocode": {"addr_key", "lat", "lng"},
+    }
+    missing_tables = [
+        table
+        for table, columns in required_columns.items()
+        if not _table_has_columns(con, table, columns)
+    ]
+    if missing_tables:
+        raise ValueError(
+            "NPPES practice serving inputs are missing required provenance or fields: "
+            + ", ".join(sorted(missing_tables))
+        )
+
+    missing_partb_provenance = int(
+        con.execute(
+            """
+            SELECT count(*)
+            FROM raw_physician_by_provider
+            WHERE nullif(trim(CAST("Rndrng_NPI" AS VARCHAR)), '') IS NOT NULL
+              AND nullif(trim("Rndrng_Prvdr_Type"), '') IS NOT NULL
+              AND (nullif(trim(source_data_period), '') IS NULL
+                   OR nullif(trim(source_run_id), '') IS NULL)
+            """
+        ).fetchone()[0]
+    )
+    if missing_partb_provenance:
+        raise ValueError(
+            "NPPES practice serving mart found eligible Part B rows without source "
+            f"provenance: {missing_partb_provenance}"
+        )
+
+    missing_partd_provenance = int(
+        con.execute(
+            """
+            SELECT count(*)
+            FROM raw_part_d_by_provider
+            WHERE nullif(trim(CAST("PRSCRBR_NPI" AS VARCHAR)), '') IS NOT NULL
+              AND "Tot_Drug_Cst" IS NOT NULL
+              AND (nullif(trim(source_data_period), '') IS NULL
+                   OR nullif(trim(source_run_id), '') IS NULL)
+            """
+        ).fetchone()[0]
+    )
+    if missing_partd_provenance:
+        raise ValueError(
+            "NPPES practice serving mart found eligible Part D rows without source "
+            f"provenance: {missing_partd_provenance}"
+        )
+
+    missing_nppes_provenance = int(
+        con.execute(
+            """
+            SELECT count(*)
+            FROM raw_nppes
+            WHERE deactivation_date IS NULL
+              AND nullif(trim(practice_address_1), '') IS NOT NULL
+              AND nullif(trim(practice_city), '') IS NOT NULL
+              AND regexp_matches(upper(trim(practice_state)), '^[A-Z]{2}$')
+              AND regexp_matches(left(practice_zip, 5), '^[0-9]{5}$')
+              AND CAST(npi AS VARCHAR) IN (
+                  SELECT CAST("Rndrng_NPI" AS VARCHAR)
+                  FROM raw_physician_by_provider
+              )
+              AND (nullif(trim(source_data_period), '') IS NULL
+                   OR nullif(trim(source_run_id), '') IS NULL)
+            """
+        ).fetchone()[0]
+    )
+    if missing_nppes_provenance:
+        raise ValueError(
+            "NPPES practice serving mart found eligible NPPES rows without source "
+            f"provenance: {missing_nppes_provenance}"
+        )
+
+    missing_dac_provenance = int(
+        con.execute(
+            """
+            SELECT count(*)
+            FROM raw_dac_national
+            WHERE nullif(trim(CAST(org_pac_id AS VARCHAR)), '') IS NOT NULL
+              AND CAST("NPI" AS VARCHAR) IN (
+                  SELECT CAST("Rndrng_NPI" AS VARCHAR)
+                  FROM raw_physician_by_provider
+              )
+              AND (nullif(trim(source_data_period), '') IS NULL
+                   OR nullif(trim(source_run_id), '') IS NULL)
+            """
+        ).fetchone()[0]
+    )
+    if missing_dac_provenance:
+        raise ValueError(
+            "NPPES practice serving mart found eligible DAC memberships without source "
+            f"provenance: {missing_dac_provenance}"
+        )
+
+    _ensure_serving_practice_nppes_tables(con)
+    logger.info("Building NPPES-primary practice serving tables (data_year=%d)", data_year)
+    con.execute("DELETE FROM serving_practice_nppes_org_memberships")
+    con.execute("DELETE FROM serving_practice_nppes_provider_sites")
+    con.execute(
+        """
+        INSERT INTO serving_practice_nppes_provider_sites
+        WITH claims AS (
+            SELECT CAST(p."Rndrng_NPI" AS VARCHAR) npi,
+                   list(
+                       distinct trim(p."Rndrng_Prvdr_Type")
+                       order by trim(p."Rndrng_Prvdr_Type")
+                   ) specialties,
+                   max(p."Tot_Mdcr_Pymt_Amt") partb_payments,
+                   max(p."Tot_Srvcs") partb_services,
+                   max(p."Tot_Benes") partb_beneficiaries,
+                   list(distinct p.source_data_period order by p.source_data_period)
+                       FILTER (WHERE nullif(trim(p.source_data_period), '') IS NOT NULL)
+                       source_data_periods,
+                   list(distinct p.source_run_id order by p.source_run_id)
+                       FILTER (WHERE nullif(trim(p.source_run_id), '') IS NOT NULL)
+                       source_run_ids
+            FROM raw_physician_by_provider p
+            WHERE nullif(trim(p."Rndrng_Prvdr_Type"), '') IS NOT NULL
+            GROUP BY 1
+        ),
+        ranked_nppes AS (
+            SELECT CAST(n.npi AS VARCHAR) npi,
+                   upper(trim(n.practice_address_1)) addr_norm,
+                   left(n.practice_zip, 5) zip5,
+                   n.practice_address_1 address,
+                   n.practice_city city,
+                   n.practice_state state,
+                   n.practice_phone phone,
+                   n.first_name,
+                   n.last_name,
+                   n.credentials,
+                   n.source_data_period,
+                   n.source_run_id,
+                   row_number() OVER (
+                       PARTITION BY CAST(n.npi AS VARCHAR)
+                       ORDER BY upper(trim(n.practice_address_1)),
+                                left(n.practice_zip, 5),
+                                upper(trim(coalesce(n.practice_city, ''))),
+                                upper(trim(coalesce(n.practice_state, '')))
+                   ) row_number
+            FROM raw_nppes n
+            WHERE n.deactivation_date IS NULL
+              AND nullif(trim(n.practice_address_1), '') IS NOT NULL
+              AND nullif(trim(n.practice_city), '') IS NOT NULL
+              AND regexp_matches(upper(trim(n.practice_state)), '^[A-Z]{2}$')
+              AND regexp_matches(left(n.practice_zip, 5), '^[0-9]{5}$')
+              AND CAST(n.npi AS VARCHAR) IN (SELECT npi FROM claims)
+        ),
+        geocodes AS (
+            SELECT addr_key, min(lat) latitude, min(lng) longitude
+            FROM address_geocode
+            GROUP BY addr_key
+        ),
+        rx AS (
+            SELECT CAST("PRSCRBR_NPI" AS VARCHAR) npi,
+                   max("Tot_Drug_Cst") partd_drug_cost,
+                   list(distinct source_data_period order by source_data_period)
+                       FILTER (WHERE nullif(trim(source_data_period), '') IS NOT NULL)
+                       source_data_periods,
+                   list(distinct source_run_id order by source_run_id)
+                       FILTER (WHERE nullif(trim(source_run_id), '') IS NOT NULL)
+                       source_run_ids
+            FROM raw_part_d_by_provider
+            GROUP BY 1
+        )
+        SELECT c.npi,
+               n.addr_norm || '|' || n.zip5 addr_key,
+               n.addr_norm,
+               n.address,
+               n.city,
+               n.state,
+               n.zip5,
+               n.phone,
+               n.first_name,
+               n.last_name,
+               n.credentials,
+               c.specialties,
+               g.latitude,
+               g.longitude,
+               c.partb_payments,
+               c.partb_services,
+               c.partb_beneficiaries,
+               rx.partd_drug_cost,
+               n.source_data_period,
+               n.source_run_id,
+               c.source_data_periods,
+               c.source_run_ids,
+               coalesce(rx.source_data_periods, []::VARCHAR[]),
+               coalesce(rx.source_run_ids, []::VARCHAR[]),
+               ?
+        FROM claims c
+        JOIN ranked_nppes n ON n.npi = c.npi AND n.row_number = 1
+        LEFT JOIN geocodes g ON g.addr_key = n.addr_norm || '|' || n.zip5
+        LEFT JOIN rx ON rx.npi = c.npi
+        """,
+        [data_year],
+    )
+    con.execute(
+        """
+        INSERT INTO serving_practice_nppes_org_memberships
+        SELECT p.addr_key,
+               p.npi,
+               nullif(trim(CAST(d.org_pac_id AS VARCHAR)), '') org_pac_id,
+               min(nullif(trim(d."Facility Name"), '')) practice_name,
+               max(try_cast(d.num_org_mem AS INTEGER)) group_size_national,
+               max(CASE WHEN upper(trim(d.adr_ln_1)) = p.addr_norm
+                              AND left(CAST(d."ZIP Code" AS VARCHAR), 5) = p.zip5
+                        THEN 1 ELSE 0 END) = 1 primary_address_match,
+               list(distinct d.source_data_period order by d.source_data_period)
+                   dac_source_data_periods,
+               list(distinct d.source_run_id order by d.source_run_id)
+                   dac_source_run_ids,
+               ?
+        FROM serving_practice_nppes_provider_sites p
+        JOIN raw_dac_national d ON p.npi = CAST(d."NPI" AS VARCHAR)
+        WHERE nullif(trim(CAST(d.org_pac_id AS VARCHAR)), '') IS NOT NULL
+        GROUP BY p.addr_key, p.npi, nullif(trim(CAST(d.org_pac_id AS VARCHAR)), '')
+        """,
+        [data_year],
+    )
+    counts = {
+        table: int(con.execute(f"SELECT count(*) FROM {table}").fetchone()[0])
+        for table in (
+            "serving_practice_nppes_provider_sites",
+            "serving_practice_nppes_org_memberships",
+        )
+    }
+    logger.info(
+        "NPPES-primary serving rows: providers=%d memberships=%d",
+        counts["serving_practice_nppes_provider_sites"],
+        counts["serving_practice_nppes_org_memberships"],
+    )
+    return counts
+
+
 def _ensure_pecos_relationship_tables(con: duckdb.DuckDBPyConnection) -> None:
     """Create the curated PPEF relationship tables in copied legacy warehouses."""
     con.execute(

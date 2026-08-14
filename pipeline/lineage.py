@@ -70,6 +70,22 @@ TRANSFORMS: tuple[TransformSpec, ...] = (
         "Prejoins normalized DAC site membership, national provider totals, geocodes, and row provenance for practice search.",
     ),
     TransformSpec(
+        "build_serving_practice_nppes_tables",
+        "Build NPPES-primary practice serving rows",
+        (
+            "raw_nppes",
+            "raw_physician_by_provider",
+            "raw_part_d_by_provider",
+            "raw_dac_national",
+            "address_geocode",
+        ),
+        (
+            "serving_practice_nppes_provider_sites",
+            "serving_practice_nppes_org_memberships",
+        ),
+        "Selects one deterministic NPPES primary site per Medicare NPI and materializes its non-additive CMS organization contexts.",
+    ),
+    TransformSpec(
         "build_pecos_provider_organizations",
         "Build provider-organization bridge",
         ("raw_pecos_reassignment", "raw_pecos_enrollment"),

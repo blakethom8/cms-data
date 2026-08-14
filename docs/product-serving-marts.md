@@ -2,11 +2,12 @@
 
 > **Last reviewed: 2026-08-14** · **Status: S2 contract reference**
 
-The warehouse keeps raw publisher-shaped evidence separate from curated marts. The twelve
-source-oriented foundations below are joined by the first registered route-specific serving mart.
-Registration does not automatically authorize replacement of request-time API logic. A route can
-switch only after response parity and a material p95 or resource improvement are proven under the
-S2 acceptance gates.
+The warehouse keeps raw publisher-shaped evidence separate from curated marts. Twelve
+source-oriented foundations are joined by three registered route-specific serving tables: the live
+CMS-enrollment practice table and a two-table NPPES-primary candidate. Registration does not
+automatically authorize replacement of request-time API logic. A route can switch only after
+response parity and a material p95 or resource improvement are proven under the S2 acceptance
+gates.
 
 The executable source of truth is `pipeline/mart_contracts.py`. Release builds validate physical
 grain, required values, NPI domains, parent relationships, and source-manifest coverage. The
@@ -28,8 +29,11 @@ running row scans in the serving process.
 | `kol_summary` | One qualifying all-year summary per `npi` | Open Payments manifest; most recent program year is derived | Not yet authorized for industry serving |
 | `nppes_radar_provider_state` | One reconciled current state row per `npi` | Row release/period plus release manifest | Radar providers |
 | `nppes_radar_events` | One immutable event per `event_id` | Row release/period plus release manifest | Radar providers |
+| `serving_practice_provider_sites` | One normalized DAC site and organization-or-solo key per NPI | DAC, Part B, and Part D row run/period arrays plus release manifests | Live for `cms_enrollment` practice search |
+| `serving_practice_nppes_provider_sites` | One deterministic primary NPPES site per Medicare NPI | Selected NPPES row plus Part B/Part D run-period arrays | Candidate for `nppes_primary` practice search; not in production |
+| `serving_practice_nppes_org_memberships` | `addr_key × npi × org_pac_id` | DAC run-period arrays; provider parent retains NPPES identity | Candidate organization context bridge; not in production |
 
-The first route-specific contract is `serving_practice_provider_sites`, at one normalized DAC site
+The first live route-specific contract is `serving_practice_provider_sites`, at one normalized DAC site
 and organization-or-solo key per NPI. It retains ordered specialty values, national Part B and Part
 D totals, geocodes, and row-level source period/run IDs. DAC, Part B, and Part D are registered
 managed sources and require release-manifest provenance. The selected production baseline predates
@@ -39,6 +43,15 @@ was selected in production on 2026-08-14, so `/practices/search` now consumes th
 `cms_enrollment` searches. Runtime capability selection uses the mart only when the selected
 immutable warehouse contains it; predecessors remain on the raw oracle without a global
 environment change.
+
+The next slice preserves the different semantics of `location_basis=nppes_primary` in two tables.
+`serving_practice_nppes_provider_sites` stores exactly one deterministic active NPPES address per
+Medicare NPI, ordered specialty values, national Part B/Part D measures, geocodes, and row-level
+source identity. `serving_practice_nppes_org_memberships` stores the provider's CMS organization
+contexts separately, so a provider associated with multiple organizations cannot duplicate
+national measures. The API's `auto` selector requires both complete table schemas as one
+capability; otherwise it keeps using the raw query. Fixture parity is byte-exact, but no isolated
+production-data candidate, performance proof, deployment, or cutover has occurred for this slice.
 
 The additive offline builder is `python -m pipeline.data_platform
 build-serving-practice-release`. It requires a named validated baseline release, a verified backup
@@ -76,5 +89,7 @@ ingestion timestamps are never substituted for publisher periods.
 
 The [S2 execution plan](proposals/2026-08-s2-serving-marts-plan.md) begins with measured canonical
 plans, then builds the default practice-search serving mart as the first isolated vertical slice.
-That slice is now live. Explorer remains source-faithful, Clinical Trials remains in
-AACT/PostgreSQL, and every future mart cutover still requires separate authorization.
+That slice is now live. The NPPES-primary slice is implemented locally and remains behind its raw
+oracle pending an isolated candidate and acceptance evidence. Explorer remains source-faithful,
+Clinical Trials remains in AACT/PostgreSQL, and every future mart cutover still requires separate
+authorization.

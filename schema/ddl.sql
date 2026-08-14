@@ -112,6 +112,65 @@ CREATE INDEX IF NOT EXISTS idx_serving_practice_sites_npi
 
 
 ------------------------------------------------------------
+-- S2 serving tables: NPPES-primary practice search
+-- Provider grain: one deterministic primary NPPES site per Medicare NPI
+-- Membership grain: one provider × CMS organization context at that site
+------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS serving_practice_nppes_provider_sites (
+    npi                       VARCHAR(10) PRIMARY KEY,
+    addr_key                  VARCHAR NOT NULL,
+    addr_norm                 VARCHAR NOT NULL,
+    address                   VARCHAR(255) NOT NULL,
+    city                      VARCHAR(100) NOT NULL,
+    state                     VARCHAR(2) NOT NULL,
+    zip5                      VARCHAR(5) NOT NULL,
+    phone                     VARCHAR(30),
+    first_name                VARCHAR(100),
+    last_name                 VARCHAR(255),
+    credentials               VARCHAR(50),
+    specialties              VARCHAR[] NOT NULL,
+    latitude                  DOUBLE,
+    longitude                 DOUBLE,
+    partb_payments            DOUBLE,
+    partb_services            DOUBLE,
+    partb_beneficiaries       DOUBLE,
+    partd_drug_cost           DOUBLE,
+    nppes_source_data_period  VARCHAR NOT NULL,
+    nppes_source_run_id       VARCHAR NOT NULL,
+    partb_source_data_periods VARCHAR[] NOT NULL,
+    partb_source_run_ids      VARCHAR[] NOT NULL,
+    partd_source_data_periods VARCHAR[] NOT NULL,
+    partd_source_run_ids      VARCHAR[] NOT NULL,
+    data_year                 INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_serving_nppes_sites_state
+    ON serving_practice_nppes_provider_sites(state);
+CREATE INDEX IF NOT EXISTS idx_serving_nppes_sites_zip5
+    ON serving_practice_nppes_provider_sites(zip5);
+CREATE INDEX IF NOT EXISTS idx_serving_nppes_sites_addr
+    ON serving_practice_nppes_provider_sites(addr_key);
+
+CREATE TABLE IF NOT EXISTS serving_practice_nppes_org_memberships (
+    addr_key                VARCHAR NOT NULL,
+    npi                     VARCHAR(10) NOT NULL,
+    org_pac_id              VARCHAR NOT NULL,
+    practice_name           VARCHAR(255),
+    group_size_national     INTEGER,
+    primary_address_match   BOOLEAN NOT NULL,
+    dac_source_data_periods VARCHAR[] NOT NULL,
+    dac_source_run_ids      VARCHAR[] NOT NULL,
+    data_year               INTEGER NOT NULL,
+    PRIMARY KEY (addr_key, npi, org_pac_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_serving_nppes_memberships_npi
+    ON serving_practice_nppes_org_memberships(npi);
+CREATE INDEX IF NOT EXISTS idx_serving_nppes_memberships_addr
+    ON serving_practice_nppes_org_memberships(addr_key);
+
+
+------------------------------------------------------------
 -- Tables 2b/2c: PECOS benefit-reassignment relationships
 -- Sources: PPEF enrollment + reassignment + practice location
 ------------------------------------------------------------

@@ -88,7 +88,7 @@ def test_overview_reports_warehouse_evidence_without_enabling_writes(tmp_path: P
     assert payload["warehouse"]["table_count"] == 2
     assert payload["warehouse"]["raw_table_count"] == 1
     assert payload["warehouse"]["data_mart_count"] == 1
-    assert payload["warehouse"]["registered_mart_count"] == 13
+    assert payload["warehouse"]["registered_mart_count"] == 15
     assert payload["warehouse"]["available_mart_count"] == 1
     assert payload["warehouse"]["schema_valid_mart_count"] == 0
     assert payload["warehouse"]["serving_authorized_mart_count"] == 0
@@ -117,7 +117,7 @@ def test_marts_report_contracts_without_claiming_row_validation(tmp_path: Path) 
     payload = _client(tmp_path).get("/operations/marts").json()
 
     assert payload["validation_scope"] == "schema_only"
-    assert payload["registered_count"] == 13
+    assert payload["registered_count"] == 15
     assert payload["available_count"] == 1
     assert payload["schema_valid_count"] == 0
     assert payload["data_valid_count"] is None

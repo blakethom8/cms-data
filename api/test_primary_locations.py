@@ -11,7 +11,10 @@ REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from practices import get_practices_router
-from pipeline.transform import build_serving_practice_provider_sites
+from pipeline.transform import (
+    build_serving_practice_nppes_tables,
+    build_serving_practice_provider_sites,
+)
 
 
 def _database() -> duckdb.DuckDBPyConnection:
@@ -116,6 +119,9 @@ def _database() -> duckdb.DuckDBPyConnection:
             ("1111111111", "Cardiology", 100.0, 10.0, 8.0),
             # Repeated source rows must never duplicate one NPI's national totals.
             ("1111111111", "Cardiology", 100.0, 10.0, 8.0),
+            # A provider can retain more than one searchable specialty without
+            # duplicating its national measures in the provider-grain mart.
+            ("1111111111", "Dermatology", 100.0, 10.0, 8.0),
             ("2222222222", "Cardiology", 200.0, 20.0, 12.0),
             ("3333333333", "Dermatology", 50.0, 5.0, 4.0),
             ("4444444444", "Cardiology", 75.0, 7.0, 5.0),
@@ -318,12 +324,17 @@ def _database() -> duckdb.DuckDBPyConnection:
 
 
 def _client(
-    connection: duckdb.DuckDBPyConnection, *, cms_backend: str = "raw"
+    connection: duckdb.DuckDBPyConnection,
+    *,
+    cms_backend: str = "raw",
+    nppes_backend: str = "raw",
 ) -> TestClient:
     app = FastAPI()
     app.include_router(
         get_practices_router(
-            lambda: connection, cms_enrollment_search_backend=cms_backend
+            lambda: connection,
+            cms_enrollment_search_backend=cms_backend,
+            nppes_primary_search_backend=nppes_backend,
         )
     )
     return TestClient(app)
@@ -345,6 +356,26 @@ def _build_serving_mart(connection: duckdb.DuckDBPyConnection) -> None:
         """
     )
     build_serving_practice_provider_sites(connection, 2026)
+
+
+def _build_nppes_serving_marts(connection: duckdb.DuckDBPyConnection) -> None:
+    connection.execute(
+        """
+        ALTER TABLE raw_nppes ADD COLUMN source_run_id VARCHAR DEFAULT 'nppes-run';
+        ALTER TABLE raw_nppes ADD COLUMN source_data_period VARCHAR DEFAULT '2026-07';
+        ALTER TABLE raw_dac_national ADD COLUMN source_run_id VARCHAR DEFAULT 'dac-run';
+        ALTER TABLE raw_dac_national ADD COLUMN source_data_period VARCHAR DEFAULT '2026-07';
+        ALTER TABLE raw_physician_by_provider ADD COLUMN source_run_id VARCHAR
+            DEFAULT 'partb-run';
+        ALTER TABLE raw_physician_by_provider ADD COLUMN source_data_period VARCHAR
+            DEFAULT '2024';
+        ALTER TABLE raw_part_d_by_provider ADD COLUMN source_run_id VARCHAR
+            DEFAULT 'partd-run';
+        ALTER TABLE raw_part_d_by_provider ADD COLUMN source_data_period VARCHAR
+            DEFAULT '2024';
+        """
+    )
+    build_serving_practice_nppes_tables(connection, 2026)
 
 
 def test_specialties_uses_normalized_core_provider_catalog_and_caches_it():
@@ -619,6 +650,7 @@ def test_cms_serving_mart_is_byte_exact_with_raw_search_oracle():
     mart = _client(connection, cms_backend="mart")
     cases = [
         {"specialty": "Cardiology", "state": "CO"},
+        {"specialty": "Dermatology", "state": "CO"},
         {
             "specialties": "Cardiology,Dermatology",
             "zips": "80202,80203",
@@ -645,6 +677,94 @@ def test_cms_serving_mart_is_byte_exact_with_raw_search_oracle():
 
         assert mart_response.status_code == raw_response.status_code == 200
         assert mart_response.content == raw_response.content
+
+
+def test_nppes_serving_marts_are_byte_exact_with_raw_search_oracle():
+    connection = _database()
+    _build_nppes_serving_marts(connection)
+    raw = _client(connection, nppes_backend="raw")
+    mart = _client(connection, nppes_backend="mart")
+    cases = [
+        {"specialty": "Cardiology", "state": "CO"},
+        {
+            "specialties": "Cardiology,Dermatology",
+            "zips": "80202,80203",
+        },
+        {
+            "specialty": "Cardiology",
+            "lat": 39.74,
+            "lng": -104.99,
+            "radius_miles": 5,
+            "limit": 1,
+        },
+        {"specialty": "Cardiology", "zip": "99999"},
+    ]
+
+    for params in cases:
+        raw_response = raw.get(
+            "/practices/search",
+            params={**params, "location_basis": "nppes_primary"},
+        )
+        mart_response = mart.get(
+            "/practices/search",
+            params={**params, "location_basis": "nppes_primary"},
+        )
+
+        assert mart_response.status_code == raw_response.status_code == 200
+        assert mart_response.content == raw_response.content
+
+
+def test_nppes_auto_backend_falls_back_then_uses_complete_serving_contract():
+    connection = _database()
+    params = {
+        "specialties": "Cardiology,Dermatology",
+        "state": "CO",
+        "location_basis": "nppes_primary",
+    }
+    raw_response = _client(connection, nppes_backend="raw").get(
+        "/practices/search", params=params
+    )
+    fallback_response = _client(connection, nppes_backend="auto").get(
+        "/practices/search", params=params
+    )
+    assert fallback_response.content == raw_response.content
+
+    _build_nppes_serving_marts(connection)
+    for table in (
+        "raw_nppes",
+        "raw_physician_by_provider",
+        "raw_part_d_by_provider",
+        "raw_dac_national",
+        "address_geocode",
+    ):
+        connection.execute(f"ALTER TABLE {table} RENAME TO unavailable_{table}")
+    mart_response = _client(connection, nppes_backend="auto").get(
+        "/practices/search", params=params
+    )
+
+    assert mart_response.status_code == 200
+    assert mart_response.content == raw_response.content
+
+
+def test_nppes_auto_backend_falls_back_when_either_mart_is_incomplete():
+    connection = _database()
+    connection.execute(
+        "CREATE TABLE serving_practice_nppes_provider_sites (npi VARCHAR)"
+    )
+    params = {
+        "specialty": "Cardiology",
+        "state": "CO",
+        "location_basis": "nppes_primary",
+    }
+
+    raw_response = _client(connection, nppes_backend="raw").get(
+        "/practices/search", params=params
+    )
+    auto_response = _client(connection, nppes_backend="auto").get(
+        "/practices/search", params=params
+    )
+
+    assert auto_response.content == raw_response.content
 
 
 def test_auto_backend_uses_raw_without_mart_and_mart_when_available():

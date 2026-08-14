@@ -14,6 +14,7 @@ from pipeline.transform import (
     build_provider_drug_detail,
     build_provider_quality_scores,
     clear_refresh_targets,
+    build_serving_practice_nppes_tables,
     build_serving_practice_provider_sites,
 )
 
@@ -283,6 +284,153 @@ def test_serving_practice_transform_rejects_missing_dac_provenance() -> None:
 
         with pytest.raises(ValueError, match="without source provenance: 1"):
             build_serving_practice_provider_sites(connection, 2026)
+    finally:
+        connection.close()
+
+
+def test_nppes_serving_transform_separates_provider_totals_from_org_context() -> None:
+    connection = _connection()
+    try:
+        connection.execute(
+            '''
+            CREATE TABLE raw_nppes (
+                npi VARCHAR, first_name VARCHAR, last_name VARCHAR,
+                credentials VARCHAR, practice_address_1 VARCHAR,
+                practice_city VARCHAR, practice_state VARCHAR,
+                practice_zip VARCHAR, practice_phone VARCHAR,
+                deactivation_date VARCHAR, source_run_id VARCHAR,
+                source_data_period VARCHAR
+            );
+            INSERT INTO raw_nppes VALUES
+                ('1234567890', 'Jamie', 'Rivera', 'MD', '10 MAIN ST',
+                 'Los Angeles', 'CA', '90001', '111', NULL,
+                 'nppes-run', '2026-07');
+
+            CREATE TABLE raw_physician_by_provider (
+                "Rndrng_NPI" VARCHAR, "Rndrng_Prvdr_Type" VARCHAR,
+                "Tot_Mdcr_Pymt_Amt" DOUBLE, "Tot_Srvcs" DOUBLE,
+                "Tot_Benes" DOUBLE, source_run_id VARCHAR,
+                source_data_period VARCHAR
+            );
+            INSERT INTO raw_physician_by_provider VALUES
+                ('1234567890', 'Cardiology', 125.25, 10, 8,
+                 'partb-run', '2024'),
+                ('1234567890', 'Cardiology', 125.25, 10, 8,
+                 'partb-run', '2024');
+
+            CREATE TABLE raw_part_d_by_provider (
+                "PRSCRBR_NPI" VARCHAR, "Tot_Drug_Cst" DOUBLE,
+                source_run_id VARCHAR, source_data_period VARCHAR
+            );
+            INSERT INTO raw_part_d_by_provider VALUES
+                ('1234567890', 50.75, 'partd-run', '2024');
+
+            CREATE TABLE raw_dac_national (
+                "NPI" VARCHAR, "Facility Name" VARCHAR, org_pac_id VARCHAR,
+                num_org_mem INTEGER, adr_ln_1 VARCHAR, "ZIP Code" VARCHAR,
+                source_run_id VARCHAR, source_data_period VARCHAR
+            );
+            INSERT INTO raw_dac_national VALUES
+                ('1234567890', 'Local Cardio', 'PAC-1', 20,
+                 '10 MAIN ST', '90001', 'dac-run', '2026-07'),
+                ('1234567890', 'Regional Cardio', 'PAC-2', 100,
+                 '99 OTHER ST', '90002', 'dac-run', '2026-07');
+
+            CREATE TABLE address_geocode (addr_key VARCHAR, lat DOUBLE, lng DOUBLE);
+            INSERT INTO address_geocode VALUES
+                ('10 MAIN ST|90001', 34.1, -118.2),
+                ('10 MAIN ST|90001', 34.2, -118.1);
+            '''
+        )
+
+        counts = build_serving_practice_nppes_tables(connection, 2026)
+        provider = connection.execute(
+            """
+            SELECT npi, addr_key, specialties, latitude, longitude,
+                   partb_payments, partd_drug_cost, nppes_source_run_id,
+                   partb_source_data_periods, partd_source_run_ids, data_year
+            FROM serving_practice_nppes_provider_sites
+            """
+        ).fetchone()
+        memberships = connection.execute(
+            """
+            SELECT org_pac_id, practice_name, group_size_national,
+                   primary_address_match, dac_source_run_ids
+            FROM serving_practice_nppes_org_memberships
+            ORDER BY org_pac_id
+            """
+        ).fetchall()
+        connection.execute("UPDATE raw_part_d_by_provider SET source_run_id = NULL")
+        with pytest.raises(
+            ValueError, match="Part D rows without source provenance: 1"
+        ):
+            build_serving_practice_nppes_tables(connection, 2026)
+    finally:
+        connection.close()
+
+    assert counts == {
+        "serving_practice_nppes_provider_sites": 1,
+        "serving_practice_nppes_org_memberships": 2,
+    }
+    assert provider == (
+        "1234567890",
+        "10 MAIN ST|90001",
+        ["Cardiology"],
+        34.1,
+        -118.2,
+        125.25,
+        50.75,
+        "nppes-run",
+        ["2024"],
+        ["partd-run"],
+        2026,
+    )
+    assert memberships == [
+        ("PAC-1", "Local Cardio", 20, True, ["dac-run"]),
+        ("PAC-2", "Regional Cardio", 100, False, ["dac-run"]),
+    ]
+
+
+def test_nppes_serving_transform_rejects_missing_nppes_provenance() -> None:
+    connection = _connection()
+    try:
+        connection.execute(
+            '''
+            CREATE TABLE raw_nppes (
+                npi VARCHAR, first_name VARCHAR, last_name VARCHAR,
+                credentials VARCHAR, practice_address_1 VARCHAR,
+                practice_city VARCHAR, practice_state VARCHAR,
+                practice_zip VARCHAR, practice_phone VARCHAR,
+                deactivation_date VARCHAR, source_run_id VARCHAR,
+                source_data_period VARCHAR
+            );
+            INSERT INTO raw_nppes VALUES
+                ('1234567890', 'Jamie', 'Rivera', 'MD', '10 MAIN ST',
+                 'Los Angeles', 'CA', '90001', '111', NULL, NULL, '2026-07');
+            CREATE TABLE raw_physician_by_provider (
+                "Rndrng_NPI" VARCHAR, "Rndrng_Prvdr_Type" VARCHAR,
+                "Tot_Mdcr_Pymt_Amt" DOUBLE, "Tot_Srvcs" DOUBLE,
+                "Tot_Benes" DOUBLE, source_run_id VARCHAR,
+                source_data_period VARCHAR
+            );
+            INSERT INTO raw_physician_by_provider VALUES
+                ('1234567890', 'Cardiology', 125.25, 10, 8,
+                 'partb-run', '2024');
+            CREATE TABLE raw_part_d_by_provider (
+                "PRSCRBR_NPI" VARCHAR, "Tot_Drug_Cst" DOUBLE,
+                source_run_id VARCHAR, source_data_period VARCHAR
+            );
+            CREATE TABLE raw_dac_national (
+                "NPI" VARCHAR, "Facility Name" VARCHAR, org_pac_id VARCHAR,
+                num_org_mem INTEGER, adr_ln_1 VARCHAR, "ZIP Code" VARCHAR,
+                source_run_id VARCHAR, source_data_period VARCHAR
+            );
+            CREATE TABLE address_geocode (addr_key VARCHAR, lat DOUBLE, lng DOUBLE);
+            '''
+        )
+
+        with pytest.raises(ValueError, match="NPPES rows without source provenance: 1"):
+            build_serving_practice_nppes_tables(connection, 2026)
     finally:
         connection.close()
 
