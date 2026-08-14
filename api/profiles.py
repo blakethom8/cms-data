@@ -192,7 +192,8 @@ def _affiliation_groups(
             from serving_provider_profile_groups
             where npi = ?
             order by (sources <> 'reassignment') desc,
-                     coalesce(group_size, reassignment_size, 0) desc
+                     coalesce(group_size, reassignment_size, 0) desc,
+                     group_id
         """, [npi])
     return _rows(conn, """
         with dac as (
@@ -218,7 +219,8 @@ def _affiliation_groups(
                     else 'reassignment' end sources
         from dac d full outer join reassign r on r.group_id = d.group_id
         order by (d.group_id is not null) desc,
-                 coalesce(d.group_size, r.reassignment_size, 0) desc
+                 coalesce(d.group_size, r.reassignment_size, 0) desc,
+                 coalesce(d.group_id, r.group_id)
     """, [npi, npi])
 
 
