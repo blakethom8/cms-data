@@ -1,0 +1,48 @@
+{
+  "artifact_root": "/srv/cms-data-platform/production-artifacts",
+  "code_commit": "bcd338fa8670caa2c533ff47aa551b77077503d4",
+  "code_fingerprint": "sha256:48c205e2bd46cdfa017b49727352cf27e34fcacc57aebdbd215759e74b4935b0",
+  "deployment_id": "deployment-20260811T155814Z-6baa26aa69",
+  "deployment_kind": "warehouse_release",
+  "error_summary": null,
+  "prepared_at": "2026-08-11T15:58:14+00:00",
+  "previous_deployment_id": "deployment-20260811T145509Z-187674a921",
+  "rollback_at": null,
+  "runtime_fingerprint": "sha256:82370f7e4b25f1a907a92eda5c1097302a6f88936ad59319206b4ade3cc7c347",
+  "selected_at": "2026-08-11T16:05:42+00:00",
+  "state": "verified",
+  "superseded_at": null,
+  "targets": {
+    "code": "/srv/cms-data-platform/production-artifacts/code/bcd338fa8670caa2c533ff47aa551b77077503d4-operations-evidence-1",
+    "runtime": "/srv/cms-data-platform/production-artifacts/runtimes/runtime-candidate-8985e8a-c26024b3",
+    "warehouse": "/srv/cms-data-platform/production-artifacts/warehouses/warehouse-20260811T021837Z-f44c147e30/warehouse.duckdb"
+  },
+  "verification_summary": {
+    "check_count": 15,
+    "check_names": [
+      "authentication_required",
+      "clinical_trials",
+      "explorer_catalog",
+      "health",
+      "industry_detail",
+      "industry_exact_option_round_trip",
+      "industry_options",
+      "industry_search",
+      "practice_capabilities",
+      "practice_search",
+      "process_identity",
+      "provider_profile",
+      "required_tables",
+      "research",
+      "warehouse_counts"
+    ],
+    "evidence_path": "/srv/cms-data-platform/production/evidence/deployment-20260811T155814Z-6baa26aa69/smoke.json",
+    "evidence_sha256": "d7e925274854bb35b5f16dd5d346059587fb0787d43d679e2a6c6be243b4ee14",
+    "generated_at": "2026-08-11T16:06:04+00:00"
+  },
+  "verified_at": "2026-08-11T16:06:39+00:00",
+  "warehouse_byte_size": 20569665536,
+  "warehouse_pipeline_commit": "3c3e761afcfb6aa8c5190e53985adfd50f8e0a51",
+  "warehouse_release_id": "warehouse-20260811T021837Z-f44c147e30",
+  "warehouse_sha256": "91e2ee4e22fd7b7f612765635e19601ce081730c8b0ddc634dc54d891a345ef2"
+}
