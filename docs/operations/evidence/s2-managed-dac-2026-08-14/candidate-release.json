@@ -1,0 +1,118 @@
+{
+  "release": {
+    "baseline_path": "/srv/cms-data-platform/data/releases/warehouse-20260811T021837Z-f44c147e30/warehouse.duckdb",
+    "baseline_sha256": "91e2ee4e22fd7b7f612765635e19601ce081730c8b0ddc634dc54d891a345ef2",
+    "byte_size": 20951347200,
+    "created_at": "2026-08-14T02:54:28+00:00",
+    "database_path": "releases/warehouse-20260814T025428Z-5dac630227/warehouse.duckdb",
+    "duckdb_version": "1.4.4",
+    "error_summary": null,
+    "pipeline_code_commit": "bc7b114187071691f55bb18bf182c3a3477a78bd",
+    "promotion_state": "not_promoted",
+    "promotion_timestamp": null,
+    "rollback_timestamp": null,
+    "sha256": "bf7d2381c8c9a683497a7dcc5d64c87ccfb3359fe5ee77d61e74ca3bffb1fa02",
+    "source_run_ids": [
+      "20260721T220808Z-eed38803",
+      "20260721T220935Z-988185f9",
+      "20260811T015237Z-9b77e0e8",
+      "20260811T015408Z-b90e89a8",
+      "20260811T015409Z-86e07d86",
+      "20260811T015410Z-9c2ba5f4",
+      "20260814T023610Z-5acfb10c"
+    ],
+    "table_counts": {
+      "raw_dac_national": 3388151,
+      "serving_practice_provider_sites": 3212860
+    },
+    "validation_details": {
+      "baseline_dependency_provenance": {
+        "cms_part_d_by_provider": {
+          "source_data_period": "2024-01-01/2024-12-31",
+          "source_run_id": "20260721T220935Z-988185f9"
+        },
+        "cms_physician_by_provider": {
+          "source_data_period": "2024-01-01/2024-12-31",
+          "source_run_id": "20260721T220808Z-eed38803"
+        }
+      },
+      "baseline_warehouse_release_id": "warehouse-20260811T021837Z-f44c147e30",
+      "changed_table_counts": {
+        "raw_dac_national": 3388151,
+        "serving_practice_provider_sites": 3212860
+      },
+      "changed_tables": [
+        "raw_dac_national",
+        "serving_practice_provider_sites"
+      ],
+      "comparison_policy": "serving_practice_managed_dac_v1",
+      "mart_contract_validation": {
+        "available_count": 1,
+        "data_valid_count": 1,
+        "marts": [
+          {
+            "authorized_routes": [],
+            "available": true,
+            "data_valid": true,
+            "duplicate_key_groups": 0,
+            "grain": "one normalized DAC site and organization-or-solo key per provider NPI",
+            "invalid_npis": 0,
+            "issues": [],
+            "key_columns": [
+              "site_key",
+              "npi"
+            ],
+            "kind": "serving",
+            "missing_required_columns": [],
+            "missing_source_periods": [],
+            "orphan_npis": null,
+            "provenance_scope": "row_and_release_manifest",
+            "required_null_rows": 0,
+            "row_count": 3212860,
+            "row_validation_failures": {
+              "empty_specialties": 0,
+              "invalid_group_identity": 0,
+              "invalid_state_or_zip": 0,
+              "missing_dac_provenance": 0,
+              "partb_value_without_provenance": 0,
+              "partd_value_without_provenance": 0
+            },
+            "schema_valid": true,
+            "serving_authorized": false,
+            "source_ids": [
+              "cms_dac_national",
+              "cms_physician_by_provider",
+              "cms_part_d_by_provider"
+            ],
+            "source_period_policy": "DAC, Part B, and Part D retain row period/run IDs and require managed release-manifest periods",
+            "table": "serving_practice_provider_sites"
+          }
+        ],
+        "passed": true,
+        "registered_count": 1,
+        "schema_valid_count": 1,
+        "schema_version": 1,
+        "serving_authorized_count": 0,
+        "validation_scope": "row_and_schema"
+      },
+      "release_scope": "targeted_managed_source_and_mart",
+      "resource_limits": {
+        "memory_limit_gb": 8,
+        "preserve_insertion_order": false,
+        "spill_directory": "/srv/cms-data-platform/data/staging/duckdb-spill/warehouse-20260814T025428Z-5dac630227",
+        "threads": 1
+      },
+      "source_periods": {
+        "cms_dac_national": "2026-07-31",
+        "cms_part_d_by_provider": "2024-01-01/2024-12-31",
+        "cms_physician_by_provider": "2024-01-01/2024-12-31",
+        "nppes_monthly_v2": "2026-07-13",
+        "nppes_weekly_incremental_v2": "2026-07-27/2026-08-02"
+      }
+    },
+    "validation_state": "passed",
+    "validation_timestamp": "2026-08-14T02:57:23+00:00",
+    "warehouse_release_id": "warehouse-20260814T025428Z-5dac630227"
+  },
+  "schema_version": 2
+}

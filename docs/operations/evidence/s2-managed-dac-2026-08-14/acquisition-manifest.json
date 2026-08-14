@@ -1,0 +1,36 @@
+{
+  "manifests": [
+    {
+      "active_release_id": null,
+      "artifact_byte_sizes": {},
+      "artifact_checksums": {},
+      "byte_size": 839308285,
+      "discovery_timestamp": "2026-08-14T02:36:10+00:00",
+      "error_summary": null,
+      "failure_timestamp": null,
+      "operator_summary": null,
+      "pipeline_code_commit": "22ade708dd2b26d37256e0c1a3ebcb0a617bf08b",
+      "promotion_state": "not_promoted",
+      "promotion_timestamp": null,
+      "publisher": "Centers for Medicare & Medicaid Services",
+      "publisher_release_timestamp": "2026-08-13T00:00:00+00:00",
+      "publisher_version": "cms-provider-data:mj5m-pzi6:2026-08-13:52c3f098d7e56028a298fd297cb0b38d_1785521776",
+      "release_id": "cms_dac_national-5053cf8b6ce7baab",
+      "retrieval_timestamp": "2026-08-14T02:37:17+00:00",
+      "rollback_timestamp": null,
+      "row_counts": {
+        "source_rows": 3388151
+      },
+      "run_id": "20260814T023610Z-5acfb10c",
+      "schema_fingerprint": "sha256:56b554f9023a465fddba31d357014c9f1b4ffa93f28fa0c25102965c8f1cc45a",
+      "sha256": "56996a2de21da047d416a4d44c2cbaa116f601e4f69ff314639018316b6c49c0",
+      "source_data_period": "2026-07-31",
+      "source_encoding": "utf-8-sig",
+      "source_id": "cms_dac_national",
+      "source_url": "https://data.cms.gov/provider-data/sites/default/files/resources/52c3f098d7e56028a298fd297cb0b38d_1785521776/DAC_NationalDownloadableFile.csv",
+      "validation_state": "passed",
+      "validation_timestamp": "2026-08-14T02:37:26+00:00"
+    }
+  ],
+  "schema_version": 1
+}
