@@ -991,6 +991,7 @@ def get_practices_router(
                            candidate_specialty -> {mart_spec_pred}
                        ) matched_specialties
                 from serving_practice_provider_sites m
+                where ({" and ".join(loc_clauses)})
             ),
             clinicians as (
                 select m.npi,
@@ -1012,7 +1013,6 @@ def get_practices_router(
                        m.partd_drug_cost drug_cost
                 from matched m
                 where len(m.matched_specialties) > 0
-                  and ({" and ".join(loc_clauses)})
             ),
             sites as (
                 select addr_norm || '|' || zip5 addr_key,
