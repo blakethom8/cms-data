@@ -32,6 +32,7 @@ from .manifests import (
     RunManifest,
     ValidationState,
 )
+from .mart_contracts import validate_mart_contracts
 
 WAREHOUSE_RELEASE_SCHEMA_VERSION = 2
 SUPPORTED_WAREHOUSE_RELEASE_SCHEMA_VERSIONS = frozenset({1, 2})
@@ -1891,14 +1892,20 @@ def build_full_platform_warehouse_release(
                     )
                     for table in FULL_PLATFORM_SMOKE_TABLES
                 }
+                source_periods = {
+                    source_id: manifest.source_data_period
+                    for source_id, manifest in sorted(by_source_id.items())
+                }
+                mart_contracts = validate_mart_contracts(
+                    connection,
+                    source_periods=source_periods,
+                )
                 release.validation_details = {
-                    "source_periods": {
-                        source_id: manifest.source_data_period
-                        for source_id, manifest in sorted(by_source_id.items())
-                    },
+                    "source_periods": source_periods,
                     **cms_details,
                     "nppes": nppes_details,
                     "open_payments": payments_details,
+                    "mart_contracts": mart_contracts,
                     "smoke_table_counts": smoke_table_counts,
                     "aact": {
                         "state": "external_postgresql_release_required",

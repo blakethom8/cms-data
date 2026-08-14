@@ -88,6 +88,11 @@ def test_overview_reports_warehouse_evidence_without_enabling_writes(tmp_path: P
     assert payload["warehouse"]["table_count"] == 2
     assert payload["warehouse"]["raw_table_count"] == 1
     assert payload["warehouse"]["data_mart_count"] == 1
+    assert payload["warehouse"]["registered_mart_count"] == 12
+    assert payload["warehouse"]["available_mart_count"] == 1
+    assert payload["warehouse"]["schema_valid_mart_count"] == 0
+    assert payload["warehouse"]["serving_authorized_mart_count"] == 0
+    assert payload["warehouse"]["mart_validation_scope"] == "schema_only"
     assert payload["warehouse"]["estimated_rows"] == 3
     assert payload["contracts"]["registered_sources"] == len(SOURCE_REGISTRY)
     assert payload["contracts"]["sources_with_active_evidence"] == 1
@@ -106,6 +111,21 @@ def test_sources_join_registry_contracts_to_latest_manifest_evidence(tmp_path: P
     assert "core_providers" in nppes["downstream_tables"]
     assert nppes["evidence_status"] == "validated_active"
     assert nppes["latest_manifest"]["run_id"] == "active"
+
+
+def test_marts_report_contracts_without_claiming_row_validation(tmp_path: Path) -> None:
+    payload = _client(tmp_path).get("/operations/marts").json()
+
+    assert payload["validation_scope"] == "schema_only"
+    assert payload["registered_count"] == 12
+    assert payload["available_count"] == 1
+    assert payload["schema_valid_count"] == 0
+    assert payload["data_valid_count"] is None
+    assert payload["passed"] is False
+    core = next(mart for mart in payload["marts"] if mart["table"] == "core_providers")
+    assert core["available"] is True
+    assert core["schema_valid"] is False
+    assert "offline release validation" in payload["note"]
 
 
 def test_sources_follow_selected_deployment_manifest_evidence(

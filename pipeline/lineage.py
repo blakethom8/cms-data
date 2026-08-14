@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .candidate_sources import CMS_RAW_TABLES
+from .mart_contracts import MART_CONTRACT_BY_TABLE
 
 
 @dataclass(frozen=True, slots=True)
@@ -192,6 +193,9 @@ def table_kind(table: str) -> str:
 
     if table.startswith("raw_"):
         return "raw"
+    contract = MART_CONTRACT_BY_TABLE.get(table)
+    if contract is not None:
+        return contract.kind
     if table in BRIDGE_TABLES:
         return "bridge"
     if table in SUMMARY_TABLES:
