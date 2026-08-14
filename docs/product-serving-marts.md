@@ -53,6 +53,14 @@ national measures. The API's `auto` selector requires both complete table schema
 capability; otherwise it keeps using the raw query. Fixture parity is byte-exact, but no isolated
 production-data candidate, performance proof, deployment, or cutover has occurred for this slice.
 
+The staging-only builder is `python -m pipeline.data_platform
+build-nppes-serving-practice-release`. It requires the exact validated baseline release and a
+matching verified-backup digest, inherits source-run and smoke-count evidence, requires every
+declared NPPES/DAC/Part B/Part D source period, and builds both tables in one transaction under
+bounded DuckDB resources. Its `serving_practice_nppes_additive_v1` comparison policy permits only
+those two tables to differ and applies schema plus order-independent logical fingerprints to every
+other table. The production manager deliberately does not accept this policy yet.
+
 The additive offline builder is `python -m pipeline.data_platform
 build-serving-practice-release`. It requires a named validated baseline release, a verified backup
 manifest with the same SHA-256, and the mart data year. The production-proof form is
