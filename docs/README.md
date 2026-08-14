@@ -24,6 +24,7 @@ When documents disagree, the operating model and the source code win.
 | [operations/hetzner-cms-server.md](operations/hetzner-cms-server.md) | Current production-host inventory, Provider Search boundary, decommission record, and infrastructure work. |
 | [operations/cms-private-network-runbook.md](operations/cms-private-network-runbook.md) | Current private WireGuard API boundary, verification, rollback, and retention procedure. |
 | [operations/disaster-recovery-runbook.md](operations/disaster-recovery-runbook.md) | Off-host CMS bundle contract, isolated materialization, restore verification, and drill evidence. |
+| [operations/bounded-duckdb-rehearsal-2026-08-13.md](operations/bounded-duckdb-rehearsal-2026-08-13.md) | Three-trial executor comparison, tuning evidence, safety checks, and remaining rollout gates. |
 | [operations/cms-private-network-cutover-2026-08-05.md](operations/cms-private-network-cutover-2026-08-05.md) | Executed private-network and credential cutover record. |
 | [operations/public-sites-retirement-2026-08-05.md](operations/public-sites-retirement-2026-08-05.md) | Executed public-site retirement record and remaining owner actions. |
 | [operations/command-center-temporary-publication-2026-08-11.md](operations/command-center-temporary-publication-2026-08-11.md) | Temporary direct HTTPS Command Center boundary, validation, DNS handoff, and rollback. |
