@@ -205,7 +205,8 @@ preview itself could not prove a safe result. The command is read-only and has n
 
 ```bash
 cd /srv/cms-data-platform/production/release-current/code
-/srv/cms-data-platform/production/release-current/runtime/bin/python \
+PYTHONDONTWRITEBYTECODE=1 \
+  /srv/cms-data-platform/production/release-current/runtime/bin/python -B \
   -m pipeline.retention preview \
   --platform-root /srv/cms-data-platform \
   --candidate-bytes ADDITIONAL_UNALLOCATED_CANDIDATE_BYTES \

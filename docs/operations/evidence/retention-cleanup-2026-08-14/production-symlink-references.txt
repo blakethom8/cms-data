@@ -1,0 +1,3 @@
+/srv/cms-data-platform/production/releases/deployment-20260723T002222Z-31da868819/warehouse -> /srv/cms-data-platform/production-artifacts/warehouses/warehouse-20260723T000948Z-24c46c1cda/warehouse.duckdb
+/srv/cms-data-platform/production/releases/deployment-20260723T004113Z-2f24e8d935/warehouse -> /srv/cms-data-platform/production-artifacts/warehouses/warehouse-20260723T000948Z-24c46c1cda/warehouse.duckdb
+/srv/cms-data-platform/production/releases/deployment-20260804T163418Z-2ad954a774/warehouse -> /srv/cms-data-platform/production-artifacts/warehouses/warehouse-20260723T000948Z-24c46c1cda/warehouse.duckdb

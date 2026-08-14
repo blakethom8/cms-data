@@ -389,7 +389,7 @@ evidence.
    symlinks or crossing mounts, and names paths for operator review:
 
    ```bash
-   python -m pipeline.retention preview \
+   PYTHONDONTWRITEBYTECODE=1 python -B -m pipeline.retention preview \
      --platform-root /srv/cms-data-platform \
      --json
    ```

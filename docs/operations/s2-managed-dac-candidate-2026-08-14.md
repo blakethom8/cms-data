@@ -260,6 +260,12 @@ route ETag. Data routes retain deployment-scoped ETags and conditional `304` res
 service is active on PID `4002795` with zero restarts. The complete follow-up record is
 [`release-verification-code-deploy-2026-08-14.md`](release-verification-code-deploy-2026-08-14.md).
 
+The subsequent approved
+[`storage-retention cleanup`](storage-retention-cleanup-2026-08-14.md) removed one superseded
+warehouse artifact outside the active-plus-two rollback floor. Disk use fell from 84.29% critical
+to 78.99% warning, with 61,414,723,584 bytes free. The selected deployment, S2 warehouse, service
+PID, rollback floor, and Provider Search readiness were unchanged.
+
 ## Evidence
 
 Machine-readable acquisition, release, comparison, raw/mart diagnostics, six final benchmark

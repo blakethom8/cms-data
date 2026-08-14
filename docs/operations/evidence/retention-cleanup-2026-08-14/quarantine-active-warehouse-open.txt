@@ -1,0 +1,1 @@
+python  4002795 dataops   13rR     REG                8,1 20951347200  4605223 /srv/cms-data-platform/production-artifacts/warehouses/warehouse-20260814T025428Z-5dac630227/warehouse.duckdb

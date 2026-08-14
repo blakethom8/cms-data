@@ -1,0 +1,104 @@
+{
+  "release": {
+    "baseline_path": "/srv/cms-data-platform/production-artifacts/warehouses/warehouse-20260722T010607Z-ce61bf5add/warehouse.duckdb",
+    "baseline_sha256": "32b5031d875ad3a1c32df1c31a2d62396c3d23d0ba811ec2bcf4c480bb76ed94",
+    "byte_size": 20091252736,
+    "created_at": "2026-07-23T00:09:48+00:00",
+    "database_path": "releases/warehouse-20260723T000948Z-24c46c1cda/warehouse.duckdb",
+    "duckdb_version": "1.4.4",
+    "error_summary": null,
+    "pipeline_code_commit": "8f7ddc466a1a1c8f44ce115fa75048cac08f30fc",
+    "promotion_state": "active",
+    "promotion_timestamp": "2026-07-23T00:15:24+00:00",
+    "rollback_timestamp": null,
+    "sha256": "b8af099ef264883160797e8d5799b788681e085a53db912975de702e52f59ed7",
+    "source_run_ids": [
+      "20260722T210102Z-4daffea3",
+      "20260722T210120Z-cc2fca49"
+    ],
+    "table_counts": {
+      "pecos_enrollment_practice_locations": 1080813,
+      "pecos_provider_organizations": 3857023,
+      "raw_pecos_practice_location": 1080813,
+      "raw_pecos_reassignment": 3857023
+    },
+    "validation_details": {
+      "baseline_dependencies": {
+        "cms_pecos_public_provider_enrollment": {
+          "source_data_period": "2026-01-01/2026-03-31",
+          "table": "raw_pecos_enrollment"
+        }
+      },
+      "changed_tables": [
+        "pecos_enrollment_practice_locations",
+        "pecos_provider_organizations",
+        "raw_pecos_practice_location",
+        "raw_pecos_reassignment"
+      ],
+      "comparison_policy": "ppef_additive_v1",
+      "ppef_relationship_quality": {
+        "curated_california_location_rows": 97678,
+        "curated_location_row_delta": 0,
+        "curated_named_organization_rate": 0.9989224850357387,
+        "curated_named_organization_rows": 3852867,
+        "curated_provider_location_rows": 1080813,
+        "curated_provider_organization_rows": 3857023,
+        "duplicate_practice_location_grains": 0,
+        "duplicate_reassignment_pairs": 0,
+        "orphan_location_enrollments": 0,
+        "orphan_reassigning_enrollments": 0,
+        "orphan_receiving_enrollments": 0,
+        "raw_practice_location_rows": 1080813,
+        "raw_reassignment_rows": 3857023
+      },
+      "release_scope": "targeted_additive",
+      "resource_limits": {
+        "memory_limit_gb": 12,
+        "preserve_insertion_order": false,
+        "spill_directory": "/srv/cms-data-platform/refresh-20260721/staging/duckdb-spill/warehouse-20260723T000948Z-24c46c1cda",
+        "threads": 1
+      },
+      "smoke_table_counts": {
+        "core_providers": 7373208,
+        "hospital_affiliations": 139775,
+        "industry_relationships": 4845738,
+        "kol_summary": 29327,
+        "nppes_radar_events": 23202,
+        "nppes_radar_provider_state": 7383503,
+        "nppes_radar_releases": 2,
+        "order_referring_eligibility": 1037396,
+        "pecos_enrollment_practice_locations": 1080813,
+        "pecos_provider_organizations": 3857023,
+        "practice_locations": 2341984,
+        "provider_drug_detail": 22444680,
+        "provider_quality_scores": 412031,
+        "provider_service_detail": 9306818,
+        "raw_dme_by_referring_provider": 387352,
+        "raw_hospital_enrollments": 9175,
+        "raw_nppes": 7382998,
+        "raw_open_payments_general": 16131856,
+        "raw_open_payments_ownership": 2646,
+        "raw_open_payments_research": 931959,
+        "raw_order_and_referring": 2015687,
+        "raw_part_d_by_provider": 1416883,
+        "raw_part_d_by_provider_and_drug": 28023892,
+        "raw_pecos_enrollment": 2981799,
+        "raw_pecos_practice_location": 1080813,
+        "raw_pecos_reassignment": 3857023,
+        "raw_physician_by_provider": 1296739,
+        "raw_physician_by_provider_and_service": 9781673,
+        "raw_qpp_experience": 503917,
+        "raw_reassignment": 3361139,
+        "utilization_metrics": 1235757
+      },
+      "source_periods": {
+        "cms_pecos_practice_location": "2026-01-01/2026-03-31",
+        "cms_pecos_reassignment": "2026-01-01/2026-03-31"
+      }
+    },
+    "validation_state": "passed",
+    "validation_timestamp": "2026-07-23T00:11:48+00:00",
+    "warehouse_release_id": "warehouse-20260723T000948Z-24c46c1cda"
+  },
+  "schema_version": 2
+}

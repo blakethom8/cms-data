@@ -1,0 +1,152 @@
+{
+  "captured_at": "2026-08-14T17:55:43+00:00",
+  "references": [
+    {
+      "artifact_root": "/srv/cms-data-platform/production-artifacts",
+      "code_commit": "cd3b1f75f510822c0cd8070ca291c33b7c2558e7",
+      "code_fingerprint": "sha256:ac241e8cb06c6a9b036f8e317d6d7d2e2ec65c9baa7513b7bbfabd257f23d937",
+      "deployment_id": "deployment-20260723T002222Z-31da868819",
+      "deployment_kind": "warehouse_release",
+      "error_summary": null,
+      "prepared_at": "2026-07-23T00:22:22+00:00",
+      "previous_deployment_id": "deployment-20260722T224705Z-e852780678",
+      "rollback_at": null,
+      "runtime_fingerprint": "sha256:82370f7e4b25f1a907a92eda5c1097302a6f88936ad59319206b4ade3cc7c347",
+      "selected_at": "2026-07-23T00:31:31+00:00",
+      "state": "superseded",
+      "superseded_at": "2026-07-23T00:42:29+00:00",
+      "targets": {
+        "code": "/srv/cms-data-platform/production-artifacts/code/cd3b1f75f510822c0cd8070ca291c33b7c2558e7",
+        "runtime": "/srv/cms-data-platform/production-artifacts/runtimes/runtime-candidate-8985e8a-c26024b3",
+        "warehouse": "/srv/cms-data-platform/production-artifacts/warehouses/warehouse-20260723T000948Z-24c46c1cda/warehouse.duckdb"
+      },
+      "verification_summary": {
+        "check_count": 15,
+        "check_names": [
+          "authentication_required",
+          "clinical_trials",
+          "explorer_catalog",
+          "health",
+          "industry_detail",
+          "industry_exact_option_round_trip",
+          "industry_options",
+          "industry_search",
+          "practice_capabilities",
+          "practice_search",
+          "process_identity",
+          "provider_profile",
+          "required_tables",
+          "research",
+          "warehouse_counts"
+        ],
+        "evidence_path": "/srv/cms-data-platform/production/evidence/deployment-20260723T002222Z-31da868819/smoke.json",
+        "evidence_sha256": "055620b0f459429d9640cda68c8102cee7f836796590f49ead23e25611b5bb24",
+        "generated_at": "2026-07-23T00:31:56+00:00"
+      },
+      "verified_at": "2026-07-23T00:32:44+00:00",
+      "warehouse_byte_size": 20091252736,
+      "warehouse_pipeline_commit": "8f7ddc466a1a1c8f44ce115fa75048cac08f30fc",
+      "warehouse_release_id": "warehouse-20260723T000948Z-24c46c1cda",
+      "warehouse_sha256": "b8af099ef264883160797e8d5799b788681e085a53db912975de702e52f59ed7"
+    },
+    {
+      "artifact_root": "/srv/cms-data-platform/production-artifacts",
+      "code_commit": "3f3ff40939537c3040cdeb5fdb4c156da07348e0",
+      "code_fingerprint": "sha256:2645c9d290ec3a2c189305d272e5bed457e66f9e0c1c42a7153d6a84156ae4a9",
+      "deployment_id": "deployment-20260723T004113Z-2f24e8d935",
+      "deployment_kind": "warehouse_release",
+      "error_summary": null,
+      "prepared_at": "2026-07-23T00:41:13+00:00",
+      "previous_deployment_id": "deployment-20260723T002222Z-31da868819",
+      "rollback_at": null,
+      "runtime_fingerprint": "sha256:82370f7e4b25f1a907a92eda5c1097302a6f88936ad59319206b4ade3cc7c347",
+      "selected_at": "2026-07-23T00:42:29+00:00",
+      "state": "superseded",
+      "superseded_at": "2026-08-04T16:47:18+00:00",
+      "targets": {
+        "code": "/srv/cms-data-platform/production-artifacts/code/3f3ff40939537c3040cdeb5fdb4c156da07348e0",
+        "runtime": "/srv/cms-data-platform/production-artifacts/runtimes/runtime-candidate-8985e8a-c26024b3",
+        "warehouse": "/srv/cms-data-platform/production-artifacts/warehouses/warehouse-20260723T000948Z-24c46c1cda/warehouse.duckdb"
+      },
+      "verification_summary": {
+        "check_count": 15,
+        "check_names": [
+          "authentication_required",
+          "clinical_trials",
+          "explorer_catalog",
+          "health",
+          "industry_detail",
+          "industry_exact_option_round_trip",
+          "industry_options",
+          "industry_search",
+          "practice_capabilities",
+          "practice_search",
+          "process_identity",
+          "provider_profile",
+          "required_tables",
+          "research",
+          "warehouse_counts"
+        ],
+        "evidence_path": "/srv/cms-data-platform/production/evidence/deployment-20260723T004113Z-2f24e8d935/smoke.json",
+        "evidence_sha256": "8d362c00d3568ab6465aa6ff9606425528df42090857d141616b8c8c3e1bc0d6",
+        "generated_at": "2026-07-23T00:42:50+00:00"
+      },
+      "verified_at": "2026-07-23T00:43:24+00:00",
+      "warehouse_byte_size": 20091252736,
+      "warehouse_pipeline_commit": "8f7ddc466a1a1c8f44ce115fa75048cac08f30fc",
+      "warehouse_release_id": "warehouse-20260723T000948Z-24c46c1cda",
+      "warehouse_sha256": "b8af099ef264883160797e8d5799b788681e085a53db912975de702e52f59ed7"
+    },
+    {
+      "artifact_root": "/srv/cms-data-platform/production-artifacts",
+      "code_commit": "f081f8c1f0a695da782ebcc9bc0fa6edc219f51a",
+      "code_fingerprint": "sha256:6e2fe3dbb26b45f9e81c740749194a1b94ce243d8d6e4f2702b2c60f6f63fb58",
+      "deployment_id": "deployment-20260804T163418Z-2ad954a774",
+      "deployment_kind": "warehouse_release",
+      "error_summary": null,
+      "prepared_at": "2026-08-04T16:34:18+00:00",
+      "previous_deployment_id": "deployment-20260723T004113Z-2f24e8d935",
+      "rollback_at": null,
+      "runtime_fingerprint": "sha256:82370f7e4b25f1a907a92eda5c1097302a6f88936ad59319206b4ade3cc7c347",
+      "selected_at": "2026-08-04T16:47:18+00:00",
+      "state": "superseded",
+      "superseded_at": "2026-08-11T02:50:41+00:00",
+      "targets": {
+        "code": "/srv/cms-data-platform/production-artifacts/code/f081f8c1f0a695da782ebcc9bc0fa6edc219f51a",
+        "runtime": "/srv/cms-data-platform/production-artifacts/runtimes/runtime-candidate-8985e8a-c26024b3",
+        "warehouse": "/srv/cms-data-platform/production-artifacts/warehouses/warehouse-20260723T000948Z-24c46c1cda/warehouse.duckdb"
+      },
+      "verification_summary": {
+        "check_count": 15,
+        "check_names": [
+          "authentication_required",
+          "clinical_trials",
+          "explorer_catalog",
+          "health",
+          "industry_detail",
+          "industry_exact_option_round_trip",
+          "industry_options",
+          "industry_search",
+          "practice_capabilities",
+          "practice_search",
+          "process_identity",
+          "provider_profile",
+          "required_tables",
+          "research",
+          "warehouse_counts"
+        ],
+        "evidence_path": "/srv/cms-data-platform/production/evidence/deployment-20260804T163418Z-2ad954a774/smoke.json",
+        "evidence_sha256": "778303dba46a4a6744aaee5f82f6f2299ab1f5b82c4632b8a338bcb73f95c38c",
+        "generated_at": "2026-08-04T16:47:40+00:00"
+      },
+      "verified_at": "2026-08-04T16:48:22+00:00",
+      "warehouse_byte_size": 20091252736,
+      "warehouse_pipeline_commit": "8f7ddc466a1a1c8f44ce115fa75048cac08f30fc",
+      "warehouse_release_id": "warehouse-20260723T000948Z-24c46c1cda",
+      "warehouse_sha256": "b8af099ef264883160797e8d5799b788681e085a53db912975de702e52f59ed7"
+    }
+  ],
+  "schema_version": 1,
+  "selected_deployment_id": "deployment-20260814T172445Z-3cd965d04e",
+  "warehouse_release_id": "warehouse-20260723T000948Z-24c46c1cda"
+}

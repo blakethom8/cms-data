@@ -1,0 +1,18 @@
+{
+  "artifact_integrity": "passed",
+  "blocking_transactions": 0,
+  "bundle_path": "/srv/cms-data-platform/production/releases/deployment-20260814T172445Z-3cd965d04e",
+  "control_plane_healthy": true,
+  "deployment_count": 25,
+  "error_summary": null,
+  "healthy": true,
+  "last_verified_at": "2026-08-14T17:34:46+00:00",
+  "pointer_matches_ledger": true,
+  "schema_version": 1,
+  "selected_code_commit": "b80d56510757770f1f6f6d90492053948567b08b",
+  "selected_deployment_id": "deployment-20260814T172445Z-3cd965d04e",
+  "selected_state": "verified",
+  "selected_warehouse_release_id": "warehouse-20260814T025428Z-5dac630227",
+  "service_observation": "not_checked",
+  "transition_sentinel": false
+}
