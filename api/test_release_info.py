@@ -222,6 +222,107 @@ def test_resolver_caches_success_for_process_lifetime_but_retries_failure(
     assert resolver() is first
 
 
+def test_resolver_refreshes_verification_for_the_same_cached_bundle(
+    tmp_path: Path,
+) -> None:
+    root = _production_root(tmp_path)
+    ledger_path = root / "deployments.json"
+    ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+    ledger["deployments"][0]["verified_at"] = None
+    ledger_path.write_text(json.dumps(ledger), encoding="utf-8")
+    resolver = make_release_resolver(_duckdb_path(root))
+
+    selected = resolver()
+    assert selected is not None
+    assert selected.release_id == DEPLOYMENT_ID
+    assert selected.promoted_at == "2026-07-21T20:31:07+00:00"
+    assert selected.verified_at is None
+
+    ledger["deployments"][0]["verified_at"] = "2026-07-21T20:35:11+00:00"
+    ledger_path.write_text(json.dumps(ledger), encoding="utf-8")
+
+    verified = resolver()
+    assert verified is not None
+    assert verified.release_id == DEPLOYMENT_ID
+    assert verified.verified_at == "2026-07-21T20:35:11+00:00"
+
+    # Once complete, the metadata is stable even if the control-plane file
+    # becomes temporarily unreadable later in the process lifetime.
+    ledger_path.unlink()
+    assert resolver() is verified
+
+
+def test_resolver_does_not_refresh_from_a_repointed_bundle(tmp_path: Path) -> None:
+    root = _production_root(tmp_path)
+    ledger_path = root / "deployments.json"
+    ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+    ledger["deployments"][0]["verified_at"] = None
+    ledger_path.write_text(json.dumps(ledger), encoding="utf-8")
+    resolver = make_release_resolver(_duckdb_path(root))
+
+    selected = resolver()
+    assert selected is not None
+    assert selected.verified_at is None
+
+    other_id = "deployment-20260721T212014Z-18465a2bbf"
+    other_bundle = root / "releases" / other_id
+    other_bundle.mkdir()
+    (other_bundle / "warehouse").symlink_to(tmp_path / "artifacts" / "warehouse.duckdb")
+    (root / "release-current").unlink()
+    (root / "release-current").symlink_to(other_bundle)
+    ledger["deployments"].append(
+        {
+            "deployment_id": other_id,
+            "state": "verified",
+            "selected_at": "2026-07-21T21:20:07+00:00",
+            "verified_at": "2026-07-21T21:25:11+00:00",
+        }
+    )
+    ledger_path.write_text(json.dumps(ledger), encoding="utf-8")
+
+    unchanged = resolver()
+    assert unchanged is selected
+    assert unchanged.release_id == DEPLOYMENT_ID
+    assert unchanged.verified_at is None
+
+
+def test_release_endpoint_exposes_completed_verification_without_a_stale_304(
+    tmp_path: Path,
+) -> None:
+    root = _production_root(tmp_path)
+    ledger_path = root / "deployments.json"
+    ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+    ledger["deployments"][0]["verified_at"] = None
+    ledger_path.write_text(json.dumps(ledger), encoding="utf-8")
+    resolver = make_release_resolver(_duckdb_path(root))
+    app = FastAPI()
+    app.include_router(get_release_router(resolver))
+    app.add_middleware(
+        ReleaseCacheMiddleware,
+        resolve_metadata=resolver,
+        is_authorized=lambda request: True,
+    )
+    client = TestClient(app)
+
+    selected = client.get("/release")
+    assert selected.status_code == 200
+    assert selected.json()["verified_at"] is None
+    assert selected.headers["Cache-Control"] == "no-store"
+    assert "ETag" not in selected.headers
+
+    ledger["deployments"][0]["verified_at"] = "2026-07-21T20:35:11+00:00"
+    ledger_path.write_text(json.dumps(ledger), encoding="utf-8")
+
+    verified = client.get(
+        "/release",
+        headers={"If-None-Match": f'"{DEPLOYMENT_ID}:{REPRESENTATION_VERSION}"'},
+    )
+    assert verified.status_code == 200
+    assert verified.json()["verified_at"] == "2026-07-21T20:35:11+00:00"
+    assert verified.headers["Cache-Control"] == "no-store"
+    assert "ETag" not in verified.headers
+
+
 # --- Cache validators (ETag / If-None-Match) ---
 
 RELEASE = ReleaseMetadata(release_id=DEPLOYMENT_ID)

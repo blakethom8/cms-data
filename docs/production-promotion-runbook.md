@@ -406,12 +406,16 @@ service user — the endpoint stays correct via the bundle name, but record the 
 decide (owner) between loosening that one file's group mode and stamping
 `CMS_RELEASE_METADATA_PATH` at deploy time.
 
-The one-shot flow runs smoke before it records manager verification. If `/release` has already
-cached otherwise complete metadata during smoke, `verified_at` can remain `null` for that process
-even after the ledger is verified. Treat a null timestamp as a recorded metadata discrepancy: prove
-the ledger state independently and confirm release ID, artifact hashes, ETag, and route behavior.
-Do not add an unplanned restart solely to refresh the field. Track the cache refresh behavior as a
-code follow-up.
+The one-shot flow runs smoke before it records manager verification. The release resolver caches
+immutable release identity but, while a selected bundle still has no verification timestamp,
+refreshes only `verified_at` from that same deployment's ledger. It refuses to refresh from a
+repointed bundle, so an old process cannot absorb a new deployment's metadata during transition.
+`GET /release` is non-cacheable operational metadata and does not use the immutable data-route ETag,
+so clients cannot retain the pre-verification representation through a conditional `304`.
+Older serving bundles may continue returning `verified_at: null` until their next normal code
+deployment. Treat that as a recorded metadata discrepancy: prove the ledger state independently and
+confirm release ID, artifact hashes, ETag, and route behavior. Do not add an unplanned restart solely
+to refresh the informational field.
 
 Rollback is unchanged: the cutover auto-selects and re-verifies the predecessor on any
 required failure, and manual `rollback` restores the prior bundle pointer, which also

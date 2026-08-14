@@ -16,7 +16,7 @@ import json
 import logging
 import os
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Callable
 
@@ -215,20 +215,41 @@ def load_release_metadata(duckdb_path: str) -> ReleaseMetadata | None:
     return _bundle_release(duckdb_path)
 
 
+def _bundle_verified_at(duckdb_path: str, release_id: str) -> str | None:
+    """Refresh verification only when the bundle still names the cached release."""
+
+    try:
+        bundle = Path(duckdb_path).parent.resolve(strict=True)
+    except OSError:
+        return None
+    if bundle.name != release_id or bundle.parent.name != "releases":
+        return None
+    record = _ledger_record(bundle.parent.parent, release_id)
+    return _optional_str(record.get("verified_at"))
+
+
 def make_release_resolver(duckdb_path: str) -> Callable[[], ReleaseMetadata | None]:
-    """Cache a successful resolution for the process lifetime.
+    """Cache stable release identity while completing pending verification metadata.
 
     A release changes only through the production cutover, which restarts the
-    service, so a resolved identity is stable until shutdown. Failed
-    resolutions are retried per request so a box repaired in place recovers
-    without a restart.
+    service, so a resolved identity is stable until shutdown. The cutover
+    verifies the selected deployment after smoke; until that transition is
+    recorded, refresh only ``verified_at`` from the same bundle's ledger.
+    Failed resolutions are retried per request so a box repaired in place
+    recovers without a restart.
     """
 
     cache: list[ReleaseMetadata] = []
 
     def resolve() -> ReleaseMetadata | None:
         if cache:
-            return cache[0]
+            metadata = cache[0]
+            if metadata.promoted_at is not None and metadata.verified_at is None:
+                verified_at = _bundle_verified_at(duckdb_path, metadata.release_id)
+                if verified_at is not None:
+                    metadata = replace(metadata, verified_at=verified_at)
+                    cache[0] = metadata
+            return metadata
         metadata = load_release_metadata(duckdb_path)
         if metadata is not None:
             cache.append(metadata)
@@ -241,8 +262,10 @@ def make_release_resolver(duckdb_path: str) -> Callable[[], ReleaseMetadata | No
 # immutable release the revalidation is a free 304.
 CACHE_CONTROL = "private, no-cache"
 
-# Process-status and documentation surfaces are not data responses.
-_VALIDATOR_EXEMPT_PATHS = frozenset({"/health", "/openapi.json", "/redoc"})
+# Process-status and documentation surfaces are not immutable data responses.
+_VALIDATOR_EXEMPT_PATHS = frozenset(
+    {"/health", "/release", "/openapi.json", "/redoc"}
+)
 
 
 def release_etag(metadata: ReleaseMetadata) -> str:
@@ -316,7 +339,7 @@ def get_release_router(
     router = APIRouter(tags=["Release"])
 
     @router.get("/release", response_model=ReleaseManifest)
-    async def release():
+    async def release(response: Response):
         metadata = resolve_metadata()
         if metadata is None:
             raise HTTPException(
@@ -326,6 +349,7 @@ def get_release_router(
                     "serves; the release manifest cannot be reported."
                 ),
             )
+        response.headers["Cache-Control"] = "no-store"
         return metadata.to_payload()
 
     return router
