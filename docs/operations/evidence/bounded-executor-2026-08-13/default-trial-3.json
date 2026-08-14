@@ -1,0 +1,760 @@
+{
+  "base_origin": "http://127.0.0.1:18080",
+  "concurrency_levels": [
+    1,
+    2,
+    4,
+    8,
+    12
+  ],
+  "generated_at": "2026-08-13T23:54:50+00:00",
+  "levels": [
+    {
+      "by_request": {
+        "explorer": {
+          "elapsed_seconds": 34.135,
+          "failures": 0,
+          "latency_ms": {
+            "max": 1572.27,
+            "p50": 1440.84,
+            "p95": 1572.27,
+            "p99": 1572.27
+          },
+          "pool_wait_ms": {
+            "max": 0.04,
+            "p50": 0.03,
+            "p95": 0.04,
+            "p99": 0.04,
+            "samples": 10
+          },
+          "requests": 10,
+          "response_bytes": 420110,
+          "status_counts": {
+            "200": 10
+          },
+          "throughput_rps": 0.29
+        },
+        "practice_search": {
+          "elapsed_seconds": 34.135,
+          "failures": 0,
+          "latency_ms": {
+            "max": 270.88,
+            "p50": 253.64,
+            "p95": 270.88,
+            "p99": 270.88
+          },
+          "pool_wait_ms": {
+            "max": 0.04,
+            "p50": 0.03,
+            "p95": 0.04,
+            "p99": 0.04,
+            "samples": 10
+          },
+          "requests": 10,
+          "response_bytes": 269233,
+          "status_counts": {
+            "200": 10
+          },
+          "throughput_rps": 0.29
+        },
+        "provider_profile": {
+          "elapsed_seconds": 34.135,
+          "failures": 0,
+          "latency_ms": {
+            "max": 624.78,
+            "p50": 596.53,
+            "p95": 610.66,
+            "p99": 624.78
+          },
+          "pool_wait_ms": {
+            "max": 0.08,
+            "p50": 0.03,
+            "p95": 0.07,
+            "p99": 0.08,
+            "samples": 20
+          },
+          "requests": 20,
+          "response_bytes": 95260,
+          "status_counts": {
+            "200": 20
+          },
+          "throughput_rps": 0.59
+        },
+        "provider_search": {
+          "elapsed_seconds": 34.135,
+          "failures": 0,
+          "latency_ms": {
+            "max": 112.99,
+            "p50": 105.52,
+            "p95": 112.99,
+            "p99": 112.99
+          },
+          "pool_wait_ms": {
+            "max": 0.04,
+            "p50": 0.04,
+            "p95": 0.04,
+            "p99": 0.04,
+            "samples": 10
+          },
+          "requests": 10,
+          "response_bytes": 19316,
+          "status_counts": {
+            "200": 10
+          },
+          "throughput_rps": 0.29
+        },
+        "radar": {
+          "elapsed_seconds": 34.135,
+          "failures": 0,
+          "latency_ms": {
+            "max": 445.97,
+            "p50": 420.87,
+            "p95": 445.97,
+            "p99": 445.97
+          },
+          "pool_wait_ms": {
+            "max": 0.04,
+            "p50": 0.03,
+            "p95": 0.04,
+            "p99": 0.04,
+            "samples": 10
+          },
+          "requests": 10,
+          "response_bytes": 875900,
+          "status_counts": {
+            "200": 10
+          },
+          "throughput_rps": 0.29
+        }
+      },
+      "concurrency": 1,
+      "elapsed_seconds": 34.135,
+      "failures": 0,
+      "latency_ms": {
+        "max": 1572.27,
+        "p50": 582.61,
+        "p95": 1454.08,
+        "p99": 1482.82
+      },
+      "pool_wait_ms": {
+        "max": 0.08,
+        "p50": 0.03,
+        "p95": 0.05,
+        "p99": 0.07,
+        "samples": 60
+      },
+      "requests": 60,
+      "response_bytes": 1679819,
+      "server_process": {
+        "cpu_percent": 308.4,
+        "process_id": 3802234,
+        "rss_end_bytes": 1771950080,
+        "rss_peak_bytes": 1781792768,
+        "rss_start_bytes": 1764798464
+      },
+      "status_counts": {
+        "200": 60
+      },
+      "throughput_rps": 1.76
+    },
+    {
+      "by_request": {
+        "explorer": {
+          "elapsed_seconds": 21.383,
+          "failures": 0,
+          "latency_ms": {
+            "max": 1576.58,
+            "p50": 1497.99,
+            "p95": 1576.58,
+            "p99": 1576.58
+          },
+          "pool_wait_ms": {
+            "max": 0.05,
+            "p50": 0.03,
+            "p95": 0.05,
+            "p99": 0.05,
+            "samples": 10
+          },
+          "requests": 10,
+          "response_bytes": 420110,
+          "status_counts": {
+            "200": 10
+          },
+          "throughput_rps": 0.47
+        },
+        "practice_search": {
+          "elapsed_seconds": 21.383,
+          "failures": 0,
+          "latency_ms": {
+            "max": 422.87,
+            "p50": 371.21,
+            "p95": 422.87,
+            "p99": 422.87
+          },
+          "pool_wait_ms": {
+            "max": 0.06,
+            "p50": 0.03,
+            "p95": 0.06,
+            "p99": 0.06,
+            "samples": 10
+          },
+          "requests": 10,
+          "response_bytes": 269751,
+          "status_counts": {
+            "200": 10
+          },
+          "throughput_rps": 0.47
+        },
+        "provider_profile": {
+          "elapsed_seconds": 21.383,
+          "failures": 0,
+          "latency_ms": {
+            "max": 1103.09,
+            "p50": 865.28,
+            "p95": 1074.16,
+            "p99": 1103.09
+          },
+          "pool_wait_ms": {
+            "max": 0.06,
+            "p50": 0.03,
+            "p95": 0.05,
+            "p99": 0.06,
+            "samples": 20
+          },
+          "requests": 20,
+          "response_bytes": 95260,
+          "status_counts": {
+            "200": 20
+          },
+          "throughput_rps": 0.94
+        },
+        "provider_search": {
+          "elapsed_seconds": 21.383,
+          "failures": 0,
+          "latency_ms": {
+            "max": 114.97,
+            "p50": 105.97,
+            "p95": 114.97,
+            "p99": 114.97
+          },
+          "pool_wait_ms": {
+            "max": 0.07,
+            "p50": 0.03,
+            "p95": 0.07,
+            "p99": 0.07,
+            "samples": 10
+          },
+          "requests": 10,
+          "response_bytes": 19394,
+          "status_counts": {
+            "200": 10
+          },
+          "throughput_rps": 0.47
+        },
+        "radar": {
+          "elapsed_seconds": 21.383,
+          "failures": 0,
+          "latency_ms": {
+            "max": 490.15,
+            "p50": 446.03,
+            "p95": 490.15,
+            "p99": 490.15
+          },
+          "pool_wait_ms": {
+            "max": 0.04,
+            "p50": 0.03,
+            "p95": 0.04,
+            "p99": 0.04,
+            "samples": 10
+          },
+          "requests": 10,
+          "response_bytes": 875900,
+          "status_counts": {
+            "200": 10
+          },
+          "throughput_rps": 0.47
+        }
+      },
+      "concurrency": 2,
+      "elapsed_seconds": 21.383,
+      "failures": 0,
+      "latency_ms": {
+        "max": 1576.58,
+        "p50": 618.64,
+        "p95": 1504.64,
+        "p99": 1560.38
+      },
+      "pool_wait_ms": {
+        "max": 0.07,
+        "p50": 0.03,
+        "p95": 0.05,
+        "p99": 0.06,
+        "samples": 60
+      },
+      "requests": 60,
+      "response_bytes": 1680415,
+      "server_process": {
+        "cpu_percent": 470.8,
+        "process_id": 3802234,
+        "rss_end_bytes": 1811922944,
+        "rss_peak_bytes": 1826246656,
+        "rss_start_bytes": 1771950080
+      },
+      "status_counts": {
+        "200": 60
+      },
+      "throughput_rps": 2.81
+    },
+    {
+      "by_request": {
+        "explorer": {
+          "elapsed_seconds": 14.911,
+          "failures": 0,
+          "latency_ms": {
+            "max": 2006.18,
+            "p50": 1834.87,
+            "p95": 2006.18,
+            "p99": 2006.18
+          },
+          "pool_wait_ms": {
+            "max": 0.05,
+            "p50": 0.03,
+            "p95": 0.05,
+            "p99": 0.05,
+            "samples": 10
+          },
+          "requests": 10,
+          "response_bytes": 420110,
+          "status_counts": {
+            "200": 10
+          },
+          "throughput_rps": 0.67
+        },
+        "practice_search": {
+          "elapsed_seconds": 14.911,
+          "failures": 0,
+          "latency_ms": {
+            "max": 440.25,
+            "p50": 379.39,
+            "p95": 440.25,
+            "p99": 440.25
+          },
+          "pool_wait_ms": {
+            "max": 0.06,
+            "p50": 0.03,
+            "p95": 0.06,
+            "p99": 0.06,
+            "samples": 10
+          },
+          "requests": 10,
+          "response_bytes": 269986,
+          "status_counts": {
+            "200": 10
+          },
+          "throughput_rps": 0.67
+        },
+        "provider_profile": {
+          "elapsed_seconds": 14.911,
+          "failures": 0,
+          "latency_ms": {
+            "max": 1401.57,
+            "p50": 1233.46,
+            "p95": 1365.12,
+            "p99": 1401.57
+          },
+          "pool_wait_ms": {
+            "max": 0.04,
+            "p50": 0.03,
+            "p95": 0.04,
+            "p99": 0.04,
+            "samples": 20
+          },
+          "requests": 20,
+          "response_bytes": 95260,
+          "status_counts": {
+            "200": 20
+          },
+          "throughput_rps": 1.34
+        },
+        "provider_search": {
+          "elapsed_seconds": 14.911,
+          "failures": 0,
+          "latency_ms": {
+            "max": 249.26,
+            "p50": 182.27,
+            "p95": 249.26,
+            "p99": 249.26
+          },
+          "pool_wait_ms": {
+            "max": 0.04,
+            "p50": 0.03,
+            "p95": 0.04,
+            "p99": 0.04,
+            "samples": 10
+          },
+          "requests": 10,
+          "response_bytes": 19497,
+          "status_counts": {
+            "200": 10
+          },
+          "throughput_rps": 0.67
+        },
+        "radar": {
+          "elapsed_seconds": 14.911,
+          "failures": 0,
+          "latency_ms": {
+            "max": 868.16,
+            "p50": 766.07,
+            "p95": 868.16,
+            "p99": 868.16
+          },
+          "pool_wait_ms": {
+            "max": 0.04,
+            "p50": 0.03,
+            "p95": 0.04,
+            "p99": 0.04,
+            "samples": 10
+          },
+          "requests": 10,
+          "response_bytes": 875900,
+          "status_counts": {
+            "200": 10
+          },
+          "throughput_rps": 0.67
+        }
+      },
+      "concurrency": 4,
+      "elapsed_seconds": 14.911,
+      "failures": 0,
+      "latency_ms": {
+        "max": 2006.18,
+        "p50": 1003.01,
+        "p95": 1892.61,
+        "p99": 1929.36
+      },
+      "pool_wait_ms": {
+        "max": 0.06,
+        "p50": 0.03,
+        "p95": 0.04,
+        "p99": 0.05,
+        "samples": 60
+      },
+      "requests": 60,
+      "response_bytes": 1680753,
+      "server_process": {
+        "cpu_percent": 659.02,
+        "process_id": 3802234,
+        "rss_end_bytes": 1805676544,
+        "rss_peak_bytes": 1838272512,
+        "rss_start_bytes": 1811922944
+      },
+      "status_counts": {
+        "200": 60
+      },
+      "throughput_rps": 4.02
+    },
+    {
+      "by_request": {
+        "explorer": {
+          "elapsed_seconds": 14.866,
+          "failures": 0,
+          "latency_ms": {
+            "max": 3066.07,
+            "p50": 2943.57,
+            "p95": 3066.07,
+            "p99": 3066.07
+          },
+          "pool_wait_ms": {
+            "max": 1270.0,
+            "p50": 1194.79,
+            "p95": 1270.0,
+            "p99": 1270.0,
+            "samples": 10
+          },
+          "requests": 10,
+          "response_bytes": 420110,
+          "status_counts": {
+            "200": 10
+          },
+          "throughput_rps": 0.67
+        },
+        "practice_search": {
+          "elapsed_seconds": 14.866,
+          "failures": 0,
+          "latency_ms": {
+            "max": 1276.16,
+            "p50": 820.67,
+            "p95": 1276.16,
+            "p99": 1276.16
+          },
+          "pool_wait_ms": {
+            "max": 830.61,
+            "p50": 431.34,
+            "p95": 830.61,
+            "p99": 830.61,
+            "samples": 10
+          },
+          "requests": 10,
+          "response_bytes": 269946,
+          "status_counts": {
+            "200": 10
+          },
+          "throughput_rps": 0.67
+        },
+        "provider_profile": {
+          "elapsed_seconds": 14.866,
+          "failures": 0,
+          "latency_ms": {
+            "max": 2752.54,
+            "p50": 2298.03,
+            "p95": 2665.32,
+            "p99": 2752.54
+          },
+          "pool_wait_ms": {
+            "max": 1386.23,
+            "p50": 1072.43,
+            "p95": 1310.5,
+            "p99": 1386.23,
+            "samples": 20
+          },
+          "requests": 20,
+          "response_bytes": 95260,
+          "status_counts": {
+            "200": 20
+          },
+          "throughput_rps": 1.35
+        },
+        "provider_search": {
+          "elapsed_seconds": 14.866,
+          "failures": 0,
+          "latency_ms": {
+            "max": 1477.69,
+            "p50": 1425.19,
+            "p95": 1477.69,
+            "p99": 1477.69
+          },
+          "pool_wait_ms": {
+            "max": 1326.86,
+            "p50": 1235.23,
+            "p95": 1326.86,
+            "p99": 1326.86,
+            "samples": 10
+          },
+          "requests": 10,
+          "response_bytes": 19369,
+          "status_counts": {
+            "200": 10
+          },
+          "throughput_rps": 0.67
+        },
+        "radar": {
+          "elapsed_seconds": 14.866,
+          "failures": 0,
+          "latency_ms": {
+            "max": 1679.6,
+            "p50": 1390.1,
+            "p95": 1679.6,
+            "p99": 1679.6
+          },
+          "pool_wait_ms": {
+            "max": 978.89,
+            "p50": 652.34,
+            "p95": 978.89,
+            "p99": 978.89,
+            "samples": 10
+          },
+          "requests": 10,
+          "response_bytes": 875900,
+          "status_counts": {
+            "200": 10
+          },
+          "throughput_rps": 0.67
+        }
+      },
+      "concurrency": 8,
+      "elapsed_seconds": 14.866,
+      "failures": 0,
+      "latency_ms": {
+        "max": 3066.07,
+        "p50": 1549.23,
+        "p95": 3002.1,
+        "p99": 3048.56
+      },
+      "pool_wait_ms": {
+        "max": 1386.23,
+        "p50": 970.27,
+        "p95": 1306.84,
+        "p99": 1326.86,
+        "samples": 60
+      },
+      "requests": 60,
+      "response_bytes": 1680585,
+      "server_process": {
+        "cpu_percent": 664.73,
+        "process_id": 3802234,
+        "rss_end_bytes": 1806942208,
+        "rss_peak_bytes": 1837457408,
+        "rss_start_bytes": 1805676544
+      },
+      "status_counts": {
+        "200": 60
+      },
+      "throughput_rps": 4.04
+    },
+    {
+      "by_request": {
+        "explorer": {
+          "elapsed_seconds": 11.888,
+          "failures": 5,
+          "latency_ms": {
+            "max": 3539.72,
+            "p50": 2452.99,
+            "p95": 3539.72,
+            "p99": 3539.72
+          },
+          "pool_wait_ms": {
+            "max": 2000.0,
+            "p50": 2000.0,
+            "p95": 2000.0,
+            "p99": 2000.0,
+            "samples": 10
+          },
+          "requests": 10,
+          "response_bytes": 210310,
+          "status_counts": {
+            "200": 5,
+            "503": 5
+          },
+          "throughput_rps": 0.84
+        },
+        "practice_search": {
+          "elapsed_seconds": 11.888,
+          "failures": 0,
+          "latency_ms": {
+            "max": 1848.75,
+            "p50": 1700.56,
+            "p95": 1848.75,
+            "p99": 1848.75
+          },
+          "pool_wait_ms": {
+            "max": 1405.77,
+            "p50": 1266.37,
+            "p95": 1405.77,
+            "p99": 1405.77,
+            "samples": 10
+          },
+          "requests": 10,
+          "response_bytes": 270105,
+          "status_counts": {
+            "200": 10
+          },
+          "throughput_rps": 0.84
+        },
+        "provider_profile": {
+          "elapsed_seconds": 11.888,
+          "failures": 0,
+          "latency_ms": {
+            "max": 3045.59,
+            "p50": 2613.11,
+            "p95": 3036.98,
+            "p99": 3045.59
+          },
+          "pool_wait_ms": {
+            "max": 1907.3,
+            "p50": 1348.66,
+            "p95": 1867.67,
+            "p99": 1907.3,
+            "samples": 20
+          },
+          "requests": 20,
+          "response_bytes": 95260,
+          "status_counts": {
+            "200": 20
+          },
+          "throughput_rps": 1.68
+        },
+        "provider_search": {
+          "elapsed_seconds": 11.888,
+          "failures": 2,
+          "latency_ms": {
+            "max": 2172.82,
+            "p50": 1981.65,
+            "p95": 2172.82,
+            "p99": 2172.82
+          },
+          "pool_wait_ms": {
+            "max": 2000.0,
+            "p50": 1840.61,
+            "p95": 2000.0,
+            "p99": 2000.0,
+            "samples": 10
+          },
+          "requests": 10,
+          "response_bytes": 15613,
+          "status_counts": {
+            "200": 8,
+            "503": 2
+          },
+          "throughput_rps": 0.84
+        },
+        "radar": {
+          "elapsed_seconds": 11.888,
+          "failures": 0,
+          "latency_ms": {
+            "max": 2497.25,
+            "p50": 2336.39,
+            "p95": 2497.25,
+            "p99": 2497.25
+          },
+          "pool_wait_ms": {
+            "max": 1665.09,
+            "p50": 1551.67,
+            "p95": 1665.09,
+            "p99": 1665.09,
+            "samples": 10
+          },
+          "requests": 10,
+          "response_bytes": 875900,
+          "status_counts": {
+            "200": 10
+          },
+          "throughput_rps": 0.84
+        }
+      },
+      "concurrency": 12,
+      "elapsed_seconds": 11.888,
+      "failures": 7,
+      "latency_ms": {
+        "max": 3539.72,
+        "p50": 2281.07,
+        "p95": 3292.96,
+        "p99": 3485.58
+      },
+      "pool_wait_ms": {
+        "max": 2000.0,
+        "p50": 1438.07,
+        "p95": 2000.0,
+        "p99": 2000.0,
+        "samples": 60
+      },
+      "requests": 60,
+      "response_bytes": 1467188,
+      "server_process": {
+        "cpu_percent": 695.4,
+        "process_id": 3802234,
+        "rss_end_bytes": 1782120448,
+        "rss_peak_bytes": 1822638080,
+        "rss_start_bytes": 1806942208
+      },
+      "status_counts": {
+        "200": 53,
+        "503": 7
+      },
+      "throughput_rps": 5.05
+    }
+  ],
+  "requests_per_level": 60,
+  "schema_version": 1,
+  "timeout_seconds": 30.0,
+  "workload_sha256": "0956223308be22f6807c33bd230df941c7a2b22e7c6949c0692d9946bc0eb8f0"
+}

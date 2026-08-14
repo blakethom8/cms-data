@@ -1,6 +1,7 @@
 # Bounded DuckDB request executor
 
-Status: implementation candidate. This design is not a production rollout record.
+Status: implementation rehearsed; not deployed. See
+[the 2026-08-13 rehearsal record](bounded-duckdb-rehearsal-2026-08-13.md).
 
 ## Why this exists
 
@@ -80,3 +81,11 @@ the active database in place.
 - 2026-08-13: Candidate preflight must exercise the production launch shape from the release root,
   not only the repository's `api/` test working directory. The first rehearsal preflight caught and
   corrected an import-order mismatch before a candidate process was started.
+- 2026-08-13: Pool size and DuckDB threads must be tuned together. Four connections × four threads
+  slowed isolated queries; two connections × eight threads preserved the same nominal 16-thread
+  saturation while materially improving isolated latency.
+- 2026-08-13: A 2-second acquisition deadline rejected representative C12 work. A 4-second bound
+  completed all three final trials while a separate heavier probe still proved controlled 503
+  overload behavior.
+- 2026-08-13: Commit benchmark workload files, not only their hashes. The original baseline retained
+  semantic identity and a raw hash but not the bytes needed to reproduce that raw hash.

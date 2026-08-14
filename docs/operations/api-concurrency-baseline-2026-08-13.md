@@ -24,6 +24,13 @@ No production configuration, code, credentials, service state, or data changed d
 - Result: 900 HTTP 200 responses; zero failures and zero timeouts
 - Pool wait: unavailable because the baseline server has no explicit query pool
 
+Evidence limitation discovered during the candidate rehearsal: the temporary baseline workload file
+was not retained. Its request semantics and raw SHA were documented, but its exact bytes cannot be
+reconstructed. The equivalent request mix is now committed as
+[`provider-search-mixed-v1.json`](workloads/provider-search-mixed-v1.json), with raw SHA-256
+`0956223308be22f6807c33bd230df941c7a2b22e7c6949c0692d9946bc0eb8f0`; future comparisons must use
+that file directly.
+
 The deterministic six-request mix was provider search (weight 1), provider profile (weight 2),
 practice search (weight 1), Radar (weight 1), and explorer provider evidence (weight 1). Each level
 therefore ran 10 requests for each route except provider profile, which ran 20.
