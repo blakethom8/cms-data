@@ -67,3 +67,18 @@ result as queueing or head-of-line blocking—not as the endpoint becoming intri
 Every implementation comparison must use the same release data, workload SHA-256, route weights,
 request count, timeout, and concurrency levels. Report failures and overload responses alongside
 latency; a candidate does not improve performance by dropping work invisibly.
+
+## S2 canonical diagnostics
+
+The mixed workload measures contention. Serving-mart work also uses the committed
+[`s2-canonical-cases-v1.json`](workloads/s2-canonical-cases-v1.json) corpus to preserve status,
+response digest, byte size, result count, and isolated latency for provider, practice, market,
+industry, Radar, and Explorer behavior. Run `pipeline.serving_diagnostics` only against an immutable
+warehouse and isolated API process. The runner hashes the warehouse before issuing requests and
+fails if its declared identity is wrong; it never writes the API key to evidence.
+It runs three trials by default and fails if a status is wrong or response bytes drift between
+trials. The warehouse path must be a regular non-symlink file with no write permission bits.
+
+The canonical corpus is a behavior/performance baseline, not yet operator-plan evidence. SQL
+`EXPLAIN ANALYZE` capture is the next S2.2 increment and must attach each observed query to the same
+case, warehouse hash, code commit, and executor settings. Do not infer query cost from HTTP latency.

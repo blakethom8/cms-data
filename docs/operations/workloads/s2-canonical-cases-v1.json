@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {"name":"profile-rich","family":"provider-profile","path":"/profiles/1811967433","expected_status":200,"purpose":"Provider with broad utilization, industry, research, location, group, and hospital evidence"},
+    {"name":"profile-standard","family":"provider-profile","path":"/profiles/1003005257","expected_status":200,"purpose":"Stable mixed-workload provider identity"},
+    {"name":"profile-missing","family":"provider-profile","path":"/profiles/0000000000","expected_status":404,"purpose":"Missing-provider status and body semantics"},
+    {"name":"practice-cms-state","family":"practice-search","path":"/practices/search?specialty=Cardiology&state=OH&limit=25&location_basis=cms_enrollment","expected_status":200,"result_count_field":"returned_count","purpose":"First serving-mart slice using CMS enrollment doors"},
+    {"name":"practice-nppes-state","family":"practice-search","path":"/practices/search?specialty=Cardiology&state=OH&limit=25&location_basis=nppes_primary","expected_status":200,"result_count_field":"returned_count","purpose":"Unchanged NPPES-primary comparison path"},
+    {"name":"practice-cms-zip-boundary","family":"practice-search","path":"/practices/search?specialties=Cardiology%2CInternal%20Medicine&zips=44101%2C44102%2C44103&limit=100&location_basis=cms_enrollment","expected_status":200,"result_count_field":"returned_count","purpose":"Bounded multi-specialty and multi-ZIP filter"},
+    {"name":"practice-cms-empty","family":"practice-search","path":"/practices/search?specialty=Cardiology&zip=00000&limit=25&location_basis=cms_enrollment","expected_status":200,"result_count_field":"returned_count","purpose":"Empty practice result semantics"},
+    {"name":"market-state","family":"market-snapshot","path":"/practices/market-snapshot?specialty=Cardiology&state=OH","expected_status":200,"purpose":"Market aggregation over a broad state"},
+    {"name":"industry-search","family":"industry-search","path":"/industry/search?specialty=CARDIOVASCULAR%20DISEASE%20%28CARDIOLOGY%29&state=OH&limit=100","expected_status":200,"result_count_field":"results","purpose":"Industry relationship search and matched-versus-total metrics"},
+    {"name":"industry-options-manufacturer","family":"industry-options","path":"/industry/options?field=manufacturer&q=pf&state=OH&limit=30","expected_status":200,"purpose":"Manufacturer facet aggregation"},
+    {"name":"industry-detail","family":"industry-detail","path":"/industry/1811967433/detail","expected_status":200,"purpose":"Provider industry payments, manufacturers, products, and natures"},
+    {"name":"radar-city","family":"radar","path":"/radar/providers?city=Cleveland&state=OH&limit=100","expected_status":200,"result_count_field":"events","purpose":"Broad city-scoped Radar state and event lookup"},
+    {"name":"radar-zip-taxonomy","family":"radar","path":"/radar/providers?zip5=44195&taxonomy_code=207LC0200X&limit=100","expected_status":200,"result_count_field":"events","purpose":"ZIP and taxonomy Radar filtering"},
+    {"name":"explorer-ten-npi","family":"explorer-evidence","path":"/explorer/provider-evidence?npis=1003005257%2C1811967433%2C1194759803%2C1326205873%2C1043244296%2C1780065508%2C1881985521%2C1326164633%2C1831159714%2C0000000000","expected_status":200,"purpose":"Maximum bounded source-faithful evidence request"}
+  ]
+}
