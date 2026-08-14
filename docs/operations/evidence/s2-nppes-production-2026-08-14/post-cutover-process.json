@@ -1,0 +1,10 @@
+{
+  "candidate_warehouse": "/srv/cms-data-platform/production-artifacts/warehouses/warehouse-20260814T183948Z-e5ff46dce9/warehouse.duckdb",
+  "candidate_warehouse_open": true,
+  "cwd": "/srv/cms-data-platform/production-artifacts/code/ef9a94fef246011ffa4b7410dd6b31c25ddd148d-nppes-practice-1",
+  "executable": "/usr/bin/python3.12",
+  "matching_fds": [
+    "/proc/4041825/fd/13"
+  ],
+  "pid": 4041825
+}

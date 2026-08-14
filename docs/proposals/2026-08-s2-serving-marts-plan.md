@@ -1,14 +1,11 @@
 # S2 release-built serving marts plan
 
-> Status: S2.1-S2.4 complete; the explicitly approved production cutover completed successfully on
-> 2026-08-14 and the first practice-search serving mart is live. S2.5 NPPES-primary implementation
-> is complete. S2.6 produced a validated isolated production-data candidate with passing parity,
-> plans, and concurrency evidence. Its required production copy is capacity-blocked; no deployment
-> was prepared and no NPPES-primary production cutover occurred.
+> Status: S2.1-S2.6 complete. Both practice-search slices are live through deployment-local
+> capability selection. The NPPES-primary candidate passed parity, plans, concurrency, isolated
+> smoke, rollback rehearsal, and the separately approved production cutover on 2026-08-14.
 >
-> Production state: code-only deployment `deployment-20260814T172445Z-3cd965d04e` is selected and
-> verified; S2 deployment `deployment-20260814T160153Z-45ab9d2d38` remains the rollback-ready
-> predecessor. Both use the same live S2 warehouse and serving mart.
+> Production state: deployment `deployment-20260814T201311Z-0325c353c9` is selected and verified;
+> `deployment-20260814T172445Z-3cd965d04e` remains its rollback-ready predecessor.
 
 ## Decision
 
@@ -206,8 +203,8 @@ falls back to raw when either is absent or incomplete. Byte-exact fixture parity
 multi-specialty/multi-ZIP, proximity/limit, empty results, raw fallback, and a mart-only query after
 raw dependencies are made unavailable. An isolated production-data release builder, complete
 parity corpus, operator profiles, concurrency benchmark, capacity preview, and explicit cutover
-decision were the S2.6 gates. The staging candidate now passes the data and performance gates but
-is capacity-blocked before production preparation. No NPPES-primary production state changed.
+decision were the S2.6 gates. The candidate passed every gate and was selected in production on
+2026-08-14 after the approved capacity recovery, isolated deployment smoke, and rollback rehearsal.
 
 S2.6 uses `build-nppes-serving-practice-release`. The command requires a named validated
 baseline and matching verified backup, inherits its source and smoke identity, requires all
@@ -220,8 +217,11 @@ contracts, and zero row or parent-orphan failures. The isolated release
 `warehouse-20260814T183948Z-e5ff46dce9` passed both mart contracts,
 42 invariant fingerprints, focused exact parity, paired operator plans, and three-trial concurrency
 tests. Mart p95 was 80.0–88.3% lower across concurrency 1–12 with zero failures. The distinct
-production copy projects 90.85% disk use and is blocked; see the
-[candidate record](../operations/s2-nppes-primary-candidate-2026-08-14.md).
+production copy initially projected 90.85% disk use and was blocked. The July workspace compaction
+then recovered 26.17 GB while retaining every unique source snapshot; the post-copy gate passed at
+83.64%, and the one-shot cutover selected and verified the candidate. See the
+[candidate record](../operations/s2-nppes-primary-candidate-2026-08-14.md) and
+[production cutover record](../operations/s2-nppes-primary-production-cutover-2026-08-14.md).
 
 Radar already uses release-built state/event tables and receives another mart only if its measured
 plan justifies one. Provider fuzzy search remains separate because precomputation must preserve its

@@ -1,0 +1,150 @@
+{
+  "base_url": "http://127.0.0.1:8080",
+  "checks": [
+    {
+      "name": "health",
+      "state": "passed",
+      "status_code": 200,
+      "summary": {
+        "core_providers": 7395713
+      }
+    },
+    {
+      "name": "process_identity",
+      "state": "passed",
+      "status_code": null,
+      "summary": {
+        "bundle": "/srv/cms-data-platform/production/releases/deployment-20260814T201311Z-0325c353c9",
+        "code_target": "/srv/cms-data-platform/production-artifacts/code/ef9a94fef246011ffa4b7410dd6b31c25ddd148d-nppes-practice-1",
+        "deployment_id": "deployment-20260814T201311Z-0325c353c9",
+        "process_id": 4041825,
+        "runtime_referenced": true,
+        "warehouse_open": true
+      }
+    },
+    {
+      "name": "authentication_required",
+      "state": "passed",
+      "status_code": 401,
+      "summary": {}
+    },
+    {
+      "name": "practice_capabilities",
+      "state": "passed",
+      "status_code": 200,
+      "summary": {
+        "contract_version": 2
+      }
+    },
+    {
+      "name": "practice_search",
+      "state": "passed",
+      "status_code": 200,
+      "summary": {
+        "returned": 3,
+        "total": 616
+      }
+    },
+    {
+      "name": "provider_profile",
+      "state": "passed",
+      "status_code": 200,
+      "summary": {
+        "npi": "1003005257"
+      }
+    },
+    {
+      "name": "industry_search",
+      "state": "passed",
+      "status_code": 200,
+      "summary": {
+        "returned": 3,
+        "total": 28337
+      }
+    },
+    {
+      "name": "industry_options",
+      "state": "passed",
+      "status_code": 200,
+      "summary": {
+        "returned": 1
+      }
+    },
+    {
+      "name": "industry_exact_option_round_trip",
+      "state": "passed",
+      "status_code": 200,
+      "summary": {}
+    },
+    {
+      "name": "industry_detail",
+      "state": "passed",
+      "status_code": 200,
+      "summary": {
+        "expected_status": 200,
+        "npi": "1295786770"
+      }
+    },
+    {
+      "name": "research",
+      "state": "passed",
+      "status_code": 200,
+      "summary": {}
+    },
+    {
+      "name": "clinical_trials",
+      "state": "passed",
+      "status_code": 200,
+      "summary": {
+        "expected_snapshot_date": "2026-07-21",
+        "expected_study_count": 594772,
+        "snapshot_date": "2026-07-21",
+        "study_count": 594772
+      }
+    },
+    {
+      "name": "explorer_catalog",
+      "state": "passed",
+      "status_code": 200,
+      "summary": {
+        "dataset_count": 13
+      }
+    },
+    {
+      "name": "required_tables",
+      "state": "passed",
+      "status_code": 200,
+      "summary": {
+        "present": [
+          "core_providers",
+          "hospital_affiliations",
+          "nppes_radar_events",
+          "nppes_radar_provider_state",
+          "nppes_radar_releases",
+          "raw_hospital_enrollments",
+          "raw_nppes"
+        ]
+      }
+    },
+    {
+      "name": "warehouse_counts",
+      "state": "passed",
+      "status_code": 200,
+      "summary": {
+        "affiliated_providers": 111881,
+        "core_providers": 7395713,
+        "hospital_affiliations": 139775,
+        "nppes_radar_events": 69374,
+        "nppes_radar_provider_state": 7406196,
+        "nppes_radar_releases": 4,
+        "raw_hospital_enrollments": 9175,
+        "raw_nppes": 7404601
+      }
+    }
+  ],
+  "deployment_id": "deployment-20260814T201311Z-0325c353c9",
+  "error_summary": null,
+  "generated_at": "2026-08-14T20:21:57+00:00",
+  "schema_version": 1,
+  "state": "passed"
+}

@@ -3,6 +3,11 @@
 > **Decision:** the data and performance gates pass, but production preparation and cutover are
 > blocked by storage capacity. Production was not changed.
 
+> **Completed later on 2026-08-14:** capacity was recovered without removing unique source
+> snapshots, and the separately approved production cutover selected and verified the candidate.
+> See the [production cutover record](s2-nppes-primary-production-cutover-2026-08-14.md). This
+> document remains the pre-cutover candidate record.
+
 ## Outcome
 
 The isolated staging release `warehouse-20260814T183948Z-e5ff46dce9` adds the two NPPES-primary
