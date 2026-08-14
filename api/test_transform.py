@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 
 import duckdb
+import pytest
 
 REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPOSITORY_ROOT))
@@ -13,6 +14,7 @@ from pipeline.transform import (
     build_provider_drug_detail,
     build_provider_quality_scores,
     clear_refresh_targets,
+    build_serving_practice_provider_sites,
 )
 
 
@@ -175,6 +177,114 @@ def test_practice_transform_matches_numeric_raw_npi_to_text_core_npi() -> None:
 
     assert count == 1
     assert row == ("1234567890", "Example Group", 8)
+
+
+def test_serving_practice_transform_preserves_grain_metrics_and_provenance() -> None:
+    connection = _connection()
+    try:
+        connection.execute(
+            '''
+            CREATE TABLE raw_dac_national (
+                "NPI" VARCHAR, "Provider First Name" VARCHAR,
+                "Provider Last Name" VARCHAR, pri_spec VARCHAR,
+                "Facility Name" VARCHAR, org_pac_id VARCHAR,
+                num_org_mem INTEGER, adr_ln_1 VARCHAR, "ZIP Code" VARCHAR,
+                "City/Town" VARCHAR, "State" VARCHAR,
+                "Telephone Number" VARCHAR, source_run_id VARCHAR,
+                source_data_period VARCHAR
+            );
+            INSERT INTO raw_dac_national VALUES
+                ('1234567890', 'Jamie', 'Rivera', 'Electrophysiology',
+                 'Cardio Group', ' PAC-1 ', 20, '10 MAIN ST', '90001',
+                 'Los Angeles', 'CA', '111', 'dac-run', '2026-07'),
+                ('1234567890', 'Jamie', 'Rivera', 'Cardiology',
+                 'Cardio Group', 'PAC-1', 20, '10 MAIN ST', '90001',
+                 'Los Angeles', 'CA', '111', 'dac-run', '2026-07');
+
+            CREATE TABLE raw_physician_by_provider (
+                "Rndrng_NPI" VARCHAR, "Tot_Mdcr_Pymt_Amt" DOUBLE,
+                source_run_id VARCHAR, source_data_period VARCHAR
+            );
+            INSERT INTO raw_physician_by_provider VALUES
+                ('1234567890', 125.25, 'partb-run', '2024'),
+                ('1234567890', 125.25, 'partb-run', '2024');
+
+            CREATE TABLE raw_part_d_by_provider (
+                "PRSCRBR_NPI" VARCHAR, "Tot_Drug_Cst" DOUBLE,
+                source_run_id VARCHAR, source_data_period VARCHAR
+            );
+            INSERT INTO raw_part_d_by_provider VALUES
+                ('1234567890', 50.75, 'partd-run', '2024');
+
+            CREATE TABLE address_geocode (addr_key VARCHAR, lat DOUBLE, lng DOUBLE);
+            INSERT INTO address_geocode VALUES
+                ('10 MAIN ST|90001', 34.1, -118.2),
+                ('10 MAIN ST|90001', 34.2, -118.1);
+            '''
+        )
+
+        count = build_serving_practice_provider_sites(connection, 2026)
+        row = connection.execute(
+            """
+            SELECT addr_key, group_key, npi, specialties, latitude, longitude,
+                   partb_payments, partd_drug_cost, dac_source_run_ids,
+                   partb_source_data_periods, partd_source_run_ids, data_year
+            FROM serving_practice_provider_sites
+            """
+        ).fetchone()
+    finally:
+        connection.close()
+
+    assert count == 1
+    assert row == (
+        "10 MAIN ST|90001",
+        "PAC-1",
+        "1234567890",
+        ["Cardiology", "Electrophysiology"],
+        34.1,
+        -118.2,
+        125.25,
+        50.75,
+        ["dac-run"],
+        ["2024"],
+        ["partd-run"],
+        2026,
+    )
+
+
+def test_serving_practice_transform_rejects_missing_dac_provenance() -> None:
+    connection = _connection()
+    try:
+        connection.execute(
+            '''
+            CREATE TABLE raw_dac_national (
+                "NPI" VARCHAR, "Provider First Name" VARCHAR,
+                "Provider Last Name" VARCHAR, pri_spec VARCHAR,
+                "Facility Name" VARCHAR, org_pac_id VARCHAR,
+                num_org_mem INTEGER, adr_ln_1 VARCHAR, "ZIP Code" VARCHAR,
+                "City/Town" VARCHAR, "State" VARCHAR,
+                "Telephone Number" VARCHAR, source_run_id VARCHAR,
+                source_data_period VARCHAR
+            );
+            INSERT INTO raw_dac_national VALUES
+                ('1234567890', 'Jamie', 'Rivera', 'Cardiology', NULL, NULL, 1,
+                 '10 MAIN ST', '90001', 'Los Angeles', 'CA', NULL, NULL, '2026-07');
+            CREATE TABLE raw_physician_by_provider (
+                "Rndrng_NPI" VARCHAR, "Tot_Mdcr_Pymt_Amt" DOUBLE,
+                source_run_id VARCHAR, source_data_period VARCHAR
+            );
+            CREATE TABLE raw_part_d_by_provider (
+                "PRSCRBR_NPI" VARCHAR, "Tot_Drug_Cst" DOUBLE,
+                source_run_id VARCHAR, source_data_period VARCHAR
+            );
+            CREATE TABLE address_geocode (addr_key VARCHAR, lat DOUBLE, lng DOUBLE);
+            '''
+        )
+
+        with pytest.raises(ValueError, match="without source provenance: 1"):
+            build_serving_practice_provider_sites(connection, 2026)
+    finally:
+        connection.close()
 
 
 def test_provider_evidence_outputs_keep_address_and_organization_sources_separate() -> None:

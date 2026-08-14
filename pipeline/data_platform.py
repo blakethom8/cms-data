@@ -44,6 +44,7 @@ from .releases import (
     build_full_platform_warehouse_release,
     build_ppef_warehouse_release,
     build_radar_warehouse_release,
+    build_serving_practice_warehouse_release,
     build_warehouse_release,
     compare_warehouse_release,
     promote_staging_release,
@@ -426,6 +427,32 @@ def _parser() -> argparse.ArgumentParser:
         help="DuckDB worker threads for the targeted build (default: 1)",
     )
     build_ppef.add_argument("--json", action="store_true")
+    build_serving = subparsers.add_parser(
+        "build-serving-practice-release",
+        help="Build only the provider-search practice serving mart",
+    )
+    build_serving.add_argument("--baseline-warehouse-release-id", required=True)
+    build_serving.add_argument("--backup-manifest", required=True, type=Path)
+    build_serving.add_argument("--data-year", required=True, type=int)
+    build_serving.add_argument(
+        "--data-root", type=Path, default=DEFAULT_MANIFEST_PATH.parent
+    )
+    build_serving.add_argument(
+        "--environment", choices=[STAGING_ENVIRONMENT], required=True
+    )
+    build_serving.add_argument(
+        "--memory-limit-gb",
+        type=int,
+        default=12,
+        help="DuckDB memory ceiling for the targeted build (default: 12 GiB)",
+    )
+    build_serving.add_argument(
+        "--threads",
+        type=int,
+        default=1,
+        help="DuckDB worker threads for the targeted build (default: 1)",
+    )
+    build_serving.add_argument("--json", action="store_true")
     build_platform = subparsers.add_parser(
         "build-platform-release",
         help="Build all CMS, NPPES, and Open Payments runs into one staging candidate",
@@ -601,6 +628,7 @@ def main(argv: list[str] | None = None) -> int:
         "build-release",
         "build-cms-release",
         "build-ppef-release",
+        "build-serving-practice-release",
         "build-platform-release",
         "build-radar-release",
         "prepare-aact-release",
@@ -633,6 +661,18 @@ def main(argv: list[str] | None = None) -> int:
                     threads=args.threads,
                 ).to_dict()
                 heading = "Targeted PPEF staging warehouse release built"
+            elif args.command == "build-serving-practice-release":
+                payload = build_serving_practice_warehouse_release(
+                    data_root=args.data_root,
+                    baseline_warehouse_release_id=(
+                        args.baseline_warehouse_release_id
+                    ),
+                    backup_manifest_path=args.backup_manifest,
+                    data_year=args.data_year,
+                    memory_limit_gb=args.memory_limit_gb,
+                    threads=args.threads,
+                ).to_dict()
+                heading = "Targeted practice serving-mart release built"
             elif args.command == "build-platform-release":
                 payload = build_full_platform_warehouse_release(
                     data_root=args.data_root,

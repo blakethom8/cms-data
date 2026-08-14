@@ -58,6 +58,18 @@ TRANSFORMS: tuple[TransformSpec, ...] = (
         "Filters reassignment records to known providers and chooses a primary location.",
     ),
     TransformSpec(
+        "build_serving_practice_provider_sites",
+        "Build CMS-enrollment practice serving rows",
+        (
+            "raw_dac_national",
+            "raw_physician_by_provider",
+            "raw_part_d_by_provider",
+            "address_geocode",
+        ),
+        ("serving_practice_provider_sites",),
+        "Prejoins normalized DAC site membership, national provider totals, geocodes, and row provenance for practice search.",
+    ),
+    TransformSpec(
         "build_pecos_provider_organizations",
         "Build provider-organization bridge",
         ("raw_pecos_reassignment", "raw_pecos_enrollment"),

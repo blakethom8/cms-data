@@ -1,6 +1,6 @@
 # S2 release-built serving marts plan
 
-> Status: S2.1 and S2.2 complete; response-stabilization prerequisite accepted
+> Status: S2.1 and S2.2 complete; S2.3 implemented locally and pending isolated-candidate proof
 >
 > Production boundary: do not select, rebuild, amend, or supersede prepared S1 deployment
 > `deployment-20260814T002255Z-11131e3630`. S2 candidates remain isolated and unselected until a
@@ -208,3 +208,12 @@ Explorer row ordering. It passed the full API suite and all fourteen canonical c
 trial byte-stability checks against the immutable selected warehouse. See the
 [stabilization record](../operations/s2-parity-oracle-stabilization-2026-08-14.md). This acceptance
 does not authorize a route switch, candidate selection, or production cutover.
+
+S2.3 implements the serving table and indexes, an idempotent targeted transform, row and release
+provenance validation, lineage registration, and an internal raw/mart API selector whose default
+remains `raw`. Fixture parity covers state, multi-ZIP/multi-specialty, proximity/limit, and empty
+results with byte-exact response comparison. The targeted additive release builder requires a
+named validated baseline with a matching verified-backup digest, inherits its source-run identity,
+and allowlists only the serving table. Its comparison scans schema and order-independent logical
+row fingerprints for every non-allowlisted table in addition to row counts. This implementation is
+not route-authorized; S2.4 must still produce and evaluate an isolated production-data candidate.

@@ -21,6 +21,7 @@ resolve against the identical NPPES location membership.
 """
 
 import math
+import os
 import re
 from typing import Literal, Optional
 
@@ -36,6 +37,7 @@ LocationBasis = Literal["cms_enrollment", "nppes_primary"]
 PopulationScope = Literal["selected_specialties", "all_specialties"]
 OrganizationScope = Literal["cms_address_pac", "nppes_primary_address"]
 SiteClassification = Literal["solo", "shared_unaffiliated", "organization_context"]
+CmsEnrollmentSearchBackend = Literal["raw", "mart"]
 
 # Search term -> pri_spec ILIKE patterns (CMS uses granular specialty labels).
 SPECIALTY_MAP: dict[str, list[str]] = {
@@ -597,11 +599,18 @@ def _site_profile_for_roster(
     )
 
 
-def get_practices_router(get_conn):
+def get_practices_router(
+    get_conn, cms_enrollment_search_backend: CmsEnrollmentSearchBackend | None = None
+):
     # Each application instance must close over its own connection factory. A
     # module-global router retains the first factory when tests or workers build
     # more than one app in the same process.
     router = APIRouter(prefix="/practices", tags=["Medicare Practices"])
+    selected_cms_backend = cms_enrollment_search_backend or os.getenv(
+        "CMS_PRACTICE_SEARCH_BACKEND", "raw"
+    )
+    if selected_cms_backend not in {"raw", "mart"}:
+        raise ValueError("CMS_PRACTICE_SEARCH_BACKEND must be raw or mart")
     specialty_catalog: tuple[str, ...] | None = None
 
     def get_specialty_catalog() -> tuple[str, ...]:
@@ -697,6 +706,9 @@ def get_practices_router(get_conn):
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         patterns = patterns_for_specialties(requested_specialties)
+        use_cms_mart = (
+            location_basis == "cms_enrollment" and selected_cms_backend == "mart"
+        )
 
         loc_clauses: list[str] = []
         loc_params: list = []
@@ -705,19 +717,29 @@ def get_practices_router(get_conn):
             assert lat is not None and lng is not None
             dlat = radius_miles / 69.0
             dlng = radius_miles / (69.0 * max(0.1, abs(math.cos(math.radians(lat)))))
-            loc_clauses.append("ge.lat between ? and ? and ge.lng between ? and ?")
+            geo_alias = "m" if use_cms_mart else "ge"
+            geo_lat = "latitude" if use_cms_mart else "lat"
+            geo_lng = "longitude" if use_cms_mart else "lng"
+            loc_clauses.append(
+                f"{geo_alias}.{geo_lat} between ? and ? and "
+                f"{geo_alias}.{geo_lng} between ? and ?"
+            )
             loc_params.extend([lat - dlat, lat + dlat, lng - dlng, lng + dlng])
             loc_desc.append(f"{radius_miles}mi of ({lat:.4f},{lng:.4f})")
         if state:
             state_column = (
-                "n.state" if location_basis == "nppes_primary" else 'd."State"'
+                "n.state"
+                if location_basis == "nppes_primary"
+                else ("m.state" if use_cms_mart else 'd."State"')
             )
             loc_clauses.append(f"upper(trim({state_column})) = ?")
             loc_params.append(state.upper().strip())
             loc_desc.append(state.upper().strip())
         if city:
             city_column = (
-                "n.city" if location_basis == "nppes_primary" else 'd."City/Town"'
+                "n.city"
+                if location_basis == "nppes_primary"
+                else ("m.city" if use_cms_mart else 'd."City/Town"')
             )
             loc_clauses.append(f"upper(trim({city_column})) = ?")
             loc_params.append(city.upper().strip())
@@ -727,7 +749,11 @@ def get_practices_router(get_conn):
             zip_column = (
                 "n.zip5"
                 if location_basis == "nppes_primary"
-                else 'left(cast(d."ZIP Code" as varchar), 5)'
+                else (
+                    "m.zip5"
+                    if use_cms_mart
+                    else 'left(cast(d."ZIP Code" as varchar), 5)'
+                )
             )
             loc_clauses.append(f"{zip_column} in ({placeholders})")
             loc_params.extend(selected_zips)
@@ -737,12 +763,13 @@ def get_practices_router(get_conn):
         distance_filter = ""
         if proximity:
             assert lat is not None and lng is not None
-            distance_expression = """
-                case when ge.lat is null or ge.lng is null then null else
+            distance_alias = "s" if use_cms_mart else "ge"
+            distance_expression = f"""
+                case when {distance_alias}.lat is null or {distance_alias}.lng is null then null else
                     3959.0 * 2.0 * asin(sqrt(least(1.0, greatest(0.0,
-                        pow(sin(radians(ge.lat - ?) / 2.0), 2)
-                        + cos(radians(?)) * cos(radians(ge.lat))
-                        * pow(sin(radians(ge.lng - ?) / 2.0), 2)
+                        pow(sin(radians({distance_alias}.lat - ?) / 2.0), 2)
+                        + cos(radians(?)) * cos(radians({distance_alias}.lat))
+                        * pow(sin(radians({distance_alias}.lng - ?) / 2.0), 2)
                     ))))
                 end
             """
@@ -952,8 +979,80 @@ def get_practices_router(get_conn):
                 location_basis="nppes_primary",
             )
 
-        spec_pred = " OR ".join(["d.pri_spec ILIKE ?"] * len(patterns))
-        sql = f"""
+        if use_cms_mart:
+            mart_spec_pred = " OR ".join(
+                ["candidate_specialty ILIKE ?"] * len(patterns)
+            )
+            sql = f"""
+            with matched as (
+                select m.*,
+                       list_filter(
+                           m.specialties,
+                           candidate_specialty -> {mart_spec_pred}
+                       ) matched_specialties
+                from serving_practice_provider_sites m
+            ),
+            clinicians as (
+                select m.npi,
+                       upper(trim(m.address)) addr_norm,
+                       m.zip5,
+                       m.org_pac_id,
+                       m.practice_name,
+                       m.group_size_national,
+                       m.address,
+                       m.city,
+                       m.state,
+                       m.phone,
+                       list_min(m.matched_specialties) spec,
+                       m.first_name,
+                       m.last_name,
+                       m.latitude lat,
+                       m.longitude lng,
+                       m.partb_payments payments,
+                       m.partd_drug_cost drug_cost
+                from matched m
+                where len(m.matched_specialties) > 0
+                  and ({" and ".join(loc_clauses)})
+            ),
+            sites as (
+                select addr_norm || '|' || zip5 addr_key,
+                       coalesce(org_pac_id, 'SOLO') group_key,
+                       min(practice_name) practice_name,
+                       min(org_pac_id) org_pac_id,
+                       min(address) address,
+                       min(city) city,
+                       min(state) state,
+                       min(zip5) zip5,
+                       min(phone) phone,
+                       max(group_size_national) group_size_national,
+                       count(*) providers_here,
+                       list(distinct spec order by spec) specialties,
+                       min(lat) lat,
+                       min(lng) lng,
+                       round(sum(payments), 2) partb_payments,
+                       round(sum(drug_cost), 2) partd_drug_cost,
+                       min(case when org_pac_id is null then
+                           trim(coalesce(first_name, '') || ' ' || coalesce(last_name, ''))
+                       end) solo_name
+                from clinicians
+                group by addr_norm || '|' || zip5, coalesce(org_pac_id, 'SOLO')
+            ),
+            located as (
+                select s.*, {distance_expression} distance_miles
+                from sites s
+            )
+            select addr_key, group_key, practice_name, org_pac_id, address, city,
+                   state, zip5, phone, group_size_national, providers_here,
+                   specialties, lat, lng, distance_miles, partb_payments,
+                   partd_drug_cost, solo_name, count(*) over() total_count
+            from located
+            {distance_filter}
+            order by {"distance_miles, addr_key, group_key" if proximity else "providers_here desc, addr_key, group_key"}
+            limit {limit}
+            """
+        else:
+            spec_pred = " OR ".join(["d.pri_spec ILIKE ?"] * len(patterns))
+            sql = f"""
         with geocodes as (
             select addr_key, min(lat) lat, min(lng) lng
             from address_geocode group by 1

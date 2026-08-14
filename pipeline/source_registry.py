@@ -72,7 +72,11 @@ SOURCE_REGISTRY: dict[str, SourceSpec] = {
             "8889d81e-2ee7-448f-8713-f071038289b5",
             Cadence.ANNUAL,
             "Calendar-year Medicare fee-for-service utilization and beneficiary summary.",
-            ("core_providers", "utilization_metrics"),
+            (
+                "core_providers",
+                "utilization_metrics",
+                "serving_practice_provider_sites",
+            ),
             CMS_ATTRIBUTION,
         ),
         SourceSpec(
@@ -95,7 +99,7 @@ SOURCE_REGISTRY: dict[str, SourceSpec] = {
             "14d8e8a9-7e9b-4370-a044-bf97c46b4b44",
             Cadence.ANNUAL,
             "Calendar-year Part D claims, costs, and beneficiary measures by prescriber.",
-            ("utilization_metrics",),
+            ("utilization_metrics", "serving_practice_provider_sites"),
             CMS_ATTRIBUTION,
         ),
         SourceSpec(

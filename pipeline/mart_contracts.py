@@ -29,11 +29,12 @@ class MartSpec:
     npi_parent_table: str | None = "core_providers"
     authorized_routes: tuple[str, ...] = ()
     require_nonempty: bool = True
+    row_validations: tuple[tuple[str, str], ...] = ()
 
     def __post_init__(self) -> None:
         if not self.table or not self.transform_ids or not self.key_columns:
             raise ValueError("Mart table, transform IDs, and key columns are required")
-        if self.kind not in {"mart", "summary"}:
+        if self.kind not in {"mart", "summary", "serving"}:
             raise ValueError(f"Unsupported mart kind: {self.kind}")
         required = set(self.required_columns)
         missing_keys = set(self.key_columns) - required
@@ -74,6 +75,71 @@ MART_CONTRACTS: tuple[MartSpec, ...] = (
         source_period_policy="release manifest; data_year is the reassignment period year",
         provenance_scope="release_manifest",
         authorized_routes=("/match", "/explorer/provider-evidence"),
+    ),
+    MartSpec(
+        table="serving_practice_provider_sites",
+        transform_ids=("build_serving_practice_provider_sites",),
+        grain="one normalized DAC site and organization-or-solo key per provider NPI",
+        key_columns=("site_key", "npi"),
+        upstream_tables=(
+            "raw_dac_national",
+            "raw_physician_by_provider",
+            "raw_part_d_by_provider",
+            "address_geocode",
+        ),
+        source_ids=("cms_physician_by_provider", "cms_part_d_by_provider"),
+        required_columns=(
+            "site_key",
+            "addr_key",
+            "group_key",
+            "npi",
+            "address",
+            "city",
+            "state",
+            "zip5",
+            "specialties",
+            "dac_source_data_periods",
+            "dac_source_run_ids",
+            "partb_source_data_periods",
+            "partb_source_run_ids",
+            "partd_source_data_periods",
+            "partd_source_run_ids",
+            "data_year",
+        ),
+        source_period_policy=(
+            "DAC period/run IDs are retained per row from the legacy raw table; "
+            "Part B and Part D require managed release-manifest periods"
+        ),
+        provenance_scope="row_and_release_manifest",
+        kind="serving",
+        npi_parent_table=None,
+        row_validations=(
+            (
+                "invalid_state_or_zip",
+                "NOT regexp_full_match(state, '^[A-Z]{2}$') OR "
+                "NOT regexp_full_match(zip5, '^[0-9]{5}$')",
+            ),
+            ("empty_specialties", "len(specialties) = 0"),
+            (
+                "missing_dac_provenance",
+                "len(dac_source_data_periods) = 0 OR len(dac_source_run_ids) = 0",
+            ),
+            (
+                "partb_value_without_provenance",
+                "partb_payments IS NOT NULL AND "
+                "(len(partb_source_data_periods) = 0 OR len(partb_source_run_ids) = 0)",
+            ),
+            (
+                "partd_value_without_provenance",
+                "partd_drug_cost IS NOT NULL AND "
+                "(len(partd_source_data_periods) = 0 OR len(partd_source_run_ids) = 0)",
+            ),
+            (
+                "invalid_group_identity",
+                "(org_pac_id IS NULL AND group_key <> 'SOLO') OR "
+                "(org_pac_id IS NOT NULL AND group_key <> org_pac_id)",
+            ),
+        ),
     ),
     MartSpec(
         table="utilization_metrics",
@@ -308,6 +374,7 @@ def validate_mart_contracts(
         required_null_rows: int | None = None
         invalid_npis: int | None = None
         orphan_npis: int | None = None
+        row_validation_failures: dict[str, int] = {}
 
         if columns is None:
             issues.append("table_missing")
@@ -375,6 +442,16 @@ def validate_mart_contracts(
                 if orphan_npis:
                     issues.append(f"orphan_npis:{orphan_npis}")
 
+            for label, predicate in spec.row_validations:
+                failure_count = int(
+                    connection.execute(
+                        f"SELECT count(*) FROM {table} WHERE {predicate}"
+                    ).fetchone()[0]
+                )
+                row_validation_failures[label] = failure_count
+                if failure_count:
+                    issues.append(f"{label}:{failure_count}")
+
         missing_source_periods = sorted(
             source_id
             for source_id in spec.source_ids
@@ -403,6 +480,7 @@ def validate_mart_contracts(
                 "required_null_rows": required_null_rows,
                 "invalid_npis": invalid_npis,
                 "orphan_npis": orphan_npis,
+                "row_validation_failures": row_validation_failures,
                 "missing_required_columns": missing,
                 "missing_source_periods": missing_source_periods,
                 "serving_authorized": bool(spec.authorized_routes),

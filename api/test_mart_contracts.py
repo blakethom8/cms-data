@@ -22,6 +22,7 @@ from pipeline.source_registry import SOURCE_REGISTRY
 EXPECTED_MARTS = {
     "core_providers",
     "practice_locations",
+    "serving_practice_provider_sites",
     "utilization_metrics",
     "industry_relationships",
     "hospital_affiliations",
@@ -52,7 +53,7 @@ def _spec(**overrides) -> MartSpec:
 
 
 def test_registered_marts_have_complete_source_and_lineage_contracts() -> None:
-    assert len(MART_CONTRACTS) == 12
+    assert len(MART_CONTRACTS) == 13
     assert set(MART_CONTRACT_BY_TABLE) == EXPECTED_MARTS
 
     transforms = {transform.transform_id: transform for transform in TRANSFORMS}
@@ -70,6 +71,7 @@ def test_registered_marts_have_complete_source_and_lineage_contracts() -> None:
 
     assert table_kind("kol_summary") == "summary"
     assert table_kind("nppes_radar_events") == "summary"
+    assert table_kind("serving_practice_provider_sites") == "serving"
     assert table_kind("core_providers") == "mart"
 
 
@@ -81,7 +83,7 @@ def test_schema_inspection_does_not_claim_missing_marts_are_ready() -> None:
     finally:
         connection.close()
 
-    assert report["registered_count"] == 12
+    assert report["registered_count"] == 13
     assert report["available_count"] == 1
     assert report["schema_valid_count"] == 0
     assert report["serving_authorized_count"] == 0
@@ -148,3 +150,28 @@ def test_row_validation_fails_closed_with_actionable_issues() -> None:
     assert "invalid_npis:2" in message
     assert "orphan_npis:3" in message
     assert "source_periods_missing:cms_physician_by_provider" in message
+
+
+def test_declared_row_predicates_are_counted_and_fail_closed() -> None:
+    connection = duckdb.connect(":memory:")
+    try:
+        connection.execute("CREATE TABLE example_mart (npi VARCHAR, data_year INTEGER)")
+        connection.execute("INSERT INTO example_mart VALUES ('1234567890', 1999)")
+        report = validate_mart_contracts(
+            connection,
+            contracts=(
+                _spec(
+                    npi_parent_table=None,
+                    row_validations=(("invalid_year", "data_year < 2000"),),
+                ),
+            ),
+            source_periods={"cms_physician_by_provider": "2024"},
+            raise_on_error=False,
+        )
+    finally:
+        connection.close()
+
+    mart = report["marts"][0]
+    assert report["passed"] is False
+    assert mart["row_validation_failures"] == {"invalid_year": 1}
+    assert mart["issues"] == ["invalid_year:1"]

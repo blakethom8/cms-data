@@ -200,6 +200,204 @@ def build_practice_locations(con: duckdb.DuckDBPyConnection, data_year: int):
     return count
 
 
+def _ensure_serving_practice_provider_sites_table(
+    con: duckdb.DuckDBPyConnection,
+) -> None:
+    con.execute(
+        """
+        CREATE TABLE IF NOT EXISTS serving_practice_provider_sites (
+            site_key VARCHAR(64) NOT NULL, addr_key VARCHAR NOT NULL,
+            group_key VARCHAR NOT NULL, npi VARCHAR(10) NOT NULL,
+            org_pac_id VARCHAR, practice_name VARCHAR(255),
+            group_size_national INTEGER, address VARCHAR(255) NOT NULL,
+            city VARCHAR(100) NOT NULL, state VARCHAR(2) NOT NULL,
+            zip5 VARCHAR(5) NOT NULL, phone VARCHAR(30),
+            specialties VARCHAR[] NOT NULL, first_name VARCHAR(100),
+            last_name VARCHAR(255), latitude DOUBLE, longitude DOUBLE,
+            partb_payments DOUBLE, partd_drug_cost DOUBLE,
+            dac_source_data_periods VARCHAR[] NOT NULL,
+            dac_source_run_ids VARCHAR[] NOT NULL,
+            partb_source_data_periods VARCHAR[] NOT NULL,
+            partb_source_run_ids VARCHAR[] NOT NULL,
+            partd_source_data_periods VARCHAR[] NOT NULL,
+            partd_source_run_ids VARCHAR[] NOT NULL,
+            data_year INTEGER NOT NULL,
+            PRIMARY KEY (site_key, npi)
+        );
+        CREATE INDEX IF NOT EXISTS idx_serving_practice_sites_state
+            ON serving_practice_provider_sites(state);
+        CREATE INDEX IF NOT EXISTS idx_serving_practice_sites_zip5
+            ON serving_practice_provider_sites(zip5);
+        CREATE INDEX IF NOT EXISTS idx_serving_practice_sites_npi
+            ON serving_practice_provider_sites(npi);
+        """
+    )
+
+
+def build_serving_practice_provider_sites(
+    con: duckdb.DuckDBPyConnection, data_year: int
+) -> int:
+    """Build the CMS-enrollment practice-search serving grain.
+
+    The table retains one row per normalized site, organization/solo key, and
+    NPI. Specialty values remain a list so request-time specialty filtering has
+    the same behavior as the raw DAC oracle without duplicating NPI totals.
+    """
+    required_columns = {
+        "raw_dac_national": {
+            "NPI", "Provider First Name", "Provider Last Name", "pri_spec",
+            "Facility Name", "org_pac_id", "num_org_mem", "adr_ln_1",
+            "ZIP Code", "City/Town", "State", "Telephone Number",
+            "source_run_id", "source_data_period",
+        },
+        "raw_physician_by_provider": {
+            "Rndrng_NPI", "Tot_Mdcr_Pymt_Amt", "source_run_id",
+            "source_data_period",
+        },
+        "raw_part_d_by_provider": {
+            "PRSCRBR_NPI", "Tot_Drug_Cst", "source_run_id",
+            "source_data_period",
+        },
+        "address_geocode": {"addr_key", "lat", "lng"},
+    }
+    missing_tables = [
+        table
+        for table, columns in required_columns.items()
+        if not _table_has_columns(con, table, columns)
+    ]
+    if missing_tables:
+        raise ValueError(
+            "Serving practice mart inputs are missing required provenance or fields: "
+            + ", ".join(sorted(missing_tables))
+        )
+
+    _ensure_serving_practice_provider_sites_table(con)
+
+    missing_dac_provenance = int(
+        con.execute(
+            """
+            SELECT count(*)
+            FROM raw_dac_national
+            WHERE nullif(trim(adr_ln_1), '') IS NOT NULL
+              AND nullif(trim("City/Town"), '') IS NOT NULL
+              AND regexp_matches(upper(trim("State")), '^[A-Z]{2}$')
+              AND regexp_matches(left(CAST("ZIP Code" AS VARCHAR), 5), '^[0-9]{5}$')
+              AND nullif(trim(pri_spec), '') IS NOT NULL
+              AND (nullif(trim(source_data_period), '') IS NULL
+                   OR nullif(trim(source_run_id), '') IS NULL)
+            """
+        ).fetchone()[0]
+    )
+    if missing_dac_provenance:
+        raise ValueError(
+            "Serving practice mart found eligible DAC rows without source provenance: "
+            f"{missing_dac_provenance}"
+        )
+
+    logger.info("Building serving_practice_provider_sites (data_year=%d)", data_year)
+    con.execute("DELETE FROM serving_practice_provider_sites")
+    con.execute(
+        """
+        INSERT INTO serving_practice_provider_sites
+        WITH geocodes AS (
+            SELECT addr_key, min(lat) latitude, min(lng) longitude
+            FROM address_geocode
+            GROUP BY addr_key
+        ),
+        clinicians AS (
+            SELECT
+                CAST(d."NPI" AS VARCHAR) npi,
+                upper(trim(d.adr_ln_1)) addr_norm,
+                left(CAST(d."ZIP Code" AS VARCHAR), 5) zip5,
+                nullif(trim(CAST(d.org_pac_id AS VARCHAR)), '') org_pac_id,
+                min(nullif(trim(d."Facility Name"), '')) practice_name,
+                max(try_cast(d.num_org_mem AS INTEGER)) group_size_national,
+                min(d.adr_ln_1) address,
+                min(d."City/Town") city,
+                min(d."State") state,
+                min(CAST(d."Telephone Number" AS VARCHAR)) phone,
+                list(distinct trim(d.pri_spec) order by trim(d.pri_spec))
+                    FILTER (WHERE nullif(trim(d.pri_spec), '') IS NOT NULL) specialties,
+                min(d."Provider First Name") first_name,
+                min(d."Provider Last Name") last_name,
+                list(distinct d.source_data_period order by d.source_data_period)
+                    dac_source_data_periods,
+                list(distinct d.source_run_id order by d.source_run_id)
+                    dac_source_run_ids
+            FROM raw_dac_national d
+            WHERE nullif(trim(d.adr_ln_1), '') IS NOT NULL
+              AND nullif(trim(d."City/Town"), '') IS NOT NULL
+              AND regexp_matches(upper(trim(d."State")), '^[A-Z]{2}$')
+              AND regexp_matches(left(CAST(d."ZIP Code" AS VARCHAR), 5), '^[0-9]{5}$')
+              AND nullif(trim(d.pri_spec), '') IS NOT NULL
+            GROUP BY 1, 2, 3, 4
+        ),
+        utilization AS (
+            SELECT CAST("Rndrng_NPI" AS VARCHAR) npi,
+                   max("Tot_Mdcr_Pymt_Amt") partb_payments,
+                   list(distinct source_data_period order by source_data_period)
+                       FILTER (WHERE nullif(trim(source_data_period), '') IS NOT NULL)
+                       source_data_periods,
+                   list(distinct source_run_id order by source_run_id)
+                       FILTER (WHERE nullif(trim(source_run_id), '') IS NOT NULL)
+                       source_run_ids
+            FROM raw_physician_by_provider
+            GROUP BY 1
+        ),
+        rx AS (
+            SELECT CAST("PRSCRBR_NPI" AS VARCHAR) npi,
+                   max("Tot_Drug_Cst") partd_drug_cost,
+                   list(distinct source_data_period order by source_data_period)
+                       FILTER (WHERE nullif(trim(source_data_period), '') IS NOT NULL)
+                       source_data_periods,
+                   list(distinct source_run_id order by source_run_id)
+                       FILTER (WHERE nullif(trim(source_run_id), '') IS NOT NULL)
+                       source_run_ids
+            FROM raw_part_d_by_provider
+            GROUP BY 1
+        )
+        SELECT
+            md5(concat_ws('|', c.addr_norm, c.zip5,
+                coalesce(c.org_pac_id, 'SOLO'))) site_key,
+            c.addr_norm || '|' || c.zip5 addr_key,
+            coalesce(c.org_pac_id, 'SOLO') group_key,
+            c.npi,
+            c.org_pac_id,
+            c.practice_name,
+            c.group_size_national,
+            c.address,
+            c.city,
+            c.state,
+            c.zip5,
+            c.phone,
+            c.specialties,
+            c.first_name,
+            c.last_name,
+            g.latitude,
+            g.longitude,
+            u.partb_payments,
+            rx.partd_drug_cost,
+            c.dac_source_data_periods,
+            c.dac_source_run_ids,
+            coalesce(u.source_data_periods, []::VARCHAR[]),
+            coalesce(u.source_run_ids, []::VARCHAR[]),
+            coalesce(rx.source_data_periods, []::VARCHAR[]),
+            coalesce(rx.source_run_ids, []::VARCHAR[]),
+            ?
+        FROM clinicians c
+        LEFT JOIN geocodes g ON g.addr_key = c.addr_norm || '|' || c.zip5
+        LEFT JOIN utilization u ON u.npi = c.npi
+        LEFT JOIN rx ON rx.npi = c.npi
+        """,
+        [data_year],
+    )
+    count = int(
+        con.execute("SELECT count(*) FROM serving_practice_provider_sites").fetchone()[0]
+    )
+    logger.info("serving_practice_provider_sites: %d rows loaded", count)
+    return count
+
+
 def _ensure_pecos_relationship_tables(con: duckdb.DuckDBPyConnection) -> None:
     """Create the curated PPEF relationship tables in copied legacy warehouses."""
     con.execute(
