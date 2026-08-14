@@ -81,6 +81,8 @@ def _database() -> duckdb.DuckDBPyConnection:
              'reassign-run', '2026-07'),
             ('1111111111', 'PAC-1', 'Cardio Group Legal', 50,
              'reassign-run', '2026-07'),
+            ('1111111111', 'PAC-0', 'Another Regional Medical Group', 100,
+             'reassign-run', '2026-07'),
             ('1111111111', 'PAC-2', 'Regional Medical Group', 100,
              'reassign-run', '2026-07');
         INSERT INTO address_geocode VALUES ('10 MAIN ST|90001', 34.1, -118.2);
@@ -113,10 +115,15 @@ def test_profile_core_marts_are_idempotent_and_byte_shape_equivalent() -> None:
     finally:
         connection.close()
 
+    assert [group["group_id"] for group in raw["groups"]] == [
+        "PAC-1",
+        "PAC-0",
+        "PAC-2",
+    ]
     assert counts == {
         "serving_provider_profile_headers": 2,
         "serving_provider_profile_locations": 2,
-        "serving_provider_profile_groups": 3,
+        "serving_provider_profile_groups": 4,
     }
     assert mart == raw
 
@@ -159,6 +166,7 @@ def test_profile_core_marts_preserve_separate_grains_and_provenance() -> None:
         ["2026-07"],
     )
     assert groups == [
+        ("PAC-0", "reassignment", [], ["reassign-run"]),
         ("PAC-1", "dac + reassignment", ["dac-run"], ["reassign-run"]),
         ("PAC-2", "reassignment", [], ["reassign-run"]),
     ]
