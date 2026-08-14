@@ -730,6 +730,371 @@ def build_serving_practice_nppes_tables(
     return counts
 
 
+def _ensure_serving_provider_profile_core_tables(
+    con: duckdb.DuckDBPyConnection,
+) -> None:
+    con.execute(
+        """
+        CREATE TABLE IF NOT EXISTS serving_provider_profile_headers (
+            npi VARCHAR(10) PRIMARY KEY, name VARCHAR, credentials VARCHAR,
+            specialty VARCHAR, secondary_specialties VARCHAR, city VARCHAR,
+            state VARCHAR(2), med_school VARCHAR, grad_year INTEGER,
+            telehealth BOOLEAN, nppes_source_data_periods VARCHAR[] NOT NULL,
+            nppes_source_run_ids VARCHAR[] NOT NULL,
+            dac_source_data_periods VARCHAR[] NOT NULL,
+            dac_source_run_ids VARCHAR[] NOT NULL, data_year INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_serving_profile_headers_state
+            ON serving_provider_profile_headers(state);
+
+        CREATE TABLE IF NOT EXISTS serving_provider_profile_locations (
+            npi VARCHAR(10) NOT NULL, addr_key VARCHAR NOT NULL,
+            street VARCHAR, suites VARCHAR[], city VARCHAR, state VARCHAR(2),
+            zip5 VARCHAR(5), phone VARCHAR, roster_size BIGINT,
+            latitude DOUBLE, longitude DOUBLE, likely_flagship BOOLEAN,
+            sources VARCHAR NOT NULL,
+            nppes_source_data_periods VARCHAR[] NOT NULL,
+            nppes_source_run_ids VARCHAR[] NOT NULL,
+            dac_source_data_periods VARCHAR[] NOT NULL,
+            dac_source_run_ids VARCHAR[] NOT NULL, data_year INTEGER NOT NULL,
+            PRIMARY KEY (npi, addr_key)
+        );
+        CREATE INDEX IF NOT EXISTS idx_serving_profile_locations_npi
+            ON serving_provider_profile_locations(npi);
+
+        CREATE TABLE IF NOT EXISTS serving_provider_profile_groups (
+            npi VARCHAR(10) NOT NULL, group_id VARCHAR NOT NULL,
+            group_name VARCHAR, group_size INTEGER, n_addresses BIGINT NOT NULL,
+            reassignment_size BIGINT, sources VARCHAR NOT NULL,
+            dac_source_data_periods VARCHAR[] NOT NULL,
+            dac_source_run_ids VARCHAR[] NOT NULL,
+            reassignment_source_data_periods VARCHAR[] NOT NULL,
+            reassignment_source_run_ids VARCHAR[] NOT NULL,
+            data_year INTEGER NOT NULL, PRIMARY KEY (npi, group_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_serving_profile_groups_npi
+            ON serving_provider_profile_groups(npi);
+        """
+    )
+
+
+def build_serving_provider_profile_core_tables(
+    con: duckdb.DuckDBPyConnection, data_year: int
+) -> dict[str, int]:
+    """Build the first provider-profile serving slice.
+
+    Identity, merged practice doors, and organization contexts use separate
+    grains so multi-address and multi-organization providers never duplicate
+    one another. Hospital affiliations remain on their source-faithful raw
+    path until those legacy inputs have managed source manifests.
+    """
+    required_columns = {
+        "raw_nppes": {
+            "npi", "first_name", "last_name", "credentials", "practice_address_1",
+            "practice_address_2", "practice_city", "practice_state", "practice_zip",
+            "practice_phone", "taxonomy_1", "source_run_id", "source_data_period",
+        },
+        "raw_dac_national": {
+            "NPI", "Provider First Name", "Provider Last Name", "Cred\t\t\t\t",
+            "pri_spec", "sec_spec_all", "City/Town", "State", "Med_sch", "Grd_yr",
+            "Telehlth\t\t\t\t", "Facility Name", "org_pac_id", "num_org_mem",
+            "adr_ln_1", "adr_ln_2", "ZIP Code", "Telephone Number",
+            "source_run_id", "source_data_period",
+        },
+        "raw_reassignment": {
+            "Individual NPI", "Group PAC ID", "Group Legal Business Name",
+            "Group Reassignments and Physician Assistants", "source_run_id",
+            "source_data_period",
+        },
+        "nucc_taxonomy": {"taxonomy_code", "classification", "specialization"},
+        "address_geocode": {"addr_key", "lat", "lng"},
+    }
+    missing_tables = [
+        table
+        for table, columns in required_columns.items()
+        if not _table_has_columns(con, table, columns)
+    ]
+    if missing_tables:
+        raise ValueError(
+            "Provider profile serving inputs are missing required provenance or fields: "
+            + ", ".join(sorted(missing_tables))
+        )
+
+    provenance_checks = (
+        (
+            "NPPES",
+            """
+            SELECT count(*) FROM raw_nppes
+            WHERE nullif(trim(CAST(npi AS VARCHAR)), '') IS NOT NULL
+              AND (nullif(trim(source_data_period), '') IS NULL
+                   OR nullif(trim(source_run_id), '') IS NULL)
+            """,
+        ),
+        (
+            "DAC",
+            """
+            SELECT count(*) FROM raw_dac_national
+            WHERE nullif(trim(CAST("NPI" AS VARCHAR)), '') IS NOT NULL
+              AND (nullif(trim(source_data_period), '') IS NULL
+                   OR nullif(trim(source_run_id), '') IS NULL)
+            """,
+        ),
+        (
+            "reassignment",
+            """
+            SELECT count(*) FROM raw_reassignment
+            WHERE nullif(trim(CAST("Individual NPI" AS VARCHAR)), '') IS NOT NULL
+              AND nullif(trim(CAST("Group PAC ID" AS VARCHAR)), '') IS NOT NULL
+              AND (nullif(trim(source_data_period), '') IS NULL
+                   OR nullif(trim(source_run_id), '') IS NULL)
+            """,
+        ),
+    )
+    for label, sql in provenance_checks:
+        missing = int(con.execute(sql).fetchone()[0])
+        if missing:
+            raise ValueError(
+                "Provider profile serving mart found eligible "
+                f"{label} rows without source provenance: {missing}"
+            )
+
+    _ensure_serving_provider_profile_core_tables(con)
+    logger.info("Building provider profile core serving tables (data_year=%d)", data_year)
+    con.execute("DELETE FROM serving_provider_profile_locations")
+    con.execute("DELETE FROM serving_provider_profile_groups")
+    con.execute("DELETE FROM serving_provider_profile_headers")
+
+    con.execute(
+        """
+        INSERT INTO serving_provider_profile_headers
+        WITH ranked_nppes AS (
+            SELECT CAST(npi AS VARCHAR) npi,
+                   trim(coalesce(first_name || ' ', '') || coalesce(last_name, '')) "name",
+                   nullif(trim(credentials), '') credentials,
+                   practice_city city, practice_state state, taxonomy_1,
+                   source_data_period, source_run_id,
+                   row_number() OVER (
+                       PARTITION BY CAST(npi AS VARCHAR)
+                       ORDER BY source_data_period DESC, source_run_id DESC,
+                                coalesce(first_name, ''), coalesce(last_name, '')
+                   ) row_number
+            FROM raw_nppes
+        ),
+        nppes AS (
+            SELECT npi, "name", credentials, city, state, taxonomy_1,
+                   [source_data_period] source_data_periods,
+                   [source_run_id] source_run_ids
+            FROM ranked_nppes WHERE row_number = 1
+        ),
+        dac AS (
+            SELECT CAST("NPI" AS VARCHAR) npi,
+                   any_value("Provider First Name") || ' '
+                       || any_value("Provider Last Name") "name",
+                   nullif(trim(any_value("Cred\t\t\t\t")), '') credentials,
+                   any_value(pri_spec) specialty,
+                   any_value(sec_spec_all) secondary_specialties,
+                   any_value("City/Town") city, any_value("State") state,
+                   any_value(Med_sch) med_school, any_value(Grd_yr) grad_year,
+                   max(CASE WHEN "Telehlth\t\t\t\t" = 'Y' THEN 1 ELSE 0 END) = 1
+                       telehealth,
+                   list(distinct source_data_period order by source_data_period)
+                       source_data_periods,
+                   list(distinct source_run_id order by source_run_id) source_run_ids
+            FROM raw_dac_national
+            GROUP BY "NPI"
+        ),
+        taxonomy AS (
+            SELECT taxonomy_code, min(classification) classification,
+                   min(specialization) specialization
+            FROM nucc_taxonomy GROUP BY taxonomy_code
+        )
+        SELECT coalesce(n.npi, d.npi) npi,
+               coalesce(n."name", d."name") "name",
+               coalesce(n.credentials, d.credentials) credentials,
+               coalesce(
+                   d.specialty,
+                   t.classification
+                       || coalesce(' (' || nullif(t.specialization, '') || ')', '')
+               ) specialty,
+               d.secondary_specialties,
+               coalesce(n.city, d.city) city,
+               coalesce(n.state, d.state) state,
+               d.med_school, d.grad_year, d.telehealth,
+               coalesce(n.source_data_periods, []::VARCHAR[]),
+               coalesce(n.source_run_ids, []::VARCHAR[]),
+               coalesce(d.source_data_periods, []::VARCHAR[]),
+               coalesce(d.source_run_ids, []::VARCHAR[]),
+               ?
+        FROM nppes n
+        FULL OUTER JOIN dac d ON d.npi = n.npi
+        LEFT JOIN taxonomy t ON t.taxonomy_code = n.taxonomy_1
+        WHERE regexp_matches(coalesce(n.npi, d.npi), '^[0-9]{10}$')
+        """,
+        [data_year],
+    )
+
+    con.execute(
+        """
+        INSERT INTO serving_provider_profile_locations
+        WITH dac AS (
+            SELECT CAST("NPI" AS VARCHAR) npi,
+                   upper(trim(adr_ln_1)) || '|'
+                       || left(CAST("ZIP Code" AS VARCHAR), 5) addr_key,
+                   min(trim(adr_ln_1)) street,
+                   list(distinct trim(adr_ln_2) order by trim(adr_ln_2))
+                       FILTER (WHERE nullif(trim(adr_ln_2), '') IS NOT NULL) suites,
+                   min("City/Town") city, min("State") state,
+                   left(min(CAST("ZIP Code" AS VARCHAR)), 5) zip5,
+                   min(CAST("Telephone Number" AS VARCHAR)) phone,
+                   min(nullif(trim(CAST(org_pac_id AS VARCHAR)), '')) org_pac_id,
+                   list(distinct source_data_period order by source_data_period)
+                       source_data_periods,
+                   list(distinct source_run_id order by source_run_id) source_run_ids
+            FROM raw_dac_national
+            WHERE nullif(trim(adr_ln_1), '') IS NOT NULL
+            GROUP BY 1, 2
+        ),
+        nppes AS (
+            SELECT CAST(npi AS VARCHAR) npi,
+                   upper(trim(practice_address_1)) || '|'
+                       || left(CAST(practice_zip AS VARCHAR), 5) addr_key,
+                   min(trim(practice_address_1)) street,
+                   list(distinct trim(practice_address_2) order by trim(practice_address_2))
+                       FILTER (WHERE nullif(trim(practice_address_2), '') IS NOT NULL) suites,
+                   min(practice_city) city, min(practice_state) state,
+                   left(min(CAST(practice_zip AS VARCHAR)), 5) zip5,
+                   min(CAST(practice_phone AS VARCHAR)) phone,
+                   list(distinct source_data_period order by source_data_period)
+                       source_data_periods,
+                   list(distinct source_run_id order by source_run_id) source_run_ids
+            FROM raw_nppes
+            WHERE nullif(trim(practice_address_1), '') IS NOT NULL
+            GROUP BY 1, 2
+        ),
+        doc AS (
+            SELECT coalesce(d.npi, n.npi) npi,
+                   coalesce(d.addr_key, n.addr_key) addr_key,
+                   coalesce(d.street, n.street) street,
+                   coalesce(d.suites, n.suites) suites,
+                   coalesce(d.city, n.city) city,
+                   coalesce(d.state, n.state) state,
+                   coalesce(d.zip5, n.zip5) zip5,
+                   coalesce(d.phone, n.phone) phone,
+                   d.org_pac_id,
+                   CASE WHEN d.addr_key IS NOT NULL AND n.addr_key IS NOT NULL
+                            THEN 'dac + nppes'
+                        WHEN d.addr_key IS NOT NULL THEN 'dac'
+                        ELSE 'nppes' END sources,
+                   coalesce(n.source_data_periods, []::VARCHAR[])
+                       nppes_source_data_periods,
+                   coalesce(n.source_run_ids, []::VARCHAR[]) nppes_source_run_ids,
+                   coalesce(d.source_data_periods, []::VARCHAR[])
+                       dac_source_data_periods,
+                   coalesce(d.source_run_ids, []::VARCHAR[]) dac_source_run_ids
+            FROM dac d
+            FULL OUTER JOIN nppes n ON n.npi = d.npi AND n.addr_key = d.addr_key
+        ),
+        roster AS (
+            SELECT nullif(trim(CAST(org_pac_id AS VARCHAR)), '') org_pac_id,
+                   upper(trim(adr_ln_1)) || '|'
+                       || left(CAST("ZIP Code" AS VARCHAR), 5) addr_key,
+                   count(distinct "NPI") roster_size
+            FROM raw_dac_national
+            WHERE nullif(trim(CAST(org_pac_id AS VARCHAR)), '') IS NOT NULL
+              AND nullif(trim(adr_ln_1), '') IS NOT NULL
+            GROUP BY 1, 2
+        ),
+        geocodes AS (
+            SELECT addr_key, min(lat) latitude, min(lng) longitude
+            FROM address_geocode GROUP BY addr_key
+        ),
+        enriched AS (
+            SELECT doc.*, r.roster_size, g.latitude, g.longitude
+            FROM doc
+            LEFT JOIN roster r
+              ON r.org_pac_id = doc.org_pac_id AND r.addr_key = doc.addr_key
+            LEFT JOIN geocodes g ON g.addr_key = doc.addr_key
+            JOIN serving_provider_profile_headers h ON h.npi = doc.npi
+        )
+        SELECT npi, addr_key, street, suites, city, state, zip5, phone,
+               roster_size, latitude, longitude,
+               roster_size = max(roster_size) OVER (PARTITION BY npi)
+                   AND roster_size > 50 likely_flagship,
+               sources, nppes_source_data_periods, nppes_source_run_ids,
+               dac_source_data_periods, dac_source_run_ids, ?
+        FROM enriched
+        """,
+        [data_year],
+    )
+
+    con.execute(
+        """
+        INSERT INTO serving_provider_profile_groups
+        WITH dac AS (
+            SELECT CAST("NPI" AS VARCHAR) npi,
+                   nullif(trim(CAST(org_pac_id AS VARCHAR)), '') group_id,
+                   any_value("Facility Name") group_name,
+                   max(try_cast(num_org_mem AS INTEGER)) group_size,
+                   count(distinct upper(trim(adr_ln_1))) n_addresses,
+                   list(distinct source_data_period order by source_data_period)
+                       source_data_periods,
+                   list(distinct source_run_id order by source_run_id) source_run_ids
+            FROM raw_dac_national
+            WHERE nullif(trim(CAST(org_pac_id AS VARCHAR)), '') IS NOT NULL
+            GROUP BY 1, 2
+        ),
+        reassign AS (
+            SELECT CAST("Individual NPI" AS VARCHAR) npi,
+                   nullif(trim(CAST("Group PAC ID" AS VARCHAR)), '') group_id,
+                   any_value("Group Legal Business Name") group_name,
+                   max(try_cast("Group Reassignments and Physician Assistants" AS BIGINT))
+                       reassignment_size,
+                   list(distinct source_data_period order by source_data_period)
+                       source_data_periods,
+                   list(distinct source_run_id order by source_run_id) source_run_ids
+            FROM raw_reassignment
+            WHERE nullif(trim(CAST("Group PAC ID" AS VARCHAR)), '') IS NOT NULL
+            GROUP BY 1, 2
+        )
+        SELECT coalesce(d.npi, r.npi) npi,
+               coalesce(d.group_id, r.group_id) group_id,
+               coalesce(d.group_name, r.group_name) group_name,
+               d.group_size, coalesce(d.n_addresses, 0) n_addresses,
+               r.reassignment_size,
+               CASE WHEN d.group_id IS NOT NULL AND r.group_id IS NOT NULL
+                        THEN 'dac + reassignment'
+                    WHEN d.group_id IS NOT NULL THEN 'dac'
+                    ELSE 'reassignment' END sources,
+               coalesce(d.source_data_periods, []::VARCHAR[]),
+               coalesce(d.source_run_ids, []::VARCHAR[]),
+               coalesce(r.source_data_periods, []::VARCHAR[]),
+               coalesce(r.source_run_ids, []::VARCHAR[]),
+               ?
+        FROM dac d
+        FULL OUTER JOIN reassign r
+          ON r.npi = d.npi AND r.group_id = d.group_id
+        JOIN serving_provider_profile_headers h ON h.npi = coalesce(d.npi, r.npi)
+        """,
+        [data_year],
+    )
+
+    counts = {
+        table: int(con.execute(f"SELECT count(*) FROM {table}").fetchone()[0])
+        for table in (
+            "serving_provider_profile_headers",
+            "serving_provider_profile_locations",
+            "serving_provider_profile_groups",
+        )
+    }
+    logger.info(
+        "Provider profile serving rows: headers=%d locations=%d groups=%d",
+        counts["serving_provider_profile_headers"],
+        counts["serving_provider_profile_locations"],
+        counts["serving_provider_profile_groups"],
+    )
+    return counts
+
+
 def _ensure_pecos_relationship_tables(con: duckdb.DuckDBPyConnection) -> None:
     """Create the curated PPEF relationship tables in copied legacy warehouses."""
     con.execute(

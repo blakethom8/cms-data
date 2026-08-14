@@ -90,6 +90,13 @@ NPPES_SERVING_PRACTICE_CHANGED_TABLES = frozenset(
         "serving_practice_nppes_org_memberships",
     }
 )
+PROVIDER_PROFILE_CORE_CHANGED_TABLES = frozenset(
+    {
+        "serving_provider_profile_headers",
+        "serving_provider_profile_locations",
+        "serving_provider_profile_groups",
+    }
+)
 SERVING_PRACTICE_MANAGED_DAC_CHANGED_TABLES = frozenset(
     {"raw_dac_national", "serving_practice_provider_sites"}
 )
@@ -2172,6 +2179,204 @@ def build_nppes_serving_practice_warehouse_release(
     )
 
 
+def build_provider_profile_core_warehouse_release(
+    *,
+    data_root: Path,
+    baseline_warehouse_release_id: str,
+    backup_manifest_path: Path,
+    data_year: int,
+    code_commit: str | None = None,
+    memory_limit_gb: int = 12,
+    threads: int = 1,
+) -> BuildResult:
+    """Build only the first provider-profile serving slice on a baseline copy."""
+    from .transform import build_serving_provider_profile_core_tables
+
+    _validate_targeted_build_resources(memory_limit_gb, threads)
+    if data_year < 2000 or data_year > 2100:
+        raise ReleaseError("Provider-profile serving data year must be between 2000 and 2100")
+    baseline, baseline_sha, baseline_bytes = _load_backup_manifest(
+        backup_manifest_path
+    )
+    commit = code_commit or pipeline_commit()
+    if (
+        commit is None
+        or len(commit) != 40
+        or any(character not in "0123456789abcdef" for character in commit.lower())
+    ):
+        raise ReleaseError(
+            "A full 40-character pipeline Git commit is required to build a release"
+        )
+    release_store_path = _release_store_path(data_root)
+    document = WarehouseReleaseStore(release_store_path).load()
+    baseline_release = _find_release(document, baseline_warehouse_release_id)
+    if baseline_release.validation_state != ValidationState.PASSED:
+        raise ReleaseError("Provider-profile serving baseline has not passed validation")
+    if baseline_release.sha256 != baseline_sha:
+        raise ReleaseError(
+            "Provider-profile serving backup SHA-256 does not match the named baseline release"
+        )
+    source_periods = baseline_release.validation_details.get("source_periods")
+    if not isinstance(source_periods, dict):
+        raise ReleaseError(
+            "Provider-profile serving baseline lacks source-period provenance"
+        )
+    contract_tables = tuple(sorted(PROVIDER_PROFILE_CORE_CHANGED_TABLES))
+    required_period_sources = {
+        source_id
+        for table in contract_tables
+        for source_id in MART_CONTRACT_BY_TABLE[table].source_ids
+    }
+    missing_period_sources = sorted(
+        source_id
+        for source_id in required_period_sources
+        if not isinstance(source_periods.get(source_id), str)
+        or not source_periods[source_id].strip()
+    )
+    if missing_period_sources:
+        raise ReleaseError(
+            "Provider-profile serving baseline lacks required source periods: "
+            + ", ".join(missing_period_sources)
+        )
+    inherited_smoke_counts = baseline_release.validation_details.get(
+        "smoke_table_counts"
+    )
+    if inherited_smoke_counts is not None and (
+        not isinstance(inherited_smoke_counts, dict)
+        or not inherited_smoke_counts
+        or any(
+            not isinstance(name, str)
+            or not name
+            or not isinstance(count, int)
+            or isinstance(count, bool)
+            or count < 0
+            for name, count in inherited_smoke_counts.items()
+        )
+    ):
+        raise ReleaseError(
+            "Provider-profile serving baseline has invalid smoke table-count evidence"
+        )
+
+    identity = hashlib.sha256(
+        (
+            "serving_provider_profile_core_tables\0"
+            f"{baseline_warehouse_release_id}"
+        ).encode()
+    ).hexdigest()
+    warehouse_release_id = make_warehouse_release_id(identity, commit)
+    release_dir = data_root / "releases" / warehouse_release_id
+    database_path = release_dir / "warehouse.duckdb"
+    partial_path = release_dir / "warehouse.duckdb.partial"
+    spill_directory = data_root / "staging" / "duckdb-spill" / warehouse_release_id
+
+    with _exclusive_lock(data_root / "locks" / "build.lock"):
+        release_dir.mkdir(parents=True, exist_ok=False)
+        release = WarehouseRelease(
+            warehouse_release_id=warehouse_release_id,
+            created_at=utc_now(),
+            source_run_ids=baseline_release.source_run_ids,
+            pipeline_code_commit=commit,
+            baseline_path=str(baseline),
+            baseline_sha256=baseline_sha,
+            database_path=str(database_path.relative_to(data_root)),
+            duckdb_version=duckdb.__version__,
+        )
+        document.releases.append(release)
+        _save_release_document(data_root, document)
+        try:
+            _copy_verified_baseline(
+                baseline,
+                partial_path,
+                expected_sha256=baseline_sha,
+                expected_bytes=baseline_bytes,
+            )
+            connection = duckdb.connect(str(partial_path), read_only=False)
+            try:
+                _configure_targeted_build_resources(
+                    connection,
+                    memory_limit_gb=memory_limit_gb,
+                    threads=threads,
+                    spill_directory=spill_directory,
+                )
+                connection.execute("BEGIN TRANSACTION")
+                try:
+                    table_counts = build_serving_provider_profile_core_tables(
+                        connection, data_year
+                    )
+                    contract_validation = validate_mart_contracts(
+                        connection,
+                        source_periods=source_periods,
+                        contracts=tuple(
+                            MART_CONTRACT_BY_TABLE[table]
+                            for table in contract_tables
+                        ),
+                    )
+                    connection.execute("COMMIT")
+                except Exception:
+                    connection.execute("ROLLBACK")
+                    raise
+                if set(table_counts) != set(PROVIDER_PROFILE_CORE_CHANGED_TABLES):
+                    raise ReleaseError(
+                        "Provider-profile serving build returned the wrong table set"
+                    )
+                if any(count <= 0 for count in table_counts.values()):
+                    raise ReleaseError(
+                        "Provider-profile serving tables must all be non-empty"
+                    )
+                release.validation_details = {
+                    "release_scope": "targeted_additive",
+                    "comparison_policy": "serving_provider_profile_core_additive_v1",
+                    "baseline_warehouse_release_id": baseline_warehouse_release_id,
+                    "source_periods": dict(sorted(source_periods.items())),
+                    "changed_tables": sorted(PROVIDER_PROFILE_CORE_CHANGED_TABLES),
+                    "serving_mart_counts": dict(sorted(table_counts.items())),
+                    **(
+                        {
+                            "smoke_table_counts": dict(
+                                sorted(inherited_smoke_counts.items())
+                            )
+                        }
+                        if isinstance(inherited_smoke_counts, dict)
+                        else {}
+                    ),
+                    "mart_contract_validation": contract_validation,
+                    "resource_limits": {
+                        "memory_limit_gb": memory_limit_gb,
+                        "threads": threads,
+                        "spill_directory": str(spill_directory),
+                        "preserve_insertion_order": False,
+                    },
+                }
+                connection.execute("CHECKPOINT")
+            finally:
+                connection.close()
+
+            release.byte_size = partial_path.stat().st_size
+            release.sha256 = sha256_file(partial_path)
+            release.table_counts = dict(sorted(table_counts.items()))
+            release.validation_state = ValidationState.PASSED
+            release.validation_timestamp = utc_now()
+            os.replace(partial_path, database_path)
+            os.chmod(database_path, 0o440)
+            _save_release_document(data_root, document)
+            try:
+                spill_directory.rmdir()
+            except OSError:
+                pass
+        except Exception as error:
+            release.validation_state = ValidationState.FAILED
+            release.error_summary = safe_error(error)
+            _save_release_document(data_root, document)
+            raise ReleaseError(release.error_summary) from error
+
+    return BuildResult(
+        release=release,
+        database_path=database_path,
+        release_manifest_path=_release_manifest_path(data_root, warehouse_release_id),
+        release_store_path=release_store_path,
+    )
+
+
 def build_managed_dac_serving_practice_warehouse_release(
     *,
     data_root: Path,
@@ -2742,6 +2947,49 @@ def _comparison_policy(
     """Select the exact source-owned table set for a release comparison."""
     if (
         release.validation_details.get("comparison_policy")
+        == "serving_provider_profile_core_additive_v1"
+    ):
+        changed_tables = release.validation_details.get("changed_tables")
+        evidence = release.validation_details.get("serving_mart_counts")
+        baseline_release_id = release.validation_details.get(
+            "baseline_warehouse_release_id"
+        )
+        declared_changed_tables = (
+            set(changed_tables) if isinstance(changed_tables, list) else set()
+        )
+        if declared_changed_tables != set(PROVIDER_PROFILE_CORE_CHANGED_TABLES):
+            raise ReleaseError(
+                "Provider-profile serving release has an invalid changed-table allowlist"
+            )
+        if not isinstance(baseline_release_id, str) or not baseline_release_id:
+            raise ReleaseError(
+                "Provider-profile serving release lacks its baseline release identity"
+            )
+        if not isinstance(evidence, dict) or set(evidence) != set(
+            PROVIDER_PROFILE_CORE_CHANGED_TABLES
+        ):
+            raise ReleaseError(
+                "Provider-profile serving release lacks exact row-count evidence"
+            )
+        try:
+            expected_counts = {
+                table: int(count) for table, count in evidence.items()
+            }
+        except (TypeError, ValueError) as error:
+            raise ReleaseError(
+                "Provider-profile serving row-count evidence is invalid"
+            ) from error
+        if any(count <= 0 for count in expected_counts.values()):
+            raise ReleaseError(
+                "Provider-profile serving row-count evidence must be positive"
+            )
+        return (
+            "serving_provider_profile_core_additive_v1",
+            PROVIDER_PROFILE_CORE_CHANGED_TABLES,
+            expected_counts,
+        )
+    if (
+        release.validation_details.get("comparison_policy")
         == "serving_practice_nppes_additive_v1"
     ):
         changed_tables = release.validation_details.get("changed_tables")
@@ -2941,6 +3189,7 @@ def compare_warehouse_release(
                 "serving_practice_additive_v1",
                 "serving_practice_managed_dac_v1",
                 "serving_practice_nppes_additive_v1",
+                "serving_provider_profile_core_additive_v1",
             }:
                 baseline_fingerprints = {
                     table: _table_logical_fingerprint(baseline_connection, table)

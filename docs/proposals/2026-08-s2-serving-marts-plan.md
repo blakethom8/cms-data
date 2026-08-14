@@ -182,6 +182,11 @@ Proceed one measured slice at a time:
 5. Market ZIP/specialty/provider-site rollups, preserving distinct-NPI attribution so multi-door
    providers are never double counted.
 
+The first provider-profile item is now tracked in the
+[S3 provider-profile serving plan](2026-08-s3-provider-profile-serving-plan.md). Its header,
+location, and group tables are implemented and fixture-parity tested, but remain staging-only until
+production-data performance, capacity, and rollback gates pass.
+
 ### S2.5 — NPPES-primary practice search
 
 The measured NPPES-primary state case is the next slice: its canonical plan took 497 ms and scanned

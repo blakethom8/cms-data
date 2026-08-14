@@ -1,10 +1,10 @@
 # Product serving marts
 
-> **Last reviewed: 2026-08-14** · **Status: S2 contract reference**
+> **Last reviewed: 2026-08-14** · **Status: S2/S3 contract reference**
 
 The warehouse keeps raw publisher-shaped evidence separate from curated marts. Twelve
-source-oriented foundations are joined by three registered route-specific serving tables: the live
-CMS-enrollment practice table and the live two-table NPPES-primary capability. Registration does not
+source-oriented foundations are joined by six registered route-specific serving tables: three live
+practice-search tables and three staging-only provider-profile projections. Registration does not
 automatically authorize replacement of request-time API logic. A route can switch only after
 response parity and a material p95 or resource improvement are proven under the S2 acceptance
 gates.
@@ -32,6 +32,9 @@ running row scans in the serving process.
 | `serving_practice_provider_sites` | One normalized DAC site and organization-or-solo key per NPI | DAC, Part B, and Part D row run/period arrays plus release manifests | Live for `cms_enrollment` practice search |
 | `serving_practice_nppes_provider_sites` | One deterministic primary NPPES site per Medicare NPI | Selected NPPES row plus Part B/Part D run-period arrays | Live for `nppes_primary` practice search |
 | `serving_practice_nppes_org_memberships` | `addr_key × npi × org_pac_id` | DAC run-period arrays; provider parent retains NPPES identity | Live organization bridge for `nppes_primary` practice search |
+| `serving_provider_profile_headers` | One NPPES-first identity row per `npi` | NPPES and DAC row run/period arrays plus release-manifest taxonomy provenance | Staging-only; profile default remains raw |
+| `serving_provider_profile_locations` | One normalized DAC or NPPES address per `npi × addr_key` | NPPES and DAC row run/period arrays | Staging-only; profile default remains raw |
+| `serving_provider_profile_groups` | One CMS PAC organization context per `npi × group_id` | DAC and reassignment row run/period arrays | Staging-only; profile default remains raw |
 
 The first live route-specific contract is `serving_practice_provider_sites`, at one normalized DAC site
 and organization-or-solo key per NPI. It retains ordered specialty values, national Part B and Part
@@ -82,6 +85,18 @@ mask drift. The production release manager accepts this policy only when the com
 both contain the exact two-table scope, matching positive row counts, and passed serving-mart
 validation. The first production cutover was separately authorized and completed on 2026-08-14.
 
+The first provider-profile slice keeps identity, locations, and groups in three separate grains so
+multi-address and multi-organization providers cannot multiply one another. Its targeted builder is
+`python -m pipeline.data_platform build-provider-profile-core-release`. It requires a validated
+baseline, matching verified backup, full source commit, complete NPPES/DAC/reassignment source
+periods, and bounded resources. The `serving_provider_profile_core_additive_v1` comparison policy
+allows exactly those three tables to differ and fingerprints every invariant table. The API contains
+a complete-capability selector, but `raw` remains the default and the production manager does not
+yet authorize this policy. Production-data parity, performance, capacity, and rollback evidence are
+the next gates. Hospital affiliations stay on their existing path until their legacy source inputs
+have managed manifest coverage. See the
+[S3 provider-profile plan](proposals/2026-08-s3-provider-profile-serving-plan.md).
+
 ## Validation states
 
 - **Registered** means the table has a declared `MartSpec`.
@@ -102,7 +117,7 @@ Contract keys and explicitly required columns cannot be null. Other columns reta
 provenance is declared honestly when the physical row has no source-run columns. File timestamps and
 ingestion timestamps are never substituted for publisher periods.
 
-## S2 route migration
+## S2/S3 route migration
 
 The [S2 execution plan](proposals/2026-08-s2-serving-marts-plan.md) begins with measured canonical
 plans, then builds the default practice-search serving mart as the first isolated vertical slice.
@@ -111,3 +126,8 @@ remain available to predecessor warehouses and incomplete contracts.
 Explorer remains source-faithful,
 Clinical Trials remains in AACT/PostgreSQL, and every future mart cutover still requires separate
 authorization.
+
+The [S3 provider-profile plan](proposals/2026-08-s3-provider-profile-serving-plan.md) extends that
+pattern without changing the public endpoint. Three core/access projections are implemented and
+fixture-parity tested, but remain staging-only until production-data evidence justifies a separate
+authorization and cutover.

@@ -14,18 +14,64 @@ Five lenses assembled from validated queries (designed via warehouse review):
 All SQL is whitelisted; the only inputs are an NPI (validated digits) and
 search strings, always bound as parameters.
 """
+import os
 import re
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from open_payments_profile import industry_summary
 
-router = APIRouter(prefix="/profiles", tags=["Doctor Profiles"])
-
 CRED = '"Cred\t\t\t\t"'
 TELE = '"Telehlth\t\t\t\t"'
+ProviderProfileBackend = Literal["raw", "mart", "auto"]
+PROFILE_MART_QUERY_COLUMNS = {
+    "serving_provider_profile_headers": frozenset(
+        {
+            "npi", "name", "credentials", "specialty", "secondary_specialties",
+            "city", "state", "med_school", "grad_year", "telehealth",
+        }
+    ),
+    "serving_provider_profile_locations": frozenset(
+        {
+            "npi", "addr_key", "street", "suites", "city", "state", "zip5",
+            "phone", "roster_size", "latitude", "longitude", "likely_flagship",
+            "sources",
+        }
+    ),
+    "serving_provider_profile_groups": frozenset(
+        {
+            "npi", "group_id", "group_name", "group_size", "n_addresses",
+            "reassignment_size", "sources",
+        }
+    ),
+}
+
+
+def _profile_mart_is_available(conn) -> bool:
+    """Return whether all three profile serving schemas are query-compatible."""
+    available: dict[str, set[str]] = {
+        table: set() for table in PROFILE_MART_QUERY_COLUMNS
+    }
+    rows = conn.execute(
+        """
+        select table_name, column_name
+        from information_schema.columns
+        where table_schema = 'main'
+          and table_name in (
+            'serving_provider_profile_headers',
+            'serving_provider_profile_locations',
+            'serving_provider_profile_groups'
+          )
+        """
+    ).fetchall()
+    for table, column in rows:
+        available[str(table)].add(str(column))
+    return all(
+        required.issubset(available[table])
+        for table, required in PROFILE_MART_QUERY_COLUMNS.items()
+    )
 
 # Curated demo exemplars (validated LA cardiologists with contrasting stories).
 EXEMPLARS = [
@@ -67,7 +113,9 @@ def _row(conn, sql: str, params: list) -> Optional[dict]:
     return out[0] if out else None
 
 
-def _profile_header(conn, npi: str) -> dict | None:
+def _profile_header(
+    conn, npi: str, *, backend: Literal["raw", "mart"] = "raw"
+) -> dict | None:
     """NPPES-first provider identity enriched with Medicare attributes.
 
     NPPES defines who can have a profile; DAC is optional evidence that adds
@@ -75,6 +123,15 @@ def _profile_header(conn, npi: str) -> dict | None:
     NPPES-only clinician discoverable and profileable without pretending that
     missing Medicare rows mean the NPI does not exist.
     """
+    if backend == "mart":
+        return _row(conn, """
+            select npi, name, credentials, specialty, secondary_specialties,
+                   city, state, med_school, grad_year,
+                   year(current_date) - grad_year years_in_practice,
+                   telehealth
+            from serving_provider_profile_headers
+            where npi = ?
+        """, [npi])
     return _row(conn, f"""
         with nppes as (
           select CAST(npi as varchar) npi,
@@ -116,7 +173,9 @@ def _profile_header(conn, npi: str) -> dict | None:
     """, [npi, npi])
 
 
-def _affiliation_groups(conn, npi: str) -> list[dict]:
+def _affiliation_groups(
+    conn, npi: str, *, backend: Literal["raw", "mart"] = "raw"
+) -> list[dict]:
     """DAC billing groups merged with PECOS reassignment relationships.
 
     DAC contributes the door-bearing enrollment (name, roster size, address
@@ -126,6 +185,15 @@ def _affiliation_groups(conn, npi: str) -> list[dict]:
     ``sources`` states which file(s) assert each row so the UI can stay
     transparent about provenance.
     """
+    if backend == "mart":
+        return _rows(conn, """
+            select group_id, group_name, group_size, n_addresses,
+                   reassignment_size, sources
+            from serving_provider_profile_groups
+            where npi = ?
+            order by (sources <> 'reassignment') desc,
+                     coalesce(group_size, reassignment_size, 0) desc
+        """, [npi])
     return _rows(conn, """
         with dac as (
           select org_pac_id group_id, any_value("Facility Name") group_name,
@@ -154,7 +222,9 @@ def _affiliation_groups(conn, npi: str) -> list[dict]:
     """, [npi, npi])
 
 
-def _profile_locations(conn, npi: str) -> list[dict]:
+def _profile_locations(
+    conn, npi: str, *, backend: Literal["raw", "mart"] = "raw"
+) -> list[dict]:
     """Practice doors from DAC enrollment merged with the NPPES practice address.
 
     DAC remains the roster/org grain; NPPES contributes the registry practice
@@ -162,6 +232,14 @@ def _profile_locations(conn, npi: str) -> list[dict]:
     ``dac``, ``nppes``, or ``dac + nppes`` so Access can label provenance the
     same way group affiliations already do.
     """
+    if backend == "mart":
+        return _rows(conn, """
+            select street, suites, city, state, zip5, phone, roster_size,
+                   latitude lat, longitude lng, likely_flagship, sources
+            from serving_provider_profile_locations
+            where npi = ?
+            order by coalesce(roster_size, 0) asc, addr_key
+        """, [npi])
     return _rows(conn, """
         with dac as (
           select upper(trim(adr_ln_1)) || '|' || left(CAST("ZIP Code" as varchar),5) addr_key,
@@ -441,7 +519,26 @@ def _search_npi(conn, npi: str, state: Optional[str]) -> list[dict]:
     """, [npi, state.upper()] if state else [npi])
 
 
-def get_profiles_router(get_conn):
+def get_profiles_router(
+    get_conn, provider_profile_backend: ProviderProfileBackend | None = None
+):
+    router = APIRouter(prefix="/profiles", tags=["Doctor Profiles"])
+    selected_profile_backend = provider_profile_backend or os.getenv(
+        "PROVIDER_PROFILE_BACKEND", "raw"
+    )
+    if selected_profile_backend not in {"raw", "mart", "auto"}:
+        raise ValueError("PROVIDER_PROFILE_BACKEND must be raw, mart, or auto")
+    profile_mart_available: bool | None = None
+
+    def resolve_profile_backend() -> Literal["raw", "mart"]:
+        """Select the complete three-table profile capability as one unit."""
+        nonlocal profile_mart_available
+        if selected_profile_backend != "auto":
+            return selected_profile_backend
+        if profile_mart_available is None:
+            profile_mart_available = _profile_mart_is_available(get_conn())
+        return "mart" if profile_mart_available else "raw"
+
     @router.get("/exemplars")
     async def exemplars():
         return EXEMPLARS
@@ -483,10 +580,11 @@ def get_profiles_router(get_conn):
     def profile(npi: str):
         npi = _npi(npi)
         conn = get_conn()
+        profile_backend = resolve_profile_backend()
         out: dict = {"npi": npi}
 
         # ------ header / background (DAC + NPPES) ------
-        out["header"] = _profile_header(conn, npi)
+        out["header"] = _profile_header(conn, npi, backend=profile_backend)
         if not out["header"]:
             raise HTTPException(status_code=404, detail="NPI not found in NPPES or Doctors & Clinicians")
 
@@ -627,7 +725,7 @@ def get_profiles_router(get_conn):
         """, [npi])
 
         # ------ 5. access & affiliation ------
-        out["locations"] = _profile_locations(conn, npi)
+        out["locations"] = _profile_locations(conn, npi, backend=profile_backend)
         home_state = (out["header"] or {}).get("state")
         out["locations"].sort(key=lambda l: (
             0 if l.get("state") == home_state else 1,
@@ -636,7 +734,7 @@ def get_profiles_router(get_conn):
             l.get("zip5") or "",
         ))
 
-        out["groups"] = _affiliation_groups(conn, npi)
+        out["groups"] = _affiliation_groups(conn, npi, backend=profile_backend)
         out["hospital_affiliations"] = _hospital_affiliations(conn, npi)
         if not _mips_stats:
             s = _row(conn, """select median(final_MIPS_score) med,

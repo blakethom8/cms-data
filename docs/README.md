@@ -17,7 +17,7 @@ When documents disagree, the operating model and the source code win.
 | [new-provider-radar-execution.md](new-provider-radar-execution.md) | Implementation handoff for the remaining Radar data-plane work: acquisition automation, production promotion, city-scope API, precision spike. |
 | [provider-serving-contract.md](provider-serving-contract.md) | NPPES-first discovery, curated profile, raw evidence endpoint separation, provenance labels, and v3 cache contract. |
 | [provider-evidence-model.md](provider-evidence-model.md) | Source-preserving provider address and organization evidence grains, provenance, refresh, and consumer rules. |
-| [product-serving-marts.md](product-serving-marts.md) | Executable contract reference for twelve foundation marts, three serving tables, and the measured S2 route-migration boundary. |
+| [product-serving-marts.md](product-serving-marts.md) | Executable contract reference for twelve foundation marts, six serving tables, and the measured S2/S3 route-migration boundary. |
 | [operations/api-concurrency-benchmark.md](operations/api-concurrency-benchmark.md) | Reproducible mixed-load benchmark and S2 canonical diagnostic corpus. |
 | [operations/s2-canonical-baseline-2026-08-14.md](operations/s2-canonical-baseline-2026-08-14.md) | First S2 canonical behavior baseline, determinism findings, and plan-capture blockers. |
 | [operations/s2-managed-dac-candidate-2026-08-14.md](operations/s2-managed-dac-candidate-2026-08-14.md) | Managed DAC candidate identity, raw/mart parity and performance evidence, and the blocking capacity gate. |
@@ -28,6 +28,7 @@ When documents disagree, the operating model and the source code win.
 | [operations/july-refresh-workspace-compaction-2026-08-14.md](operations/july-refresh-workspace-compaction-2026-08-14.md) | July rebuild workspace inventory, unique-source retention decision, duplicate compaction proof, and restored S2 capacity gate. |
 | [operations/s2-query-plan-baseline-2026-08-14.md](operations/s2-query-plan-baseline-2026-08-14.md) | Exact canonical SQL plans, query fanout, operator work, and determinism diagnosis. |
 | [proposals/2026-08-s2-serving-marts-plan.md](proposals/2026-08-s2-serving-marts-plan.md) | S2 delivery sequence, baseline evidence, first practice-search slice, and route-switch gates. |
+| [proposals/2026-08-s3-provider-profile-serving-plan.md](proposals/2026-08-s3-provider-profile-serving-plan.md) | Provider-profile header/location/group mart design, staging boundary, evaluation gates, and later profile slices. |
 | [security/arbitrary-sql-boundary.md](security/arbitrary-sql-boundary.md) | `/query` caller inventory, operator-only authorization, typed replacement, rollout, and rollback contract. |
 | [proposals/2026-08-data-platform-roadmap.md](proposals/2026-08-data-platform-roadmap.md) | Current production-readiness and product-data roadmap: priorities, sequencing, acceptance gates, issue mapping, and operating cadence. |
 | [worktree-integration-assessment-2026-08-11.md](worktree-integration-assessment-2026-08-11.md) | Decision log, verification record, commit map, and agent handoff for the assessed deployment, evidence, API, and Command Center work. |
