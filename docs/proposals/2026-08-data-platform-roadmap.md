@@ -187,13 +187,17 @@ Design direction:
 
 Acceptance gates:
 
-- [ ] Commit a production-representative benchmark for search, profile, practice, Radar, explorer,
+- [x] Commit a production-representative benchmark for search, profile, practice, Radar, explorer,
   and a mixed workload at concurrency 1/2/4/8/12.
-- [ ] Record baseline latency, throughput, pool wait, CPU, RSS, and failure behavior.
-- [ ] Prove no connection is used concurrently in an unsupported way.
-- [ ] Prove bounded overload returns a controlled failure instead of unbounded queueing.
-- [ ] Re-run response-shape, production smoke, ETag/304, rollback, and resource tests.
-- [ ] Record selected worker/pool/thread/memory values and why they fit the host.
+- [x] Record baseline latency, throughput, pool wait, CPU, RSS, and failure behavior.
+- [x] Prove no connection is used concurrently in an unsupported way.
+- [x] Prove bounded overload returns a controlled failure instead of unbounded queueing.
+- [x] Re-run response-shape, production smoke, ETag/304, rollback, and resource tests.
+- [x] Record selected worker/pool/thread/memory values and why they fit the host.
+
+Preparation evidence is complete in the
+[2026-08-13 prepared-candidate record](../operations/bounded-duckdb-prepared-candidate-2026-08-13.md).
+The code-only candidate remains unselected; controlled production cutover is a separate approval.
 
 ### S2. Release-built product marts
 

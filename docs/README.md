@@ -23,6 +23,7 @@ When documents disagree, the operating model and the source code win.
 | [../deploy/systemd/README.md](../deploy/systemd/README.md) | Systemd release layout and the read-only publisher-status timer. |
 | [operations/hetzner-cms-server.md](operations/hetzner-cms-server.md) | Current production-host inventory, Provider Search boundary, decommission record, and infrastructure work. |
 | [operations/cms-private-network-runbook.md](operations/cms-private-network-runbook.md) | Current private WireGuard API boundary, verification, rollback, and retention procedure. |
+| [operations/bounded-duckdb-prepared-candidate-2026-08-13.md](operations/bounded-duckdb-prepared-candidate-2026-08-13.md) | Sealed prepared-candidate identity, exact-bundle smoke/load evidence, rehearsal findings, and the unperformed cutover boundary. |
 | [operations/disaster-recovery-runbook.md](operations/disaster-recovery-runbook.md) | Off-host CMS bundle contract, isolated materialization, restore verification, and drill evidence. |
 | [operations/bounded-duckdb-rehearsal-2026-08-13.md](operations/bounded-duckdb-rehearsal-2026-08-13.md) | Three-trial executor comparison, tuning evidence, safety checks, and remaining rollout gates. |
 | [operations/cms-private-network-cutover-2026-08-05.md](operations/cms-private-network-cutover-2026-08-05.md) | Executed private-network and credential cutover record. |

@@ -35,6 +35,7 @@ the scoped key in the environment; never pass it on the command line or include 
 
 ```bash
 export CMS_API_KEY='<scoped-key>'
+export PYTHONDONTWRITEBYTECODE=1
 .venv/bin/python -m pipeline.serving_benchmark \
   --base-url http://127.0.0.1:8080 \
   --workload docs/operations/workloads/provider-search-mixed-v1.json \
@@ -53,6 +54,8 @@ rehearsal record. Compare p50/p95/p99, throughput, CPU, RSS peak, status counts,
 The bounded connection pool emits its acquisition wait through the `Server-Timing` response header.
 The harness records p50/p95/p99/max wait separately from total request latency. Baseline evidence
 from a server without the pool has zero wait samples; never reinterpret that absence as zero wait.
+Keep `PYTHONDONTWRITEBYTECODE=1` set whenever the harness imports from an immutable release checkout;
+otherwise Python can create a writable `__pycache__` and make the artifact fail promotion integrity.
 
 ## Interpretation contract
 

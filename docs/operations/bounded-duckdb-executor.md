@@ -92,3 +92,9 @@ the active database in place.
 - 2026-08-13: Measured executor parameters belong in the checked-in non-secret production release
   environment file. A prepared bundle must load that exact file during rehearsal so configuration
   provenance does not depend on manually repeated shell flags.
+- 2026-08-13: Python diagnostics and benchmark tools can create writable bytecode caches inside an
+  immutable checkout unless `PYTHONDONTWRITEBYTECODE=1` is present. Post-seal Git checks must also
+  disable optional locks, and a transient candidate must prove environment-file precedence from its
+  actual process environment before smoke. The
+  [prepared-candidate record](bounded-duckdb-prepared-candidate-2026-08-13.md) captures the
+  fail-closed detections and cleanup.
