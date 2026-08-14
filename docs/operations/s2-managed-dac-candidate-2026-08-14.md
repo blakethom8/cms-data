@@ -238,8 +238,10 @@ One non-blocking metadata issue was captured. The control-plane ledger is verifi
 populated the process-local release metadata cache before the manager recorded verification, and
 the successful value remains cached for that process lifetime. Served release identity, data,
 hashes, ETag, and route behavior are correct. Production was not restarted a second time merely to
-refresh this timestamp; a follow-up should make successful metadata resolution refresh when the
-ledger transitions from unverified to verified.
+refresh this timestamp. The follow-up serving-code change makes a selected-but-unverified resolver
+refresh only `verified_at` from the same deployment's ledger and refuses metadata from a repointed
+bundle. The cutover process retains its original cached value until the next normal immutable code
+deployment; no standalone production restart was introduced for this informational field.
 
 ## Evidence
 
