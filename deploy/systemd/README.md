@@ -16,6 +16,12 @@ loopback-only `systemd-socket-proxyd` listener at `127.0.0.1:8080` preserves the
 smoke contract without exposing Uvicorn on a public or Docker interface. See
 `docs/operations/cms-private-network-runbook.md` for installation and rollback.
 
+The checked-in `production-release.env` also binds the measured DuckDB executor settings to the
+serving artifact. The current candidate values are pool size `2`, DuckDB threads `8`, a 4-second
+acquisition deadline, and a `2GB` DuckDB memory limit. Rehearsals must load this exact file after the
+secret environment files. Installing it under `/etc/cms-data/` and restarting the service remain
+cutover actions; merging or preparing a bundle does neither.
+
 Install these files only after production has been bootstrapped to a verified legacy rollback
 release. Preserve checksummed copies of the prior unit and environment files first. A unit install
 requires `systemctl daemon-reload` and one controlled restart followed by

@@ -146,8 +146,9 @@ configuration and its overload behavior remain auditable rather than being disca
 
 ## Decision
 
-Do not deploy the code defaults. Carry `pool size 2`, `DuckDB threads 8`, and a 4-second acquisition
-deadline into a formal immutable deployment candidate. Before cutover, run the complete production
-smoke suite, response and ETag gates, resource checks, and rollback rehearsal against that exact
-bundle. Treat the C1 median regression as an explicit canary guardrail; if production traffic is
-predominantly isolated, test a modest per-query thread increase before accepting it.
+Do not deploy the code defaults. The measured `pool size 2`, `DuckDB threads 8`, 4-second acquisition
+deadline, and `2GB` memory limit must be bound through the candidate's checked-in
+`deploy/systemd/production-release.env`. Before cutover, run the complete production smoke suite,
+response and ETag gates, resource checks, and rollback rehearsal against that exact bundle and
+environment file. Treat the C1 median regression as an explicit canary guardrail; if production
+traffic is predominantly isolated, test a modest per-query thread increase before accepting it.
