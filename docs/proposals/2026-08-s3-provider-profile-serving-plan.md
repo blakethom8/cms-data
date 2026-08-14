@@ -1,9 +1,11 @@
 # S3 provider-profile serving marts plan
 
-> **Last reviewed: 2026-08-14** · **Status: S3.1 implemented; production evaluation pending**
+> **Last reviewed: 2026-08-14** · **Status: S3.1 merged; S3.2 preflight capacity-blocked**
 >
 > **Production state:** unchanged. Provider-profile core queries still default to the raw oracle.
 > No provider-profile candidate has been built from production data, prepared, or selected.
+> The [production-data preflight](../operations/s3-provider-profile-preflight-2026-08-14.md) proves
+> source readiness and records the capacity prerequisite and a raw-oracle parity fix.
 
 ## Decision
 

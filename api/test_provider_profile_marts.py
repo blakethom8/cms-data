@@ -79,6 +79,8 @@ def _database() -> duckdb.DuckDBPyConnection:
         INSERT INTO raw_reassignment VALUES
             ('1111111111', 'PAC-1', 'Cardio Group Legal', 25,
              'reassign-run', '2026-07'),
+            ('1111111111', 'PAC-1', 'Cardio Group Legal', 50,
+             'reassign-run', '2026-07'),
             ('1111111111', 'PAC-2', 'Regional Medical Group', 100,
              'reassign-run', '2026-07');
         INSERT INTO address_geocode VALUES ('10 MAIN ST|90001', 34.1, -118.2);
@@ -236,7 +238,7 @@ def test_profile_auto_selector_falls_back_or_uses_the_complete_capability(
         (
             "raw_reassignment",
             "source_run_id",
-            '"Group PAC ID" = \'PAC-1\'',
+            '"Group PAC ID" = \'PAC-2\'',
             "reassignment",
         ),
     ],
