@@ -1,11 +1,10 @@
 # S2 release-built serving marts plan
 
-> Status: S2.1-S2.4 evidence complete — parity, performance, capacity, and route authorization pass;
-> immutable deployment preparation remains before the explicit cutover gate
+> Status: S2.1-S2.4 complete; the explicitly approved production cutover completed successfully on
+> 2026-08-14 and the first practice-search serving mart is live
 >
-> Production boundary: do not select, rebuild, amend, or supersede prepared S1 deployment
-> `deployment-20260814T002255Z-11131e3630`. S2 candidates remain isolated and unselected until a
-> separately approved cutover.
+> Production state: `deployment-20260814T160153Z-45ab9d2d38` is selected and verified;
+> `deployment-20260811T155814Z-6baa26aa69` remains the rollback-ready predecessor.
 
 ## Decision
 
@@ -264,6 +263,7 @@ deployment-local `auto` selection resolved to the mart, serving identity/ETag ch
 activation plus rollback dry-runs passed. PR #52 landed the three reusable promotion hardening
 items: targeted releases inherit baseline smoke counts, smoke uses a named operator key, and
 post-copy capacity counts only bytes not already allocated. The corrected capacity gate passes at
-84.29% actual/projected use with the active-plus-two rollback floor intact. Production remains on the
-verified predecessor pending the separate cutover approval. See the
+84.29% actual/projected use with the active-plus-two rollback floor intact. The approved one-shot
+cutover selected and verified the candidate, the production smoke passed all 15 checks, and
+Provider Search remained ready. See the
 [candidate record](../operations/s2-managed-dac-candidate-2026-08-14.md).

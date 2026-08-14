@@ -231,6 +231,9 @@ loopback health endpoint, records the complete smoke suite, and verifies the can
 readiness, smoke, or verification fails, it atomically selects the predecessor, restarts, runs the
 rollback counts, and verifies the rollback before returning exit code `1`.
 
+The smoke base URL must be an exact loopback HTTP origin such as `http://127.0.0.1:8080`; a private
+interface address is rejected before candidate selection even when it routes to the same service.
+
 ```bash
 cd /srv/cms-data-platform/production-ops/current
 PYTHONPATH=/srv/cms-data-platform/production-ops/current \
@@ -402,6 +405,13 @@ and `build.checksum` as `null`, `production/deployments.json` is not group-reada
 service user — the endpoint stays correct via the bundle name, but record the finding and
 decide (owner) between loosening that one file's group mode and stamping
 `CMS_RELEASE_METADATA_PATH` at deploy time.
+
+The one-shot flow runs smoke before it records manager verification. If `/release` has already
+cached otherwise complete metadata during smoke, `verified_at` can remain `null` for that process
+even after the ledger is verified. Treat a null timestamp as a recorded metadata discrepancy: prove
+the ledger state independently and confirm release ID, artifact hashes, ETag, and route behavior.
+Do not add an unplanned restart solely to refresh the field. Track the cache refresh behavior as a
+code follow-up.
 
 Rollback is unchanged: the cutover auto-selects and re-verifies the predecessor on any
 required failure, and manual `rollback` restores the prior bundle pointer, which also

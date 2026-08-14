@@ -1,0 +1,14 @@
+{
+  "cmdline": "/srv/cms-data-platform/production/release-current/runtime/bin/python -m uvicorn api.main:app --host 10.77.0.1 --port 8080 ",
+  "configured_practice_backend": "auto",
+  "cwd": "/srv/cms-data-platform/production-artifacts/code/7fb735cdf0dac96dd26201277564be2740810170-s2-managed-dac-1",
+  "deployment_id": "deployment-20260814T160153Z-45ab9d2d38",
+  "executable_resolved": "/usr/bin/python3.12",
+  "generated_at": "2026-08-14T16:51:29.818900+00:00",
+  "nrestarts": 0,
+  "open_warehouse": "/srv/cms-data-platform/production-artifacts/warehouses/warehouse-20260814T025428Z-5dac630227/warehouse.duckdb",
+  "operations_current": "/srv/cms-data-platform/production-ops/ops-d8567a340ffc1f665c39c01671273784ff224174-s2-hardening",
+  "pid": 3990931,
+  "resolved_practice_backend": "mart",
+  "schema_version": 1
+}

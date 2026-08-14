@@ -1,0 +1,47 @@
+Aug 14 16:47:27 ubuntu-32gb-hil-2 systemd[1]: Stopping cms-api.service - CMS Provider Data API...
+Aug 14 16:47:27 ubuntu-32gb-hil-2 cms-api[3240475]: INFO:     Shutting down
+Aug 14 16:47:27 ubuntu-32gb-hil-2 cms-api[3240475]: INFO:     Waiting for application shutdown.
+Aug 14 16:47:28 ubuntu-32gb-hil-2 cms-api[3240475]: INFO:     Application shutdown complete.
+Aug 14 16:47:28 ubuntu-32gb-hil-2 cms-api[3240475]: INFO:     Finished server process [3240475]
+Aug 14 16:47:28 ubuntu-32gb-hil-2 systemd[1]: cms-api.service: Deactivated successfully.
+Aug 14 16:47:28 ubuntu-32gb-hil-2 systemd[1]: Stopped cms-api.service - CMS Provider Data API.
+Aug 14 16:47:28 ubuntu-32gb-hil-2 systemd[1]: cms-api.service: Consumed 1h 26.789s CPU time, 3.8G memory peak, 0B memory swap peak.
+Aug 14 16:47:28 ubuntu-32gb-hil-2 systemd[1]: Starting cms-api.service - CMS Provider Data API...
+Aug 14 16:47:47 ubuntu-32gb-hil-2 cms-api[3990880]: {
+Aug 14 16:47:47 ubuntu-32gb-hil-2 cms-api[3990880]:   "schema_version": 1,
+Aug 14 16:47:47 ubuntu-32gb-hil-2 cms-api[3990880]:   "selected_deployment_id": "deployment-20260814T160153Z-45ab9d2d38",
+Aug 14 16:47:47 ubuntu-32gb-hil-2 cms-api[3990880]:   "selected_state": "selected",
+Aug 14 16:47:47 ubuntu-32gb-hil-2 cms-api[3990880]:   "state": "passed"
+Aug 14 16:47:47 ubuntu-32gb-hil-2 cms-api[3990880]: }
+Aug 14 16:47:47 ubuntu-32gb-hil-2 systemd[1]: Started cms-api.service - CMS Provider Data API.
+Aug 14 16:47:47 ubuntu-32gb-hil-2 cms-api[3990931]: INFO:     Started server process [3990931]
+Aug 14 16:47:47 ubuntu-32gb-hil-2 cms-api[3990931]: INFO:     Waiting for application startup.
+Aug 14 16:47:47 ubuntu-32gb-hil-2 cms-api[3990931]: INFO:     Application startup complete.
+Aug 14 16:47:47 ubuntu-32gb-hil-2 cms-api[3990931]: INFO:     Uvicorn running on http://10.77.0.1:8080 (Press CTRL+C to quit)
+Aug 14 16:47:48 ubuntu-32gb-hil-2 cms-api[3990931]: INFO:     10.77.0.1:38556 - "GET /health HTTP/1.1" 200 OK
+Aug 14 16:47:48 ubuntu-32gb-hil-2 cms-api[3990931]: INFO:     10.77.0.1:38566 - "GET /health HTTP/1.1" 200 OK
+Aug 14 16:47:48 ubuntu-32gb-hil-2 cms-api[3990931]: INFO:     10.77.0.1:38576 - "GET /practices/capabilities HTTP/1.1" 401 Unauthorized
+Aug 14 16:47:48 ubuntu-32gb-hil-2 cms-api[3990931]: INFO:     10.77.0.1:38590 - "GET /practices/capabilities HTTP/1.1" 200 OK
+Aug 14 16:47:48 ubuntu-32gb-hil-2 cms-api[3990931]: INFO:     10.77.0.1:38594 - "GET /practices/search?specialty=Cardiology&state=OH&limit=3 HTTP/1.1" 200 OK
+Aug 14 16:47:49 ubuntu-32gb-hil-2 cms-api[3990931]: INFO:     10.77.0.1:38596 - "GET /profiles/1003005257 HTTP/1.1" 200 OK
+Aug 14 16:47:52 ubuntu-32gb-hil-2 cms-api[3990931]: INFO:     10.77.0.1:38604 - "GET /industry/search?state=OH&limit=3 HTTP/1.1" 200 OK
+Aug 14 16:47:54 ubuntu-32gb-hil-2 cms-api[3990931]: INFO:     10.77.0.1:38612 - "GET /industry/options?field=manufacturer&state=OH&limit=1 HTTP/1.1" 200 OK
+Aug 14 16:47:57 ubuntu-32gb-hil-2 cms-api[3990931]: INFO:     10.77.0.1:35830 - "GET /industry/search?state=OH&manufacturer=ABBVIE+INC.&threshold_scope=matched&limit=3 HTTP/1.1" 200 OK
+Aug 14 16:47:57 ubuntu-32gb-hil-2 cms-api[3990931]: INFO:     10.77.0.1:35842 - "GET /industry/1295786770/detail HTTP/1.1" 200 OK
+Aug 14 16:47:57 ubuntu-32gb-hil-2 cms-api[3990931]: INFO:     10.77.0.1:35856 - "POST /research/investigators HTTP/1.1" 200 OK
+Aug 14 16:47:57 ubuntu-32gb-hil-2 cms-api[3990931]: INFO:     10.77.0.1:35860 - "GET /clinical-trials/version HTTP/1.1" 200 OK
+Aug 14 16:47:57 ubuntu-32gb-hil-2 cms-api[3990931]: INFO:     10.77.0.1:35868 - "GET /explorer/catalog HTTP/1.1" 200 OK
+Aug 14 16:47:57 ubuntu-32gb-hil-2 cms-api[3990931]: INFO:     10.77.0.1:35872 - "GET /tables HTTP/1.1" 200 OK
+Aug 14 16:47:57 ubuntu-32gb-hil-2 cms-api[3990931]: INFO:     10.77.0.1:35874 - "POST /query HTTP/1.1" 200 OK
+Aug 14 16:50:04 ubuntu-32gb-hil-2 cms-api[3990931]: INFO:     10.77.0.1:56544 - "GET /release HTTP/1.1" 200 OK
+Aug 14 16:50:04 ubuntu-32gb-hil-2 cms-api[3990931]: INFO:     10.77.0.1:56552 - "GET /practices/capabilities HTTP/1.1" 200 OK
+Aug 14 16:50:04 ubuntu-32gb-hil-2 cms-api[3990931]: INFO:     10.77.0.1:56566 - "GET /practices/capabilities HTTP/1.1" 304 Not Modified
+Aug 14 16:50:04 ubuntu-32gb-hil-2 cms-api[3990931]: INFO:     10.77.0.1:56576 - "GET /practices/search?state=CA&specialty=Internal+Medicine&limit=3 HTTP/1.1" 200 OK
+Aug 14 16:50:18 ubuntu-32gb-hil-2 cms-api[3990931]: INFO:     10.77.0.1:58598 - "GET /release HTTP/1.1" 200 OK
+Aug 14 16:50:18 ubuntu-32gb-hil-2 cms-api[3990931]: INFO:     10.77.0.1:58600 - "HEAD /practices/capabilities HTTP/1.1" 405 Method Not Allowed
+Aug 14 16:50:18 ubuntu-32gb-hil-2 cms-api[3990931]: INFO:     10.77.0.1:58606 - "GET /practices/search?state=CA&specialty=Internal%20Medicine&limit=3 HTTP/1.1" 200 OK
+Aug 14 16:50:53 ubuntu-32gb-hil-2 cms-api[3990931]: INFO:     10.77.0.1:52364 - "GET /release HTTP/1.1" 200 OK
+Aug 14 16:50:53 ubuntu-32gb-hil-2 cms-api[3990931]: INFO:     10.77.0.1:52372 - "GET /practices/capabilities HTTP/1.1" 200 OK
+Aug 14 16:50:53 ubuntu-32gb-hil-2 cms-api[3990931]: INFO:     10.77.0.1:52374 - "GET /practices/capabilities HTTP/1.1" 304 Not Modified
+Aug 14 16:50:54 ubuntu-32gb-hil-2 cms-api[3990931]: INFO:     10.77.0.1:52388 - "GET /practices/search?state=CA&specialty=Internal+Medicine&limit=3 HTTP/1.1" 200 OK
+Aug 14 16:51:28 ubuntu-32gb-hil-2 cms-api[3990931]: INFO:     10.77.0.2:47486 - "GET /practices/capabilities HTTP/1.1" 200 OK

@@ -14,7 +14,7 @@ This directory supports the
 - `retention-preview.json` records the initial capacity block and review-only inventory.
 - `retention-preview-after-cleanup.json` records the passing gate after the failed candidate was
   explicitly reviewed and removed.
-- `production-smoke.json` is the passing 15-check isolated production-bundle smoke. The three
+- `production-rehearsal-smoke.json` is the passing 15-check isolated production-bundle smoke. The three
   `production-smoke-attempt*.json` files retain the fail-closed evidence-shape, protected-table, and
   scoped-key learnings that preceded it.
 - `production-expected-table-counts.json` is the bounded, query-authorized count contract used by
@@ -28,7 +28,17 @@ This directory supports the
 - `production-transition-dry-run-{activate,rollback}.json` record both no-op transition rehearsals.
 - `production-retention-preview.json` is the passing post-copy capacity and rollback-floor gate; its
   zero candidate bytes mean zero additional bytes remain to be allocated, not a zero-sized warehouse.
+- `production-pre-cutover-{state,systemd-unit,environment-metadata}.*` archive the exact control
+  plane, service unit, and non-secret environment-file metadata before selection.
+- `production-cutover-attempt1.json` records the rejected non-loopback invocation, which failed
+  before selection; `production-cutover-result.json` records the successful one-shot result.
+- `production-smoke.json` is the final 15-check smoke from the selected production process.
+- `production-post-cutover-{process,serving-contract,journal,errors}.*` prove the resolved immutable
+  artifacts, release/ETag behavior, clean service journal, and absence of error-priority entries.
+- `provider-search-readiness.json` records the downstream application's healthy CMS data check.
+- `production-retention-preview-{cutover,post-cutover}.json` preserve the final capacity and
+  rollback-floor gates immediately before and after selection.
 
 The generated artifacts intentionally retain exact loopback origins, process IDs, warehouse paths,
-release IDs, hashes, and timestamps needed to audit the rehearsal. They contain no API keys or
+release IDs, hashes, and timestamps needed to audit the rehearsal and cutover. They contain no API keys or
 downloaded source data.
