@@ -103,6 +103,23 @@ TRANSFORMS: tuple[TransformSpec, ...] = (
         "Prejoins NPPES-first profile identity, normalized DAC/NPPES doors, and non-additive CMS organization contexts.",
     ),
     TransformSpec(
+        "build_serving_provider_profile_claims_tables",
+        "Build provider profile claims serving rows",
+        (
+            "raw_physician_by_provider",
+            "raw_physician_by_provider_and_service",
+            "raw_part_d_by_provider",
+            "raw_part_d_by_provider_and_drug",
+            "serving_provider_profile_headers",
+        ),
+        (
+            "serving_provider_profile_claims_summary",
+            "serving_provider_profile_top_services",
+            "serving_provider_profile_top_drugs",
+        ),
+        "Materializes response-exact profile utilization, deterministic top-service, and deterministic top-drug claims lenses with row provenance.",
+    ),
+    TransformSpec(
         "build_pecos_provider_organizations",
         "Build provider-organization bridge",
         ("raw_pecos_reassignment", "raw_pecos_enrollment"),

@@ -30,6 +30,7 @@ class MartSpec:
     authorized_routes: tuple[str, ...] = ()
     require_nonempty: bool = True
     row_validations: tuple[tuple[str, str], ...] = ()
+    schema_columns: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.table or not self.transform_ids or not self.key_columns:
@@ -377,6 +378,151 @@ MART_CONTRACTS: tuple[MartSpec, ...] = (
         ),
     ),
     MartSpec(
+        table="serving_provider_profile_claims_summary",
+        transform_ids=("build_serving_provider_profile_claims_tables",),
+        grain="one claims-bearing provider profile summary row per NPI",
+        key_columns=("npi",),
+        upstream_tables=(
+            "raw_physician_by_provider",
+            "raw_physician_by_provider_and_service",
+            "raw_part_d_by_provider",
+            "serving_provider_profile_headers",
+        ),
+        source_ids=(
+            "cms_physician_by_provider",
+            "cms_physician_by_provider_and_service",
+            "cms_part_d_by_provider",
+        ),
+        required_columns=(
+            "npi", "has_panel", "has_clinical", "has_prescribing",
+            "part_b_provider_source_data_periods",
+            "part_b_provider_source_run_ids",
+            "part_b_service_source_data_periods",
+            "part_b_service_source_run_ids",
+            "part_d_provider_source_data_periods",
+            "part_d_provider_source_run_ids", "data_year",
+        ),
+        schema_columns=(
+            "medicare_patients", "panel_total_services", "services_per_patient",
+            "medicare_allowed_amt", "part_b_drug_payments", "avg_patient_age",
+            "pct_age_75_plus", "pct_female", "pct_dual_eligible",
+            "avg_hcc_risk_score", "pct_hypertension", "pct_hyperlipidemia",
+            "pct_diabetes", "pct_ischemic_heart", "pct_heart_failure",
+            "pct_afib", "pct_ckd", "pct_copd", "pct_depression",
+            "cms_specialty", "distinct_codes", "clinical_total_services",
+            "est_total_paid", "facility_paid_share", "drug_admin_paid_share",
+            "em_paid_share", "total_claims", "prescribing_patients",
+            "total_cost", "cost_per_claim", "brand_claim_share",
+            "brand_cost_share", "opioid_rate_pct", "lis_claim_share",
+            "rx_panel_avg_age", "rx_panel_risk",
+        ),
+        source_period_policy=(
+            "each summary retains separate Part B provider, Part B service, "
+            "and Part D provider run/period arrays"
+        ),
+        provenance_scope="row_and_release_manifest",
+        kind="serving",
+        npi_parent_table="serving_provider_profile_headers",
+        row_validations=(
+            (
+                "missing_part_b_provider_provenance",
+                "has_panel AND (len(part_b_provider_source_data_periods) = 0 "
+                "OR len(part_b_provider_source_run_ids) = 0)",
+            ),
+            (
+                "unexpected_part_b_provider_provenance",
+                "NOT has_panel AND (len(part_b_provider_source_data_periods) > 0 "
+                "OR len(part_b_provider_source_run_ids) > 0)",
+            ),
+            (
+                "missing_part_b_service_provenance",
+                "has_clinical AND (len(part_b_service_source_data_periods) = 0 "
+                "OR len(part_b_service_source_run_ids) = 0)",
+            ),
+            (
+                "unexpected_part_b_service_provenance",
+                "NOT has_clinical AND (len(part_b_service_source_data_periods) > 0 "
+                "OR len(part_b_service_source_run_ids) > 0)",
+            ),
+            (
+                "missing_part_d_provider_provenance",
+                "has_prescribing AND (len(part_d_provider_source_data_periods) = 0 "
+                "OR len(part_d_provider_source_run_ids) = 0)",
+            ),
+            (
+                "unexpected_part_d_provider_provenance",
+                "NOT has_prescribing AND (len(part_d_provider_source_data_periods) > 0 "
+                "OR len(part_d_provider_source_run_ids) > 0)",
+            ),
+        ),
+    ),
+    MartSpec(
+        table="serving_provider_profile_top_services",
+        transform_ids=("build_serving_provider_profile_claims_tables",),
+        grain="one provider NPI by deterministic top-10 Part B service rank",
+        key_columns=("npi", "service_rank"),
+        upstream_tables=(
+            "raw_physician_by_provider_and_service",
+            "serving_provider_profile_headers",
+        ),
+        source_ids=("cms_physician_by_provider_and_service",),
+        required_columns=(
+            "npi", "service_rank", "hcpcs", "category",
+            "source_data_periods", "source_run_ids", "data_year",
+        ),
+        schema_columns=(
+            "description", "services", "patients", "est_paid", "pct_of_paid",
+            "facility_share",
+        ),
+        source_period_policy=(
+            "each ranked service retains every contributing source run/period"
+        ),
+        provenance_scope="row_and_release_manifest",
+        kind="serving",
+        npi_parent_table="serving_provider_profile_headers",
+        row_validations=(
+            (
+                "invalid_service_rank",
+                "service_rank < 1 OR service_rank > 10",
+            ),
+            (
+                "missing_service_provenance",
+                "len(source_data_periods) = 0 OR len(source_run_ids) = 0",
+            ),
+        ),
+    ),
+    MartSpec(
+        table="serving_provider_profile_top_drugs",
+        transform_ids=("build_serving_provider_profile_claims_tables",),
+        grain="one provider NPI by deterministic top-10 Part D drug rank",
+        key_columns=("npi", "drug_rank"),
+        upstream_tables=(
+            "raw_part_d_by_provider_and_drug",
+            "serving_provider_profile_headers",
+        ),
+        source_ids=("cms_part_d_by_provider_and_drug",),
+        required_columns=(
+            "npi", "drug_rank", "source_data_periods", "source_run_ids",
+            "data_year",
+        ),
+        schema_columns=(
+            "brand", "generic", "claims", "patients", "drug_cost",
+            "cost_per_claim", "days_per_claim", "specialty_tier",
+            "pct_of_cost",
+        ),
+        source_period_policy="each ranked drug retains its source run/period",
+        provenance_scope="row_and_release_manifest",
+        kind="serving",
+        npi_parent_table="serving_provider_profile_headers",
+        row_validations=(
+            ("invalid_drug_rank", "drug_rank < 1 OR drug_rank > 10"),
+            (
+                "missing_drug_provenance",
+                "len(source_data_periods) = 0 OR len(source_run_ids) = 0",
+            ),
+        ),
+    ),
+    MartSpec(
         table="utilization_metrics",
         transform_ids=("build_utilization_metrics",),
         grain="one provider NPI by metric year",
@@ -574,7 +720,8 @@ def inspect_mart_contracts(
     reports: list[dict[str, object]] = []
     for spec in contracts:
         columns = _available_columns(connection, spec.table)
-        missing = sorted(set(spec.required_columns) - (columns or set()))
+        declared_columns = set(spec.required_columns) | set(spec.schema_columns)
+        missing = sorted(declared_columns - (columns or set()))
         reports.append(
             {
                 "table": spec.table,
@@ -602,7 +749,8 @@ def validate_mart_contracts(
     reports: list[dict[str, object]] = []
     for spec in contracts:
         columns = _available_columns(connection, spec.table)
-        missing = sorted(set(spec.required_columns) - (columns or set()))
+        declared_columns = set(spec.required_columns) | set(spec.schema_columns)
+        missing = sorted(declared_columns - (columns or set()))
         issues: list[str] = []
         row_count: int | None = None
         duplicate_keys: int | None = None

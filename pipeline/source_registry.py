@@ -103,6 +103,7 @@ SOURCE_REGISTRY: dict[str, SourceSpec] = {
                 "utilization_metrics",
                 "serving_practice_provider_sites",
                 "serving_practice_nppes_provider_sites",
+                "serving_provider_profile_claims_summary",
             ),
             CMS_ATTRIBUTION,
         ),
@@ -114,7 +115,11 @@ SOURCE_REGISTRY: dict[str, SourceSpec] = {
             "92396110-2aed-4d63-a6a2-5d6207d46a29",
             Cadence.ANNUAL,
             "Calendar-year service utilization by NPI, HCPCS code, and place of service.",
-            ("provider_service_detail",),
+            (
+                "provider_service_detail",
+                "serving_provider_profile_claims_summary",
+                "serving_provider_profile_top_services",
+            ),
             CMS_ATTRIBUTION
             + " HCPCS Level I descriptions are an explicit AMA-license release gate.",
         ),
@@ -130,6 +135,7 @@ SOURCE_REGISTRY: dict[str, SourceSpec] = {
                 "utilization_metrics",
                 "serving_practice_provider_sites",
                 "serving_practice_nppes_provider_sites",
+                "serving_provider_profile_claims_summary",
             ),
             CMS_ATTRIBUTION,
         ),
@@ -141,7 +147,7 @@ SOURCE_REGISTRY: dict[str, SourceSpec] = {
             "9552739e-3d05-4c1b-8eff-ecabf391e2e5",
             Cadence.ANNUAL,
             "Calendar-year Part D utilization by prescriber and drug.",
-            ("provider_drug_detail",),
+            ("provider_drug_detail", "serving_provider_profile_top_drugs"),
             CMS_ATTRIBUTION,
         ),
         SourceSpec(

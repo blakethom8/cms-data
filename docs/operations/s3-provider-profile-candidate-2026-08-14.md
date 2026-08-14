@@ -142,9 +142,11 @@ The next sequence is:
 1. Retain this evidence and the three-table design, but keep the profile backend on `raw`.
 2. Reclaim the exact superseded staging candidate only after confirming it has no production or
    process references; do not touch the active or two rollback warehouses.
-3. Build the next provider slice: utilization summary, top services, and top drugs, together with
-   the deterministic header fix. Claims source periods and provenance must remain explicit.
-4. Produce one new isolated candidate and repeat component/full-response parity, plans, three
+3. The next provider slice is now implemented in code: utilization/prescribing summary, top
+   services, and top drugs, together with the deterministic header fix. Its contracts retain
+   separate claims source periods and provenance, and its combined release policy allows exactly
+   six profile tables to differ.
+4. After approved capacity cleanup or added headroom, produce one new isolated candidate and repeat component/full-response parity, plans, three
    concurrency trials, capacity, isolated smoke, and rollback rehearsal.
 5. Stop again before production preparation or authorization. Consider cutover only if the combined
    slice clears every existing gate.
