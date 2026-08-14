@@ -154,7 +154,15 @@ Stop the temporary process without touching the live service.
 
 Repeat without `--dry-run`, then start the prepared candidate bundle on a second unused loopback
 port and run the same smoke command with candidate counts and `--release-bundle` pointing to the
-prepared bundle. Stop the temporary process after it passes.
+prepared bundle. Stop the temporary process after it passes. Export `PYTHONDONTWRITEBYTECODE=1` for
+every Python smoke, benchmark, or diagnostic command that imports from an immutable release checkout.
+After sealing, check Git cleanliness with `GIT_OPTIONAL_LOCKS=0 git status --porcelain=v1`; a normal
+status invocation may refresh `.git/index` and violate the no-writable-path invariant.
+
+When systemd starts the isolated candidate, do not assume a transient `--setenv DUCKDB_PATH=...`
+overrides a later `EnvironmentFile` value. Bind the candidate bundle's `DUCKDB_PATH` at `ExecStart`
+after environment files have loaded. Before smoke, prove both the effective process environment from
+`/proc/PID/environ` and candidate identity from `GET /release`.
 
 9. Rehearse both transition directions without changing `release-current`:
 
