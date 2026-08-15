@@ -1,5 +1,6 @@
 """S3 provider-profile serving tables preserve the existing core/access response."""
 
+import json
 import sys
 from pathlib import Path
 
@@ -113,14 +114,14 @@ def _claims_database() -> duckdb.DuckDBPyConnection:
             Bene_Age_75_84_Cnt BIGINT, Bene_Age_GT_84_Cnt BIGINT,
             Bene_Feml_Cnt BIGINT, Bene_Dual_Cnt BIGINT,
             Bene_Avg_Risk_Scre DOUBLE,
-            Bene_CC_PH_Hypertension_V2_Pct DOUBLE,
-            Bene_CC_PH_Hyperlipidemia_V2_Pct DOUBLE,
-            Bene_CC_PH_Diabetes_V2_Pct DOUBLE,
-            Bene_CC_PH_IschemicHeart_V2_Pct DOUBLE,
-            Bene_CC_PH_HF_NonIHD_V2_Pct DOUBLE,
-            Bene_CC_PH_Afib_V2_Pct DOUBLE, Bene_CC_PH_CKD_V2_Pct DOUBLE,
-            Bene_CC_PH_COPD_V2_Pct DOUBLE,
-            Bene_CC_BH_Depress_V1_Pct DOUBLE,
+            Bene_CC_PH_Hypertension_V2_Pct BIGINT,
+            Bene_CC_PH_Hyperlipidemia_V2_Pct BIGINT,
+            Bene_CC_PH_Diabetes_V2_Pct BIGINT,
+            Bene_CC_PH_IschemicHeart_V2_Pct BIGINT,
+            Bene_CC_PH_HF_NonIHD_V2_Pct BIGINT,
+            Bene_CC_PH_Afib_V2_Pct BIGINT, Bene_CC_PH_CKD_V2_Pct BIGINT,
+            Bene_CC_PH_COPD_V2_Pct BIGINT,
+            Bene_CC_BH_Depress_V1_Pct BIGINT,
             source_run_id VARCHAR, source_data_period VARCHAR
         );
         CREATE TABLE raw_physician_by_provider_and_service (
@@ -285,6 +286,9 @@ def test_profile_claims_marts_are_idempotent_and_response_shape_equivalent() -> 
     }
     assert raw["top_procedures"][0]["description"] == "A description"
     assert raw == mart
+    assert json.dumps(raw, separators=(",", ":")) == json.dumps(
+        mart, separators=(",", ":")
+    )
 
 
 def test_profile_claims_marts_preserve_provenance_and_nppes_only_defaults() -> None:
