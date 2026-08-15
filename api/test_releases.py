@@ -742,23 +742,23 @@ def _provider_profile_core_baseline(tmp_path: Path) -> tuple[Path, Path, str]:
             ALTER TABLE raw_physician_by_provider
                 ADD COLUMN Bene_Avg_Risk_Scre DOUBLE;
             ALTER TABLE raw_physician_by_provider
-                ADD COLUMN Bene_CC_PH_Hypertension_V2_Pct DOUBLE;
+                ADD COLUMN Bene_CC_PH_Hypertension_V2_Pct BIGINT;
             ALTER TABLE raw_physician_by_provider
-                ADD COLUMN Bene_CC_PH_Hyperlipidemia_V2_Pct DOUBLE;
+                ADD COLUMN Bene_CC_PH_Hyperlipidemia_V2_Pct BIGINT;
             ALTER TABLE raw_physician_by_provider
-                ADD COLUMN Bene_CC_PH_Diabetes_V2_Pct DOUBLE;
+                ADD COLUMN Bene_CC_PH_Diabetes_V2_Pct BIGINT;
             ALTER TABLE raw_physician_by_provider
-                ADD COLUMN Bene_CC_PH_IschemicHeart_V2_Pct DOUBLE;
+                ADD COLUMN Bene_CC_PH_IschemicHeart_V2_Pct BIGINT;
             ALTER TABLE raw_physician_by_provider
-                ADD COLUMN Bene_CC_PH_HF_NonIHD_V2_Pct DOUBLE;
+                ADD COLUMN Bene_CC_PH_HF_NonIHD_V2_Pct BIGINT;
             ALTER TABLE raw_physician_by_provider
-                ADD COLUMN Bene_CC_PH_Afib_V2_Pct DOUBLE;
+                ADD COLUMN Bene_CC_PH_Afib_V2_Pct BIGINT;
             ALTER TABLE raw_physician_by_provider
-                ADD COLUMN Bene_CC_PH_CKD_V2_Pct DOUBLE;
+                ADD COLUMN Bene_CC_PH_CKD_V2_Pct BIGINT;
             ALTER TABLE raw_physician_by_provider
-                ADD COLUMN Bene_CC_PH_COPD_V2_Pct DOUBLE;
+                ADD COLUMN Bene_CC_PH_COPD_V2_Pct BIGINT;
             ALTER TABLE raw_physician_by_provider
-                ADD COLUMN Bene_CC_BH_Depress_V1_Pct DOUBLE;
+                ADD COLUMN Bene_CC_BH_Depress_V1_Pct BIGINT;
             UPDATE raw_physician_by_provider
             SET Rndrng_Prvdr_Ent_Cd = 'I', Tot_Mdcr_Alowd_Amt = 100,
                 Drug_Mdcr_Pymt_Amt = 10, Bene_Avg_Age = 75,
