@@ -165,3 +165,7 @@ Merged work supporting this evaluation is in PRs
 [#70](https://github.com/blakethom8/cms-data/pull/70), and
 [#71](https://github.com/blakethom8/cms-data/pull/71). The combined claims-mart implementation is
 in [#73](https://github.com/blakethom8/cms-data/pull/73).
+
+The next six-table candidate subsequently passed its correctness and performance gates but remains
+blocked from production preparation by the exact-copy capacity gate. See the
+[`complete candidate evaluation`](s3-provider-profile-complete-candidate-2026-08-15.md).
