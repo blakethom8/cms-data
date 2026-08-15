@@ -1,11 +1,12 @@
 # S3 provider-profile serving marts plan
 
-> **Last reviewed: 2026-08-14** · **Status: S3.4 claims slice implemented; production unchanged**
+> **Last reviewed: 2026-08-15** · **Status: six-table evaluation passed; production copy blocked**
 >
 > **Production state:** unchanged. Provider-profile core queries still default to the raw oracle.
-> One isolated candidate was built and evaluated, but was never prepared or selected. It missed the
-> complete-route performance gates and is superseded by a deterministic-header fix. See the
-> [candidate evaluation](../operations/s3-provider-profile-candidate-2026-08-14.md).
+> The first core-only candidate missed its performance gates and was superseded. The later complete
+> six-table candidate passed correctness and performance gates but was never prepared or selected
+> because its required production copy fails the capacity gate. See the
+> [complete candidate evaluation](../operations/s3-provider-profile-complete-candidate-2026-08-15.md).
 
 ## Decision
 
@@ -147,8 +148,10 @@ It builds all six tables in one transaction and uses
 from the verified baseline and fingerprints every invariant table. When an older baseline omitted
 the reassignment or claims-detail source IDs, each explicit managed run is revalidated against its
 retained artifact and the baseline raw table's sole run, period, and row count before the candidate
-can inherit it. The production manager does not authorize this policy. No successful candidate,
-preparation, or cutover has occurred for this slice.
+can inherit it. The production manager does not authorize this policy. The
+[`complete candidate evaluation`](../operations/s3-provider-profile-complete-candidate-2026-08-15.md)
+passed parity and performance gates, but its separate production copy is capacity-blocked. No
+production preparation, authorization, or cutover has occurred for this slice.
 
 ## S3.3 — explicit authorization and cutover
 
