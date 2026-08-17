@@ -511,10 +511,10 @@ REPORTING_MODELS: tuple[ReportingModel, ...] = (
     ),
     ReportingModel(
         name="fact_provider_drug_year",
-        grain="one provider NPI by generic drug and Part D data year",
+        grain="one provider NPI by brand, generic drug, and Part D data year",
         scope_rule="provider NPI belongs to core_providers.state = 'CA'",
         source_tables=("provider_drug_detail", "core_providers"),
-        key_columns=("npi", "generic_name", "data_year"),
+        key_columns=("npi", "brand_name", "generic_name", "data_year"),
         from_sql=(
             "FROM provider_drug_detail d JOIN core_providers cp ON cp.npi = d.npi "
             "WHERE UPPER(cp.state) = 'CA'"

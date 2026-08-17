@@ -2547,7 +2547,7 @@ def build_provider_service_detail(con: duckdb.DuckDBPyConnection, data_year: int
 
 
 def build_provider_drug_detail(con: duckdb.DuckDBPyConnection, data_year: int):
-    """Populate provider_drug_detail with one row per NPI and generic drug."""
+    """Populate provider_drug_detail at NPI, brand, generic, and year grain."""
     logger.info("Building provider_drug_detail (data_year=%d)", data_year)
     con.execute("DELETE FROM provider_drug_detail WHERE data_year = ?", [data_year])
     con.execute(
@@ -2559,7 +2559,7 @@ def build_provider_drug_detail(con: duckdb.DuckDBPyConnection, data_year: int):
         )
         SELECT
             CAST(d.prscrbr_npi AS VARCHAR),
-            min(d.brnd_name),
+            coalesce(nullif(trim(d.brnd_name), ''), trim(d.gnrc_name)),
             trim(d.gnrc_name),
             sum(TRY_CAST(d.tot_clms AS INTEGER)),
             sum(TRY_CAST(d.tot_30day_fills AS DECIMAL(15,2))),
@@ -2573,7 +2573,9 @@ def build_provider_drug_detail(con: duckdb.DuckDBPyConnection, data_year: int):
         FROM raw_part_d_by_provider_and_drug d
         WHERE CAST(d.prscrbr_npi AS VARCHAR) IN (SELECT npi FROM core_providers)
           AND nullif(trim(d.gnrc_name), '') IS NOT NULL
-        GROUP BY CAST(d.prscrbr_npi AS VARCHAR), trim(d.gnrc_name)
+        GROUP BY CAST(d.prscrbr_npi AS VARCHAR),
+                 coalesce(nullif(trim(d.brnd_name), ''), trim(d.gnrc_name)),
+                 trim(d.gnrc_name)
         """,
         [data_year],
     )
@@ -2582,6 +2584,86 @@ def build_provider_drug_detail(con: duckdb.DuckDBPyConnection, data_year: int):
     ).fetchone()[0]
     logger.info("provider_drug_detail: %d rows loaded", count)
     return count
+
+
+def build_utilization_dictionaries(
+    con: duckdb.DuckDBPyConnection, data_year: int
+) -> dict[str, int]:
+    """Build compact HCPCS and drug option dictionaries from inverted facts."""
+    logger.info("Building utilization dictionaries (data_year=%d)", data_year)
+    con.execute(
+        """
+        CREATE TABLE IF NOT EXISTS utilization_procedure_dictionary (
+            hcpcs_code VARCHAR(10) NOT NULL,
+            hcpcs_description VARCHAR(255),
+            hcpcs_drug_ind VARCHAR(1),
+            physician_count INTEGER NOT NULL,
+            total_services DOUBLE NOT NULL,
+            total_payments DOUBLE NOT NULL,
+            data_year INTEGER NOT NULL,
+            PRIMARY KEY (hcpcs_code, data_year)
+        );
+        CREATE INDEX IF NOT EXISTS idx_utilization_procedure_code
+            ON utilization_procedure_dictionary(hcpcs_code);
+        CREATE TABLE IF NOT EXISTS utilization_drug_dictionary (
+            brand_name VARCHAR(255) NOT NULL,
+            generic_name VARCHAR(255) NOT NULL,
+            physician_count INTEGER NOT NULL,
+            total_claims BIGINT NOT NULL,
+            total_drug_cost DOUBLE NOT NULL,
+            data_year INTEGER NOT NULL,
+            PRIMARY KEY (brand_name, generic_name, data_year)
+        );
+        CREATE INDEX IF NOT EXISTS idx_utilization_drug_brand
+            ON utilization_drug_dictionary(brand_name);
+        CREATE INDEX IF NOT EXISTS idx_utilization_drug_generic
+            ON utilization_drug_dictionary(generic_name);
+        """
+    )
+    con.execute(
+        "DELETE FROM utilization_procedure_dictionary WHERE data_year = ?",
+        [data_year],
+    )
+    con.execute("DELETE FROM utilization_drug_dictionary WHERE data_year = ?", [data_year])
+    con.execute(
+        """
+        INSERT INTO utilization_procedure_dictionary
+        SELECT hcpcs_code,
+               arg_max(hcpcs_description, coalesce(tot_services, 0)),
+               arg_max(hcpcs_drug_ind, coalesce(tot_services, 0)),
+               count(distinct npi),
+               coalesce(sum(tot_services), 0),
+               coalesce(sum(tot_services * avg_medicare_payment), 0),
+               data_year
+        FROM provider_service_detail
+        WHERE data_year = ?
+        GROUP BY hcpcs_code, data_year
+        """,
+        [data_year],
+    )
+    con.execute(
+        """
+        INSERT INTO utilization_drug_dictionary
+        SELECT brand_name, generic_name, count(distinct npi),
+               coalesce(sum(tot_claims), 0), coalesce(sum(tot_drug_cost), 0), data_year
+        FROM provider_drug_detail
+        WHERE data_year = ?
+        GROUP BY brand_name, generic_name, data_year
+        """,
+        [data_year],
+    )
+    counts = {
+        "utilization_procedure_dictionary": con.execute(
+            "SELECT count(*) FROM utilization_procedure_dictionary WHERE data_year = ?",
+            [data_year],
+        ).fetchone()[0],
+        "utilization_drug_dictionary": con.execute(
+            "SELECT count(*) FROM utilization_drug_dictionary WHERE data_year = ?",
+            [data_year],
+        ).fetchone()[0],
+    }
+    logger.info("Utilization dictionaries built: %s", counts)
+    return counts
 
 
 def build_order_referring_eligibility(con: duckdb.DuckDBPyConnection):
@@ -2653,6 +2735,7 @@ def transform_all(
     # 3. Service detail (large table, run last)
     results["provider_service_detail"] = build_provider_service_detail(con, data_year)
     results["provider_drug_detail"] = build_provider_drug_detail(con, data_year)
+    results.update(build_utilization_dictionaries(con, data_year))
 
     # 4. Dedup (must run after core_providers + utilization_metrics)
     from .dedup import flag_group_only_billers

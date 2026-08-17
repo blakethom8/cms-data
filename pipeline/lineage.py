@@ -201,7 +201,14 @@ TRANSFORMS: tuple[TransformSpec, ...] = (
         "Build drug detail",
         ("raw_part_d_by_provider_and_drug", "core_providers"),
         ("provider_drug_detail",),
-        "Aggregates drug-level prescribing detail for known providers.",
+        "Aggregates brand and generic prescribing detail for known providers.",
+    ),
+    TransformSpec(
+        "build_utilization_dictionaries",
+        "Build utilization dictionaries",
+        ("provider_service_detail", "provider_drug_detail"),
+        ("utilization_procedure_dictionary", "utilization_drug_dictionary"),
+        "Builds compact HCPCS and brand/generic option dictionaries for typeahead.",
     ),
     TransformSpec(
         "build_order_referring_eligibility",

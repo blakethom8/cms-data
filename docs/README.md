@@ -18,6 +18,7 @@ When documents disagree, the operating model and the source code win.
 | [provider-serving-contract.md](provider-serving-contract.md) | NPPES-first discovery, curated profile, raw evidence endpoint separation, provenance labels, and v3 cache contract. |
 | [provider-evidence-model.md](provider-evidence-model.md) | Source-preserving provider address and organization evidence grains, provenance, refresh, and consumer rules. |
 | [product-serving-marts.md](product-serving-marts.md) | Executable contract reference for twelve foundation marts, six serving tables, and the measured S2/S3 route-migration boundary. |
+| [utilization-search.md](utilization-search.md) | HCPCS/drug dictionaries and code-first ranked NPI search contract for Provider Search Cases. |
 | [operations/api-concurrency-benchmark.md](operations/api-concurrency-benchmark.md) | Reproducible mixed-load benchmark and S2 canonical diagnostic corpus. |
 | [operations/s2-canonical-baseline-2026-08-14.md](operations/s2-canonical-baseline-2026-08-14.md) | First S2 canonical behavior baseline, determinism findings, and plan-capture blockers. |
 | [operations/s2-managed-dac-candidate-2026-08-14.md](operations/s2-managed-dac-candidate-2026-08-14.md) | Managed DAC candidate identity, raw/mart parity and performance evidence, and the blocking capacity gate. |

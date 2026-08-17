@@ -647,7 +647,7 @@ CREATE INDEX IF NOT EXISTS idx_svc_detail_npi ON provider_service_detail(npi);
 ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS provider_drug_detail (
     npi                VARCHAR(10)  NOT NULL REFERENCES core_providers(npi),
-    brand_name         VARCHAR(255),
+    brand_name         VARCHAR(255) NOT NULL,
     generic_name       VARCHAR(255) NOT NULL,
     tot_claims         INTEGER,
     tot_30day_fills    DECIMAL(15,2),
@@ -658,12 +658,46 @@ CREATE TABLE IF NOT EXISTS provider_drug_detail (
     ge65_tot_drug_cost DECIMAL(15,2),
     ge65_tot_benes     INTEGER,
     data_year          INTEGER      NOT NULL,
-    PRIMARY KEY (npi, generic_name, data_year)
+    PRIMARY KEY (npi, brand_name, generic_name, data_year)
 );
 
 CREATE INDEX IF NOT EXISTS idx_drug_detail_generic ON provider_drug_detail(generic_name);
 CREATE INDEX IF NOT EXISTS idx_drug_detail_brand ON provider_drug_detail(brand_name);
 CREATE INDEX IF NOT EXISTS idx_drug_detail_npi ON provider_drug_detail(npi);
+
+
+------------------------------------------------------------
+-- Serving dictionaries for utilization typeahead
+-- Facts remain in provider_service_detail/provider_drug_detail.
+------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS utilization_procedure_dictionary (
+    hcpcs_code         VARCHAR(10) NOT NULL,
+    hcpcs_description  VARCHAR(255),
+    hcpcs_drug_ind     VARCHAR(1),
+    physician_count    INTEGER NOT NULL,
+    total_services     DOUBLE NOT NULL,
+    total_payments     DOUBLE NOT NULL,
+    data_year          INTEGER NOT NULL,
+    PRIMARY KEY (hcpcs_code, data_year)
+);
+
+CREATE INDEX IF NOT EXISTS idx_utilization_procedure_code
+    ON utilization_procedure_dictionary(hcpcs_code);
+
+CREATE TABLE IF NOT EXISTS utilization_drug_dictionary (
+    brand_name         VARCHAR(255) NOT NULL,
+    generic_name       VARCHAR(255) NOT NULL,
+    physician_count    INTEGER NOT NULL,
+    total_claims       BIGINT NOT NULL,
+    total_drug_cost    DOUBLE NOT NULL,
+    data_year          INTEGER NOT NULL,
+    PRIMARY KEY (brand_name, generic_name, data_year)
+);
+
+CREATE INDEX IF NOT EXISTS idx_utilization_drug_brand
+    ON utilization_drug_dictionary(brand_name);
+CREATE INDEX IF NOT EXISTS idx_utilization_drug_generic
+    ON utilization_drug_dictionary(generic_name);
 
 
 ------------------------------------------------------------

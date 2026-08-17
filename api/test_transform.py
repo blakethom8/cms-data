@@ -13,6 +13,7 @@ from pipeline.transform import (
     build_practice_locations,
     build_provider_drug_detail,
     build_provider_quality_scores,
+    build_utilization_dictionaries,
     clear_refresh_targets,
     build_serving_provider_profile_core_tables,
     build_serving_practice_nppes_tables,
@@ -112,7 +113,7 @@ def test_qpp_transform_handles_boolean_inference_and_selects_best_npi_row() -> N
     assert row == (90, False, False)
 
 
-def test_drug_transform_aggregates_duplicate_generic_drug_rows() -> None:
+def test_drug_transform_preserves_brand_grain_and_builds_dictionary() -> None:
     connection = _connection()
     try:
         connection.execute(
@@ -136,15 +137,28 @@ def test_drug_transform_aggregates_duplicate_generic_drug_rows() -> None:
         )
 
         count = build_provider_drug_detail(connection, 2024)
-        row = connection.execute(
-            "select generic_name, tot_claims, tot_30day_fills, tot_drug_cost "
-            "from provider_drug_detail"
-        ).fetchone()
+        dictionary_counts = build_utilization_dictionaries(connection, 2024)
+        rows = connection.execute(
+            "select brand_name, generic_name, tot_claims, tot_30day_fills, tot_drug_cost "
+            "from provider_drug_detail order by brand_name"
+        ).fetchall()
+        dictionary_rows = connection.execute(
+            "select brand_name, generic_name, physician_count, total_claims, total_drug_cost "
+            "from utilization_drug_dictionary order by brand_name"
+        ).fetchall()
     finally:
         connection.close()
 
-    assert count == 1
-    assert row == ("Generic X", 5, 6, 31)
+    assert count == 2
+    assert rows == [
+        ("Brand A", "Generic X", 2, 2.5, 10.25),
+        ("Brand B", "Generic X", 3, 3.5, 20.75),
+    ]
+    assert dictionary_counts["utilization_drug_dictionary"] == 2
+    assert dictionary_rows == [
+        ("Brand A", "Generic X", 1, 2, 10.25),
+        ("Brand B", "Generic X", 1, 3, 20.75),
+    ]
 
 
 def test_practice_transform_matches_numeric_raw_npi_to_text_core_npi() -> None:

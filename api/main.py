@@ -163,6 +163,9 @@ app.include_router(get_profiles_router(get_conn), dependencies=_secured)
 from industry import get_industry_router
 app.include_router(get_industry_router(get_conn), dependencies=_secured)
 
+from utilization import get_utilization_router
+app.include_router(get_utilization_router(get_conn), dependencies=_secured)
+
 from research import get_research_router
 app.include_router(get_research_router(get_conn), dependencies=_secured)
 
@@ -181,7 +184,9 @@ app.include_router(get_release_router(release_resolver), dependencies=_secured)
 
 from database_pool import DatabasePoolMiddleware
 
-_DATABASE_ROUTE_PREFIXES = ("/profiles", "/practices", "/radar", "/explorer")
+_DATABASE_ROUTE_PREFIXES = (
+    "/profiles", "/practices", "/radar", "/explorer", "/utilization"
+)
 _DATABASE_ROUTE_EXCLUSIONS = {"/profiles/exemplars", "/explorer/showcases"}
 
 

@@ -5767,5 +5767,908 @@
         "type": "object"
       }
     }
+  },
+  "/utilization/drugs/options": {
+    "get": {
+      "200": {
+        "properties": {
+          "contract_version": {
+            "const": 1,
+            "default": 1,
+            "title": "Contract Version",
+            "type": "integer"
+          },
+          "data_year": {
+            "title": "Data Year",
+            "type": "integer"
+          },
+          "query": {
+            "title": "Query",
+            "type": "string"
+          },
+          "results": {
+            "items": {
+              "properties": {
+                "brand": {
+                  "title": "Brand",
+                  "type": "string"
+                },
+                "claims": {
+                  "title": "Claims",
+                  "type": "integer"
+                },
+                "drug_cost": {
+                  "title": "Drug Cost",
+                  "type": "number"
+                },
+                "generic": {
+                  "title": "Generic",
+                  "type": "string"
+                },
+                "physician_count": {
+                  "title": "Physician Count",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "brand",
+                "generic",
+                "physician_count",
+                "claims",
+                "drug_cost"
+              ],
+              "title": "DrugOption",
+              "type": "object"
+            },
+            "title": "Results",
+            "type": "array"
+          }
+        },
+        "required": [
+          "query",
+          "data_year",
+          "results"
+        ],
+        "title": "DrugOptionsResponse",
+        "type": "object"
+      },
+      "422": {
+        "properties": {
+          "detail": {
+            "items": {
+              "properties": {
+                "loc": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "title": "Location",
+                  "type": "array"
+                },
+                "msg": {
+                  "title": "Message",
+                  "type": "string"
+                },
+                "type": {
+                  "title": "Error Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "loc",
+                "msg",
+                "type"
+              ],
+              "title": "ValidationError",
+              "type": "object"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "/utilization/drugs/search": {
+    "get": {
+      "200": {
+        "properties": {
+          "contract_version": {
+            "const": 1,
+            "default": 1,
+            "title": "Contract Version",
+            "type": "integer"
+          },
+          "data_year": {
+            "title": "Data Year",
+            "type": "integer"
+          },
+          "metric_scope": {
+            "const": "national_npi_totals",
+            "default": "national_npi_totals",
+            "title": "Metric Scope",
+            "type": "string"
+          },
+          "mode": {
+            "const": "drugs",
+            "default": "drugs",
+            "title": "Mode",
+            "type": "string"
+          },
+          "results": {
+            "items": {
+              "properties": {
+                "address": {
+                  "title": "Address",
+                  "type": "string"
+                },
+                "city": {
+                  "title": "City",
+                  "type": "string"
+                },
+                "credentials": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Credentials"
+                },
+                "distance_miles": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Distance Miles"
+                },
+                "first_name": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "First Name"
+                },
+                "last_name": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Last Name"
+                },
+                "lat": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Lat"
+                },
+                "lng": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Lng"
+                },
+                "matched_drugs": {
+                  "items": {
+                    "properties": {
+                      "brand": {
+                        "title": "Brand",
+                        "type": "string"
+                      },
+                      "claims": {
+                        "title": "Claims",
+                        "type": "integer"
+                      },
+                      "drug_cost": {
+                        "title": "Drug Cost",
+                        "type": "number"
+                      },
+                      "generic": {
+                        "title": "Generic",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "brand",
+                      "generic",
+                      "claims",
+                      "drug_cost"
+                    ],
+                    "title": "DrugBreakdown",
+                    "type": "object"
+                  },
+                  "title": "Matched Drugs",
+                  "type": "array"
+                },
+                "metric_scope": {
+                  "const": "national_npi_totals",
+                  "default": "national_npi_totals",
+                  "title": "Metric Scope",
+                  "type": "string"
+                },
+                "name": {
+                  "title": "Name",
+                  "type": "string"
+                },
+                "npi": {
+                  "pattern": "^\\d{10}$",
+                  "title": "Npi",
+                  "type": "string"
+                },
+                "partd_claims": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Partd Claims"
+                },
+                "partd_drug_cost": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Partd Drug Cost"
+                },
+                "selected_claim_share": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Selected Claim Share"
+                },
+                "selected_claims": {
+                  "title": "Selected Claims",
+                  "type": "integer"
+                },
+                "selected_cost_share": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Selected Cost Share"
+                },
+                "selected_drug_cost": {
+                  "title": "Selected Drug Cost",
+                  "type": "number"
+                },
+                "specialty": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Specialty"
+                },
+                "state": {
+                  "title": "State",
+                  "type": "string"
+                },
+                "zip5": {
+                  "title": "Zip5",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "npi",
+                "name",
+                "address",
+                "city",
+                "state",
+                "zip5",
+                "selected_claims",
+                "selected_drug_cost"
+              ],
+              "title": "DrugSearchResult",
+              "type": "object"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "returned_count": {
+            "title": "Returned Count",
+            "type": "integer"
+          },
+          "selected_brands": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Selected Brands",
+            "type": "array"
+          },
+          "selected_generics": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Selected Generics",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "data_year",
+          "selected_brands",
+          "selected_generics",
+          "total",
+          "returned_count",
+          "truncated",
+          "results"
+        ],
+        "title": "DrugSearchResponse",
+        "type": "object"
+      },
+      "422": {
+        "properties": {
+          "detail": {
+            "items": {
+              "properties": {
+                "loc": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "title": "Location",
+                  "type": "array"
+                },
+                "msg": {
+                  "title": "Message",
+                  "type": "string"
+                },
+                "type": {
+                  "title": "Error Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "loc",
+                "msg",
+                "type"
+              ],
+              "title": "ValidationError",
+              "type": "object"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "/utilization/procedures/options": {
+    "get": {
+      "200": {
+        "properties": {
+          "contract_version": {
+            "const": 1,
+            "default": 1,
+            "title": "Contract Version",
+            "type": "integer"
+          },
+          "data_year": {
+            "title": "Data Year",
+            "type": "integer"
+          },
+          "descriptions_enabled": {
+            "title": "Descriptions Enabled",
+            "type": "boolean"
+          },
+          "query": {
+            "title": "Query",
+            "type": "string"
+          },
+          "results": {
+            "items": {
+              "properties": {
+                "description": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Description"
+                },
+                "is_drug_code": {
+                  "default": false,
+                  "title": "Is Drug Code",
+                  "type": "boolean"
+                },
+                "physician_count": {
+                  "title": "Physician Count",
+                  "type": "integer"
+                },
+                "total_payments": {
+                  "title": "Total Payments",
+                  "type": "number"
+                },
+                "total_services": {
+                  "title": "Total Services",
+                  "type": "number"
+                },
+                "value": {
+                  "title": "Value",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "value",
+                "physician_count",
+                "total_services",
+                "total_payments"
+              ],
+              "title": "ProcedureOption",
+              "type": "object"
+            },
+            "title": "Results",
+            "type": "array"
+          }
+        },
+        "required": [
+          "query",
+          "data_year",
+          "descriptions_enabled",
+          "results"
+        ],
+        "title": "ProcedureOptionsResponse",
+        "type": "object"
+      },
+      "422": {
+        "properties": {
+          "detail": {
+            "items": {
+              "properties": {
+                "loc": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "title": "Location",
+                  "type": "array"
+                },
+                "msg": {
+                  "title": "Message",
+                  "type": "string"
+                },
+                "type": {
+                  "title": "Error Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "loc",
+                "msg",
+                "type"
+              ],
+              "title": "ValidationError",
+              "type": "object"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "/utilization/procedures/search": {
+    "get": {
+      "200": {
+        "properties": {
+          "contract_version": {
+            "const": 1,
+            "default": 1,
+            "title": "Contract Version",
+            "type": "integer"
+          },
+          "data_year": {
+            "title": "Data Year",
+            "type": "integer"
+          },
+          "metric_scope": {
+            "const": "national_npi_totals",
+            "default": "national_npi_totals",
+            "title": "Metric Scope",
+            "type": "string"
+          },
+          "mode": {
+            "const": "procedures",
+            "default": "procedures",
+            "title": "Mode",
+            "type": "string"
+          },
+          "results": {
+            "items": {
+              "properties": {
+                "address": {
+                  "title": "Address",
+                  "type": "string"
+                },
+                "city": {
+                  "title": "City",
+                  "type": "string"
+                },
+                "credentials": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Credentials"
+                },
+                "distance_miles": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Distance Miles"
+                },
+                "first_name": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "First Name"
+                },
+                "last_name": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Last Name"
+                },
+                "lat": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Lat"
+                },
+                "lng": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Lng"
+                },
+                "matched_codes": {
+                  "items": {
+                    "properties": {
+                      "beneficiaries": {
+                        "anyOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Beneficiaries"
+                      },
+                      "description": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Description"
+                      },
+                      "is_drug_code": {
+                        "default": false,
+                        "title": "Is Drug Code",
+                        "type": "boolean"
+                      },
+                      "payments": {
+                        "title": "Payments",
+                        "type": "number"
+                      },
+                      "services": {
+                        "title": "Services",
+                        "type": "number"
+                      },
+                      "value": {
+                        "title": "Value",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "value",
+                      "services",
+                      "payments"
+                    ],
+                    "title": "ProcedureBreakdown",
+                    "type": "object"
+                  },
+                  "title": "Matched Codes",
+                  "type": "array"
+                },
+                "metric_scope": {
+                  "const": "national_npi_totals",
+                  "default": "national_npi_totals",
+                  "title": "Metric Scope",
+                  "type": "string"
+                },
+                "name": {
+                  "title": "Name",
+                  "type": "string"
+                },
+                "npi": {
+                  "pattern": "^\\d{10}$",
+                  "title": "Npi",
+                  "type": "string"
+                },
+                "partb_payments": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Partb Payments"
+                },
+                "partb_services": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Partb Services"
+                },
+                "selected_beneficiaries": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Selected Beneficiaries"
+                },
+                "selected_payment_share": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Selected Payment Share"
+                },
+                "selected_payments": {
+                  "title": "Selected Payments",
+                  "type": "number"
+                },
+                "selected_service_share": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Selected Service Share"
+                },
+                "selected_services": {
+                  "title": "Selected Services",
+                  "type": "number"
+                },
+                "specialty": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Specialty"
+                },
+                "state": {
+                  "title": "State",
+                  "type": "string"
+                },
+                "zip5": {
+                  "title": "Zip5",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "npi",
+                "name",
+                "address",
+                "city",
+                "state",
+                "zip5",
+                "selected_services",
+                "selected_payments"
+              ],
+              "title": "ProcedureSearchResult",
+              "type": "object"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "returned_count": {
+            "title": "Returned Count",
+            "type": "integer"
+          },
+          "selected_hcpcs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Selected Hcpcs",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "data_year",
+          "selected_hcpcs",
+          "total",
+          "returned_count",
+          "truncated",
+          "results"
+        ],
+        "title": "ProcedureSearchResponse",
+        "type": "object"
+      },
+      "422": {
+        "properties": {
+          "detail": {
+            "items": {
+              "properties": {
+                "loc": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "title": "Location",
+                  "type": "array"
+                },
+                "msg": {
+                  "title": "Message",
+                  "type": "string"
+                },
+                "type": {
+                  "title": "Error Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "loc",
+                "msg",
+                "type"
+              ],
+              "title": "ValidationError",
+              "type": "object"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      }
+    }
   }
 }

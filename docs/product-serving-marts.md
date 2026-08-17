@@ -22,8 +22,10 @@ running row scans in the serving process.
 | `utilization_metrics` | `npi × metric_year` | Part B, Part D, and DME manifests; metric year retained | Match and unified search |
 | `industry_relationships` | `npi × payment_year × paying_company_name` | Open Payments manifest; program year retained | Not yet authorized for the industry API |
 | `hospital_affiliations` | `npi × hospital_npi` | Reassignment and hospital manifests; relationship method retained | Profile affiliation and source evidence |
-| `provider_service_detail` | `npi × HCPCS × place_of_service × data_year` | Provider-and-service manifest; measurement year retained | Not yet authorized for profile serving |
-| `provider_drug_detail` | `npi × generic_name × data_year` | Part D drug manifest; measurement year retained | Not yet authorized for profile serving |
+| `provider_service_detail` | `npi × HCPCS × place_of_service × data_year` | Provider-and-service manifest; measurement year retained | Cases procedure search |
+| `provider_drug_detail` | `npi × brand × generic_name × data_year` | Part D drug manifest; measurement year retained | Cases drug search |
+| `utilization_procedure_dictionary` | `HCPCS × data_year` | Provider-and-service manifest; measurement year retained | Cases procedure typeahead (descriptions release-gated) |
+| `utilization_drug_dictionary` | `brand × generic_name × data_year` | Part D drug manifest; measurement year retained | Cases drug typeahead |
 | `provider_quality_scores` | One selected quality record per `npi` | QPP manifest; performance year retained | Not yet authorized for profile serving |
 | `order_referring_eligibility` | One current eligibility row per `npi` | Order-and-referring snapshot interval in release manifest | Not yet authorized for profile serving |
 | `kol_summary` | One qualifying all-year summary per `npi` | Open Payments manifest; most recent program year is derived | Not yet authorized for industry serving |
