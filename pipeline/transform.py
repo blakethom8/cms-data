@@ -2765,6 +2765,8 @@ def clear_refresh_targets(
         "industry_relationships",
         "provider_service_detail",
         "provider_drug_detail",
+        "utilization_procedure_dictionary",
+        "utilization_drug_dictionary",
         "provider_quality_scores",
         "order_referring_eligibility",
     ):

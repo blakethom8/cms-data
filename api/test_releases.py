@@ -38,6 +38,7 @@ from pipeline.releases import (
     WarehouseRelease,
     WarehouseReleaseDocument,
     WarehouseReleaseStore,
+    _prepare_full_cms_candidate_schema,
     _rebuild_hospital_affiliations,
     _single_table_source_provenance,
     _table_logical_fingerprint,
@@ -1801,6 +1802,68 @@ def test_schema_ddl_matches_canonical_raw_hospital_loader() -> None:
         "source_data_period",
         "ingested_at",
     ]
+
+
+def test_full_cms_candidate_schema_upgrades_an_n_minus_one_baseline() -> None:
+    connection = duckdb.connect(":memory:")
+    try:
+        connection.execute((REPOSITORY_ROOT / "schema" / "ddl.sql").read_text())
+        connection.execute("DROP TABLE provider_address_evidence")
+        connection.execute("DROP TABLE provider_organization_evidence")
+        connection.execute("DROP TABLE utilization_procedure_dictionary")
+        connection.execute("DROP TABLE utilization_drug_dictionary")
+        connection.execute("DROP TABLE provider_drug_detail")
+        connection.execute(
+            """
+            CREATE TABLE provider_drug_detail (
+                npi VARCHAR(10) NOT NULL REFERENCES core_providers(npi),
+                brand_name VARCHAR(255),
+                generic_name VARCHAR(255) NOT NULL,
+                tot_claims INTEGER,
+                tot_30day_fills DECIMAL(15,2),
+                tot_day_supply INTEGER,
+                tot_drug_cost DECIMAL(15,2),
+                tot_beneficiaries INTEGER,
+                ge65_tot_claims INTEGER,
+                ge65_tot_drug_cost DECIMAL(15,2),
+                ge65_tot_benes INTEGER,
+                data_year INTEGER NOT NULL,
+                PRIMARY KEY (npi, generic_name, data_year)
+            )
+            """
+        )
+
+        _prepare_full_cms_candidate_schema(connection)
+
+        tables = {
+            row[0]
+            for row in connection.execute(
+                "SELECT table_name FROM information_schema.tables WHERE table_schema = 'main'"
+            ).fetchall()
+        }
+        drug_columns = {
+            row[1]: {"not_null": row[3], "primary_key": row[5]}
+            for row in connection.execute("PRAGMA table_info('provider_drug_detail')").fetchall()
+        }
+        drug_primary_key = connection.execute(
+            """
+            SELECT constraint_column_names
+            FROM duckdb_constraints()
+            WHERE table_name = 'provider_drug_detail'
+              AND constraint_type = 'PRIMARY KEY'
+            """
+        ).fetchone()[0]
+    finally:
+        connection.close()
+
+    assert {
+        "provider_address_evidence",
+        "provider_organization_evidence",
+        "utilization_procedure_dictionary",
+        "utilization_drug_dictionary",
+    } <= tables
+    assert drug_columns["brand_name"] == {"not_null": True, "primary_key": True}
+    assert drug_primary_key == ["npi", "brand_name", "generic_name", "data_year"]
 
 
 def test_full_cms_build_refuses_an_incomplete_source_set(tmp_path: Path) -> None:

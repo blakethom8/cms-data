@@ -34,6 +34,21 @@ recoverable in place, but it remains reproducible from retained inputs and evide
 After cleanup, current use was 73.10%. Reserving two selected-warehouse-sized allocations projected
 84.97%, passing the temporary 90% gate with the active-plus-two rollback floor intact.
 
+## Failed first build and N/N-1 repair
+
+The first full-CMS candidate, `warehouse-20260817T221218Z-fd2eac47d6`, failed before validation
+because the selected baseline predates `provider_address_evidence`. The failed release remained
+unpromoted with a `.partial` database, and production stayed on
+`deployment-20260814T201311Z-0325c353c9` with zero restarts.
+
+The failure also exposed a second compatibility requirement: the selected baseline retains the old
+generic-only `provider_drug_detail` primary key, which cannot represent the new brand/generic grain.
+The full-CMS builder now prepares only its isolated candidate copy by recreating the derived Part D
+and utilization-dictionary tables, applying current idempotent DDL for missing tables, and then
+performing the complete rebuild. A regression test reconstructs that N-1 baseline shape and proves
+the missing evidence/dictionary tables plus the four-column Part D primary key. Changed-file lint,
+the focused regression/transform tests, and the full suite (`539 passed, 1 skipped`) pass.
+
 ## Required storage follow-up
 
 The 90% exception is temporary. After this release, perform a separate evidence-backed retention

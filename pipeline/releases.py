@@ -1397,6 +1397,22 @@ def _validate_ppef_relationships(
     }
 
 
+def _prepare_full_cms_candidate_schema(
+    connection: duckdb.DuckDBPyConnection,
+) -> None:
+    """Upgrade derived CMS tables on an isolated N-1 candidate copy."""
+    from .load import run_ddl
+
+    # Full rebuilds may start from the selected N-1 warehouse. Current DDL is
+    # idempotent for missing tables, but it cannot change the former Part D
+    # primary key from generic-only to brand/generic grain. These tables are
+    # derived and rebuilt below, so recreate them before applying the DDL.
+    connection.execute("DROP TABLE IF EXISTS utilization_drug_dictionary")
+    connection.execute("DROP TABLE IF EXISTS utilization_procedure_dictionary")
+    connection.execute("DROP TABLE IF EXISTS provider_drug_detail")
+    run_ddl(connection)
+
+
 def _load_full_cms_content(
     connection: duckdb.DuckDBPyConnection,
     *,
@@ -1410,6 +1426,8 @@ def _load_full_cms_content(
         clear_refresh_targets,
         transform_all,
     )
+
+    _prepare_full_cms_candidate_schema(connection)
 
     ppef_source_ids = (
         "cms_pecos_public_provider_enrollment",
