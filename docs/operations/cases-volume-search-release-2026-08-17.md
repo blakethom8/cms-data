@@ -49,6 +49,24 @@ performing the complete rebuild. A regression test reconstructs that N-1 baselin
 the missing evidence/dictionary tables plus the four-column Part D primary key. Changed-file lint,
 the focused regression/transform tests, and the full suite (`539 passed, 1 skipped`) pass.
 
+## Failed repaired build and external scratch remediation
+
+The repaired candidate `warehouse-20260817T223023Z-75c8ff44ca` passed the schema-compatibility
+stage but exhausted the root filesystem during the utilization transform. Its partial database was
+27,027,845,120 bytes while DuckDB created roughly 62 GB of adjacent temporary spill files; the
+release directory peaked at 89,317,277,696 allocated bytes. The bounded build scope was stopped at
+the 100% filesystem gate. No production artifact, deployment, or selected pointer changed. The
+incomplete database and spill directory were removed through exact-path quarantine after production
+health checks; `release.json` and the audit evidence remain.
+
+A 150 GB Hetzner Cloud Volume is now mounted persistently at
+`/mnt/HC_Volume_106641689`. The full-CMS builder now accepts explicit `--memory-limit-gb`,
+`--threads`, and `--spill-root` controls, creates a release-scoped spill directory below that root,
+records those controls in the candidate manifest, and removes the empty release-scoped directory
+after a successful build. The default still uses managed staging when no external spill root is
+provided. A regression test proves that DuckDB receives the external path. Changed-file lint and
+the full suite (`540 passed, 1 skipped`) pass.
+
 ## Required storage follow-up
 
 The 90% exception is temporary. After this release, perform a separate evidence-backed retention

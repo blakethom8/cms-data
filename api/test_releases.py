@@ -24,6 +24,7 @@ from pipeline.manifests import (
     ValidationState,
 )
 from pipeline.releases import (
+    FULL_CMS_SOURCE_IDS,
     FULL_PLATFORM_SMOKE_TABLES,
     FULL_PLATFORM_WAREHOUSE_SOURCE_IDS,
     HOSPITAL_COLUMN_MAP,
@@ -33,8 +34,8 @@ from pipeline.releases import (
     PROVIDER_PROFILE_CORE_CHANGED_TABLES,
     SERVING_PRACTICE_CHANGED_TABLES,
     SERVING_PRACTICE_MANAGED_DAC_CHANGED_TABLES,
-    ReleaseError,
     WAREHOUSE_RELEASE_SCHEMA_VERSION,
+    ReleaseError,
     WarehouseRelease,
     WarehouseReleaseDocument,
     WarehouseReleaseStore,
@@ -1877,6 +1878,88 @@ def test_full_cms_build_refuses_an_incomplete_source_set(tmp_path: Path) -> None
             backup_manifest_path=tmp_path / "unused-backup.json",
             code_commit=CODE_COMMIT,
         )
+
+
+def test_full_cms_build_uses_external_release_scoped_spill_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data_root = tmp_path / "data"
+    baseline = tmp_path / "baseline.duckdb"
+    connection = duckdb.connect(str(baseline))
+    connection.execute("CREATE TABLE baseline_marker (value INTEGER)")
+    connection.execute("INSERT INTO baseline_marker VALUES (1)")
+    connection.close()
+    backup_manifest = tmp_path / "backup-manifest.json"
+    backup_manifest.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "backup_path": str(baseline),
+                "backup_identity": {"byte_size": baseline.stat().st_size},
+                "sha256": sha256_file(baseline),
+                "validation": {"read_only_open": "passed"},
+            }
+        )
+    )
+    source_run_ids = tuple(f"run-{index}" for index, _ in enumerate(FULL_CMS_SOURCE_IDS))
+    by_source_id = {
+        source_id: type(
+            "ManifestStub",
+            (),
+            {"source_data_period": "2024", "run_id": source_run_ids[index]},
+        )()
+        for index, source_id in enumerate(sorted(FULL_CMS_SOURCE_IDS))
+    }
+    observed: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        "pipeline.releases._resolve_exact_source_set",
+        lambda *_args, **_kwargs: by_source_id,
+    )
+
+    def fake_load_full_cms_content(
+        candidate: duckdb.DuckDBPyConnection, **_kwargs: object
+    ) -> tuple[dict[str, int], dict[str, object]]:
+        observed["temp_directory"] = candidate.execute(
+            "SELECT current_setting('temp_directory')"
+        ).fetchone()[0]
+        observed["threads"] = candidate.execute(
+            "SELECT current_setting('threads')"
+        ).fetchone()[0]
+        observed["preserve_insertion_order"] = candidate.execute(
+            "SELECT current_setting('preserve_insertion_order')"
+        ).fetchone()[0]
+        return {"baseline_marker": 1}, {"fixture": True}
+
+    monkeypatch.setattr(
+        "pipeline.releases._load_full_cms_content", fake_load_full_cms_content
+    )
+    spill_root = tmp_path / "external-spill"
+
+    result = build_full_cms_warehouse_release(
+        data_root=data_root,
+        source_run_ids=source_run_ids,
+        backup_manifest_path=backup_manifest,
+        code_commit=CODE_COMMIT,
+        memory_limit_gb=1,
+        threads=1,
+        spill_root=spill_root,
+    )
+
+    expected_spill = spill_root / result.release.warehouse_release_id
+    assert observed == {
+        "temp_directory": str(expected_spill),
+        "threads": 1,
+        "preserve_insertion_order": False,
+    }
+    assert result.release.validation_details["resource_limits"] == {
+        "memory_limit_gb": 1,
+        "threads": 1,
+        "spill_directory": str(expected_spill),
+        "preserve_insertion_order": False,
+    }
+    assert spill_root.is_dir()
+    assert not expected_spill.exists()
 
 
 def test_affiliation_transform_excludes_ambiguous_names_and_labels_dba_matches(

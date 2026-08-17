@@ -1546,8 +1546,12 @@ def build_full_cms_warehouse_release(
     source_run_ids: tuple[str, ...],
     backup_manifest_path: Path,
     code_commit: str | None = None,
+    memory_limit_gb: int = 12,
+    threads: int = 1,
+    spill_root: Path | None = None,
 ) -> BuildResult:
     """Build every registered CMS warehouse source into an immutable candidate."""
+    _validate_targeted_build_resources(memory_limit_gb, threads)
     by_source_id = _resolve_exact_source_set(
         data_root,
         source_run_ids,
@@ -1563,6 +1567,9 @@ def build_full_cms_warehouse_release(
     release_dir = data_root / "releases" / warehouse_release_id
     database_path = release_dir / "warehouse.duckdb"
     partial_path = release_dir / "warehouse.duckdb.partial"
+    spill_directory = (
+        spill_root if spill_root is not None else data_root / "staging" / "duckdb-spill"
+    ) / warehouse_release_id
     release_store_path = _release_store_path(data_root)
 
     with _exclusive_lock(data_root / "locks" / "build.lock"):
@@ -1589,6 +1596,12 @@ def build_full_cms_warehouse_release(
             )
             connection = duckdb.connect(str(partial_path), read_only=False)
             try:
+                _configure_targeted_build_resources(
+                    connection,
+                    memory_limit_gb=memory_limit_gb,
+                    threads=threads,
+                    spill_directory=spill_directory,
+                )
                 table_counts, cms_details = _load_full_cms_content(
                     connection, data_root=data_root, by_source_id=by_source_id
                 )
@@ -1596,6 +1609,12 @@ def build_full_cms_warehouse_release(
                     "source_periods": {
                         source_id: manifest.source_data_period
                         for source_id, manifest in sorted(by_source_id.items())
+                    },
+                    "resource_limits": {
+                        "memory_limit_gb": memory_limit_gb,
+                        "threads": threads,
+                        "spill_directory": str(spill_directory),
+                        "preserve_insertion_order": False,
                     },
                     **cms_details,
                 }
@@ -1613,6 +1632,10 @@ def build_full_cms_warehouse_release(
             os.replace(partial_path, database_path)
             os.chmod(database_path, 0o440)
             _save_release_document(data_root, document)
+            try:
+                spill_directory.rmdir()
+            except OSError:
+                pass
         except Exception as error:
             release.validation_state = ValidationState.FAILED
             release.error_summary = safe_error(error)

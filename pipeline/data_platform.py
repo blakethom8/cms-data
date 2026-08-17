@@ -426,6 +426,21 @@ def _parser() -> argparse.ArgumentParser:
     build_cms.add_argument(
         "--environment", choices=[STAGING_ENVIRONMENT], required=True
     )
+    build_cms.add_argument(
+        "--memory-limit-gb", type=int, default=12,
+        help="DuckDB memory ceiling for the full CMS build (default: 12 GiB)",
+    )
+    build_cms.add_argument(
+        "--threads", type=int, default=1,
+        help="DuckDB worker threads for the full CMS build (default: 1)",
+    )
+    build_cms.add_argument(
+        "--spill-root", type=Path,
+        help=(
+            "Existing filesystem root for release-scoped DuckDB temporary files; "
+            "defaults to data-root/staging/duckdb-spill"
+        ),
+    )
     build_cms.add_argument("--json", action="store_true")
     build_ppef = subparsers.add_parser(
         "build-ppef-release",
@@ -839,6 +854,9 @@ def main(argv: list[str] | None = None) -> int:
                     data_root=args.data_root,
                     source_run_ids=tuple(args.source_run_id),
                     backup_manifest_path=args.backup_manifest,
+                    memory_limit_gb=args.memory_limit_gb,
+                    threads=args.threads,
+                    spill_root=args.spill_root,
                 ).to_dict()
                 heading = "Full CMS staging warehouse release built"
             elif args.command == "build-ppef-release":
