@@ -39,6 +39,11 @@ REQUIRED_TABLES = (
     "utilization_procedure_dictionary",
     "utilization_drug_dictionary",
 )
+TAXONOMY_TABLES = (
+    "utilization_procedure_taxonomy",
+    "utilization_drug_classes",
+    "utilization_drug_class_members",
+)
 
 
 class UtilizationReleaseError(RuntimeError):
@@ -147,6 +152,58 @@ def _source_release(
     if sha256_file(source_warehouse) != expected_sha:
         raise UtilizationReleaseError("Source warehouse SHA-256 does not match release evidence")
     return source_warehouse, release
+
+
+def _source_utilization_release(
+    source_database: Path, source_release_manifest: Path
+) -> tuple[Path, dict]:
+    source_database = _canonical_file(source_database, "source utilization database")
+    document = _load_json(source_release_manifest, "source utilization release manifest")
+    release = document.get("release")
+    if document.get("schema_version") != SCHEMA_VERSION or not isinstance(release, dict):
+        raise UtilizationReleaseError("Source utilization release manifest is unsupported")
+    if release.get("validation_state") != "passed":
+        raise UtilizationReleaseError("Source utilization release validation has not passed")
+    release_id = release.get("utilization_release_id")
+    if not isinstance(release_id, str) or not RELEASE_PATTERN.fullmatch(release_id):
+        raise UtilizationReleaseError("Source utilization release ID is invalid")
+    if source_database.stat().st_size != int(release.get("byte_size", -1)):
+        raise UtilizationReleaseError("Source utilization byte size does not match evidence")
+    if sha256_file(source_database) != release.get("sha256"):
+        raise UtilizationReleaseError("Source utilization SHA-256 does not match evidence")
+    return source_database, release
+
+
+def _taxonomy_reference(manifest_path: Path, source_release: dict) -> tuple[Path, dict]:
+    manifest_path = _canonical_file(manifest_path, "taxonomy reference manifest")
+    document = _load_json(manifest_path, "taxonomy reference manifest")
+    reference = document.get("reference")
+    if document.get("schema_version") != 1 or not isinstance(reference, dict):
+        raise UtilizationReleaseError("Taxonomy reference manifest is unsupported")
+    if reference.get("source_utilization_release_id") != source_release.get(
+        "utilization_release_id"
+    ):
+        raise UtilizationReleaseError("Taxonomy reference targets a different utilization release")
+    if reference.get("source_utilization_sha256") != source_release.get("sha256"):
+        raise UtilizationReleaseError("Taxonomy reference source SHA-256 does not match")
+    files = reference.get("files")
+    if not isinstance(files, dict) or set(files) != {"procedures", "classes", "members"}:
+        raise UtilizationReleaseError("Taxonomy reference files are incomplete")
+    root = manifest_path.parent
+    for label, evidence in files.items():
+        if not isinstance(evidence, dict):
+            raise UtilizationReleaseError(f"Taxonomy {label} file evidence is invalid")
+        relative = Path(str(evidence.get("path", "")))
+        if relative.is_absolute() or len(relative.parts) != 1:
+            raise UtilizationReleaseError(f"Taxonomy {label} file path is not canonical")
+        path = _canonical_file(root / relative, f"taxonomy {label} file")
+        if path.parent != root:
+            raise UtilizationReleaseError(f"Taxonomy {label} file escapes its release directory")
+        if path.stat().st_size != int(evidence.get("byte_size", -1)):
+            raise UtilizationReleaseError(f"Taxonomy {label} file byte size changed")
+        if sha256_file(path) != evidence.get("sha256"):
+            raise UtilizationReleaseError(f"Taxonomy {label} file SHA-256 changed")
+    return root, reference
 
 
 def _release_id(commit: str) -> str:
@@ -331,6 +388,164 @@ def _build_indexes(connection: duckdb.DuckDBPyConnection) -> None:
     )
     for statement in statements:
         connection.execute(statement)
+
+
+def _build_taxonomy_tables(connection: duckdb.DuckDBPyConnection, root: Path) -> None:
+    for table in TAXONOMY_TABLES:
+        connection.execute(f"DROP TABLE IF EXISTS {table}")
+    procedure_path = str(root / "procedure_taxonomy.csv")
+    classes_path = str(root / "drug_classes.csv")
+    members_path = str(root / "drug_class_members.csv")
+    connection.execute(
+        """
+        CREATE TABLE utilization_procedure_taxonomy AS
+        SELECT hcpcs_code, rbcs_id, category_id, category_name,
+               subcategory_id, subcategory_name, family_id, family_name,
+               major_indicator, hcpcs_add_date, hcpcs_end_date,
+               try_cast(rbcs_release_year AS INTEGER) rbcs_release_year
+        FROM read_csv(?, header=true, all_varchar=true)
+        """,
+        [procedure_path],
+    )
+    connection.execute(
+        """
+        CREATE TABLE utilization_drug_classes AS
+        SELECT source, class_type, class_id, class_name,
+               nullif(parent_class_id, '') parent_class_id,
+               nullif(parent_class_name, '') parent_class_name,
+               try_cast("level" AS INTEGER) hierarchy_level
+        FROM read_csv(?, header=true, all_varchar=true)
+        """,
+        [classes_path],
+    )
+    connection.execute(
+        """
+        CREATE TABLE utilization_drug_class_members AS
+        SELECT source, class_type, class_id, generic_name, rxcui,
+               concept_name, concept_tty, try_cast(match_score AS INTEGER) match_score,
+               match_method, source_version
+        FROM read_csv(?, header=true, all_varchar=true)
+        """,
+        [members_path],
+    )
+    for statement in (
+        "CREATE UNIQUE INDEX idx_utilization_rbcs_code "
+        "ON utilization_procedure_taxonomy(hcpcs_code)",
+        "CREATE INDEX idx_utilization_rbcs_family "
+        "ON utilization_procedure_taxonomy(family_id)",
+        "CREATE UNIQUE INDEX idx_utilization_drug_class "
+        "ON utilization_drug_classes(source, class_id)",
+        "CREATE INDEX idx_utilization_drug_class_name "
+        "ON utilization_drug_classes(class_name)",
+        "CREATE UNIQUE INDEX idx_utilization_drug_class_member "
+        "ON utilization_drug_class_members(source, class_id, generic_name)",
+        "CREATE INDEX idx_utilization_drug_class_member_generic "
+        "ON utilization_drug_class_members(generic_name)",
+    ):
+        connection.execute(statement)
+
+
+def _validate_taxonomy(
+    connection: duckdb.DuckDBPyConnection, source_release: dict
+) -> tuple[dict[str, int], dict]:
+    expected_tables = (*REQUIRED_TABLES, *TAXONOMY_TABLES)
+    existing = {
+        row[0]
+        for row in connection.execute(
+            "SELECT table_name FROM information_schema.tables WHERE table_schema='main'"
+        ).fetchall()
+    }
+    missing = sorted(set(expected_tables) - existing)
+    if missing:
+        raise UtilizationReleaseError(f"Taxonomy candidate is missing tables: {', '.join(missing)}")
+    counts = {
+        table: _scalar(connection, f"SELECT count(*) FROM {table}")
+        for table in expected_tables
+    }
+    if any(count <= 0 for count in counts.values()):
+        raise UtilizationReleaseError("Taxonomy candidate contains an empty required table")
+    source_counts = source_release.get("table_counts")
+    if not isinstance(source_counts, dict):
+        raise UtilizationReleaseError("Source utilization table counts are unavailable")
+    changed_base = {
+        table: (source_counts.get(table), counts[table])
+        for table in REQUIRED_TABLES
+        if source_counts.get(table) != counts[table]
+    }
+    if changed_base:
+        raise UtilizationReleaseError(
+            f"Taxonomy augmentation changed base table counts: {changed_base}"
+        )
+
+    checks = {
+        "duplicate_rbcs_codes": _scalar(
+            connection,
+            "SELECT count(*) FROM (SELECT hcpcs_code FROM utilization_procedure_taxonomy "
+            "GROUP BY hcpcs_code HAVING count(*) > 1)",
+        ),
+        "invalid_rbcs_rows": _scalar(
+            connection,
+            "SELECT count(*) FROM utilization_procedure_taxonomy "
+            "WHERE NOT regexp_matches(hcpcs_code, '^[A-Z0-9]{5}$') "
+            "OR nullif(trim(category_name), '') IS NULL "
+            "OR nullif(trim(subcategory_name), '') IS NULL "
+            "OR nullif(trim(family_name), '') IS NULL",
+        ),
+        "invalid_drug_classes": _scalar(
+            connection,
+            "SELECT count(*) FROM utilization_drug_classes "
+            "WHERE (source='ATC' AND class_type!='ATC') "
+            "OR (source='FDASPL' AND class_type!='EPC') "
+            "OR source NOT IN ('ATC', 'FDASPL') "
+            "OR nullif(trim(class_id), '') IS NULL OR nullif(trim(class_name), '') IS NULL",
+        ),
+        "duplicate_drug_members": _scalar(
+            connection,
+            "SELECT count(*) FROM (SELECT source, class_id, generic_name "
+            "FROM utilization_drug_class_members GROUP BY ALL HAVING count(*) > 1)",
+        ),
+        "orphan_drug_members": _scalar(
+            connection,
+            "SELECT count(*) FROM utilization_drug_class_members m ANTI JOIN "
+            "utilization_drug_classes c ON c.source=m.source AND c.class_id=m.class_id",
+        ),
+        "invalid_drug_members": _scalar(
+            connection,
+            "SELECT count(*) FROM utilization_drug_class_members "
+            "WHERE match_score NOT IN (95, 100) OR nullif(trim(generic_name), '') IS NULL",
+        ),
+    }
+    failed = {name: value for name, value in checks.items() if value != 0}
+    if failed:
+        raise UtilizationReleaseError(f"Taxonomy candidate checks failed: {failed}")
+
+    overlap = {
+        "procedure_codes": _scalar(
+            connection,
+            "SELECT count(DISTINCT t.hcpcs_code) FROM utilization_procedure_taxonomy t "
+            "JOIN utilization_procedure_dictionary d ON d.hcpcs_code=t.hcpcs_code",
+        ),
+        "drug_generics": _scalar(
+            connection,
+            "SELECT count(DISTINCT m.generic_name) FROM utilization_drug_class_members m "
+            "JOIN utilization_drug_dictionary d "
+            "ON lower(d.generic_name)=lower(m.generic_name)",
+        ),
+        "procedure_families": _scalar(
+            connection,
+            "SELECT count(DISTINCT t.family_id) FROM utilization_procedure_taxonomy t "
+            "JOIN utilization_procedure_dictionary d ON d.hcpcs_code=t.hcpcs_code",
+        ),
+        "drug_classes": _scalar(
+            connection,
+            "SELECT count(DISTINCT concat(m.source, ':', m.class_id)) "
+            "FROM utilization_drug_class_members m JOIN utilization_drug_dictionary d "
+            "ON lower(d.generic_name)=lower(m.generic_name)",
+        ),
+    }
+    if any(value <= 0 for value in overlap.values()):
+        raise UtilizationReleaseError(f"Taxonomy candidate has empty dictionary overlap: {overlap}")
+    return counts, {"zero_failure_checks": checks, "dictionary_overlap": overlap}
 
 
 def _scalar(connection: duckdb.DuckDBPyConnection, sql: str) -> int:
@@ -665,6 +880,146 @@ def build_release(
             shutil.rmtree(spill_directory)
 
 
+def augment_release(
+    *,
+    data_root: Path,
+    source_utilization: Path,
+    source_release_manifest: Path,
+    taxonomy_manifest: Path,
+    pipeline_code_commit: str | None = None,
+) -> dict:
+    """Copy one sealed utilization release and add versioned taxonomy references."""
+    data_root = _canonical_directory(data_root, "utilization data root", create=True)
+    source_database, source_release = _source_utilization_release(
+        source_utilization, source_release_manifest
+    )
+    taxonomy_root, reference = _taxonomy_reference(taxonomy_manifest, source_release)
+    commit = pipeline_code_commit or _git_commit()
+    if not re.fullmatch(r"[0-9a-f]{40}", commit):
+        raise UtilizationReleaseError("Pipeline commit must be a full Git SHA")
+    release_id = _release_id(commit)
+    if not RELEASE_PATTERN.fullmatch(release_id):
+        raise UtilizationReleaseError("Generated utilization release ID is invalid")
+    release_dir = data_root / "utilization-releases" / release_id
+    release_dir.mkdir(parents=True, exist_ok=False)
+    partial = release_dir / "utilization.duckdb.partial"
+    final = release_dir / "utilization.duckdb"
+    manifest_path = release_dir / "release.json"
+    comparison_path = release_dir / "comparison.json"
+    release = {
+        "utilization_release_id": release_id,
+        "created_at": utc_now(),
+        "database_path": f"utilization-releases/{release_id}/utilization.duckdb",
+        "source_warehouse_release_id": source_release.get("source_warehouse_release_id"),
+        "source_warehouse_sha256": source_release.get("source_warehouse_sha256"),
+        "source_warehouse_pipeline_commit": source_release.get(
+            "source_warehouse_pipeline_commit"
+        ),
+        "source_utilization_release_id": source_release["utilization_release_id"],
+        "source_utilization_sha256": source_release["sha256"],
+        "taxonomy_reference_id": reference.get("taxonomy_reference_id"),
+        "taxonomy_source_versions": {
+            "rbcs_release_year": reference.get("rbcs", {}).get("release_year"),
+            "rxclass": reference.get("rxclass", {}).get("versions", {}),
+        },
+        "pipeline_code_commit": commit,
+        "duckdb_version": duckdb.__version__,
+        "validation_state": "building",
+        "validation_timestamp": None,
+        "byte_size": None,
+        "sha256": None,
+        "table_counts": {},
+        "validation_details": {
+            "build_progress": {"current_stage": "copy", "completed_stages": []}
+        },
+        "error_summary": None,
+    }
+
+    def write_manifest() -> None:
+        _write_json(manifest_path, {"schema_version": SCHEMA_VERSION, "release": release})
+
+    def mark(stage: str, status: str) -> None:
+        progress = release["validation_details"]["build_progress"]
+        if status == "completed":
+            progress["completed_stages"].append(stage)
+        progress["current_stage"] = stage
+        progress["current_stage_status"] = status
+        progress["updated_at"] = utc_now()
+        write_manifest()
+
+    write_manifest()
+    connection: duckdb.DuckDBPyConnection | None = None
+    try:
+        shutil.copy2(source_database, partial)
+        partial.chmod(0o640)
+        mark("copy", "completed")
+        mark("taxonomy_tables", "started")
+        connection = duckdb.connect(str(partial))
+        connection.execute("SET threads=1")
+        connection.execute("SET preserve_insertion_order=false")
+        _build_taxonomy_tables(connection, taxonomy_root)
+        mark("taxonomy_tables", "completed")
+        mark("validation", "started")
+        counts, validation = _validate_taxonomy(connection, source_release)
+        release["table_counts"] = counts
+        release["validation_details"].update(validation)
+        mark("validation", "completed")
+        connection.execute("CHECKPOINT")
+        connection.close()
+        connection = None
+        os.replace(partial, final)
+        release["byte_size"] = final.stat().st_size
+        release["sha256"] = sha256_file(final)
+        release["validation_state"] = "passed"
+        release["validation_timestamp"] = utc_now()
+        release["validation_details"]["build_progress"].update(
+            {"current_stage": "complete", "current_stage_status": "completed"}
+        )
+        comparison = {
+            "schema_version": COMPARISON_SCHEMA_VERSION,
+            "utilization_release_id": release_id,
+            "source_warehouse_release_id": release.get("source_warehouse_release_id"),
+            "source_utilization_release_id": source_release["utilization_release_id"],
+            "taxonomy_reference_id": reference.get("taxonomy_reference_id"),
+            "pipeline_code_commit": commit,
+            "comparison_policy": "independent_utilization_v1",
+            "augmentation_policy": "taxonomy_reference_v1",
+            "state": "passed",
+            "failed_requirements": [],
+            "unexpected_differences": [],
+            "evidence_mismatches": [],
+            "table_counts": counts,
+            "source_table_counts": source_release["table_counts"],
+            "dictionary_overlap": validation["dictionary_overlap"],
+        }
+        write_manifest()
+        _write_json(comparison_path, comparison)
+        final.chmod(0o440)
+        manifest_path.chmod(0o440)
+        comparison_path.chmod(0o440)
+        return {
+            "state": "passed",
+            "utilization_release_id": release_id,
+            "database_path": str(final),
+            "release_manifest": str(manifest_path),
+            "comparison": str(comparison_path),
+            "byte_size": release["byte_size"],
+            "sha256": release["sha256"],
+            "table_counts": counts,
+        }
+    except Exception as error:
+        if connection is not None:
+            connection.close()
+        release["validation_state"] = "failed"
+        release["error_summary"] = safe_error(error)
+        progress = release["validation_details"]["build_progress"]
+        progress["current_stage_status"] = "failed"
+        progress["failed_at"] = utc_now()
+        write_manifest()
+        manifest_path.chmod(0o440)
+        raise
+
+
 def verify_release(data_root: Path, release_id: str) -> dict:
     """Re-open a sealed release and verify its identity and zero-failure evidence."""
     data_root = _canonical_directory(data_root, "utilization data root")
@@ -689,9 +1044,16 @@ def verify_release(data_root: Path, release_id: str) -> dict:
         raise UtilizationReleaseError("Utilization database SHA-256 changed")
     connection = duckdb.connect(str(database), read_only=True)
     try:
+        recorded_counts = release.get("table_counts")
+        if not isinstance(recorded_counts, dict) or not set(REQUIRED_TABLES).issubset(
+            recorded_counts
+        ):
+            raise UtilizationReleaseError("Utilization table count evidence is incomplete")
+        if any(not re.fullmatch(r"[a-z][a-z0-9_]*", table) for table in recorded_counts):
+            raise UtilizationReleaseError("Utilization table count evidence has an invalid name")
         counts = {
             table: _scalar(connection, f"SELECT count(*) FROM {table}")
-            for table in REQUIRED_TABLES
+            for table in recorded_counts
         }
     finally:
         connection.close()
@@ -718,6 +1080,12 @@ def build_parser() -> argparse.ArgumentParser:
     build.add_argument("--memory-limit-gb", type=int, default=16)
     build.add_argument("--threads", type=int, default=1)
     build.add_argument("--json", action="store_true")
+    augment = subparsers.add_parser("augment-taxonomy")
+    augment.add_argument("--data-root", type=Path, required=True)
+    augment.add_argument("--source-utilization", type=Path, required=True)
+    augment.add_argument("--source-release-manifest", type=Path, required=True)
+    augment.add_argument("--taxonomy-manifest", type=Path, required=True)
+    augment.add_argument("--json", action="store_true")
     verify = subparsers.add_parser("verify")
     verify.add_argument("--data-root", type=Path, required=True)
     verify.add_argument("--utilization-release-id", required=True)
@@ -736,6 +1104,13 @@ def main(argv: list[str] | None = None) -> int:
                 spill_root=args.spill_root,
                 memory_limit_gb=args.memory_limit_gb,
                 threads=args.threads,
+            )
+        elif args.command == "augment-taxonomy":
+            result = augment_release(
+                data_root=args.data_root,
+                source_utilization=args.source_utilization,
+                source_release_manifest=args.source_release_manifest,
+                taxonomy_manifest=args.taxonomy_manifest,
             )
         else:
             result = verify_release(args.data_root, args.utilization_release_id)

@@ -5768,6 +5768,391 @@
       }
     }
   },
+  "/utilization/drugs/classes": {
+    "get": {
+      "200": {
+        "properties": {
+          "attribution": {
+            "title": "Attribution",
+            "type": "string"
+          },
+          "contract_version": {
+            "const": 1,
+            "default": 1,
+            "title": "Contract Version",
+            "type": "integer"
+          },
+          "data_year": {
+            "title": "Data Year",
+            "type": "integer"
+          },
+          "query": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Query"
+          },
+          "results": {
+            "items": {
+              "properties": {
+                "available_generic_count": {
+                  "title": "Available Generic Count",
+                  "type": "integer"
+                },
+                "class_id": {
+                  "title": "Class Id",
+                  "type": "string"
+                },
+                "class_name": {
+                  "title": "Class Name",
+                  "type": "string"
+                },
+                "class_type": {
+                  "enum": [
+                    "ATC",
+                    "EPC"
+                  ],
+                  "title": "Class Type",
+                  "type": "string"
+                },
+                "descendant_class_count": {
+                  "title": "Descendant Class Count",
+                  "type": "integer"
+                },
+                "hierarchy_level": {
+                  "title": "Hierarchy Level",
+                  "type": "integer"
+                },
+                "parent_class_id": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Parent Class Id"
+                },
+                "parent_class_name": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Parent Class Name"
+                },
+                "source": {
+                  "enum": [
+                    "ATC",
+                    "FDASPL"
+                  ],
+                  "title": "Source",
+                  "type": "string"
+                },
+                "total_claims": {
+                  "title": "Total Claims",
+                  "type": "integer"
+                },
+                "total_drug_cost": {
+                  "title": "Total Drug Cost",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "source",
+                "class_type",
+                "class_id",
+                "class_name",
+                "hierarchy_level",
+                "available_generic_count",
+                "descendant_class_count",
+                "total_claims",
+                "total_drug_cost"
+              ],
+              "title": "DrugClassSummary",
+              "type": "object"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "returned_count": {
+            "title": "Returned Count",
+            "type": "integer"
+          },
+          "source": {
+            "enum": [
+              "ATC",
+              "FDASPL"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "source",
+          "data_year",
+          "attribution",
+          "total",
+          "returned_count",
+          "results"
+        ],
+        "title": "DrugClassesResponse",
+        "type": "object"
+      },
+      "422": {
+        "properties": {
+          "detail": {
+            "items": {
+              "properties": {
+                "loc": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "title": "Location",
+                  "type": "array"
+                },
+                "msg": {
+                  "title": "Message",
+                  "type": "string"
+                },
+                "type": {
+                  "title": "Error Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "loc",
+                "msg",
+                "type"
+              ],
+              "title": "ValidationError",
+              "type": "object"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "/utilization/drugs/classes/{source}/{class_id}": {
+    "get": {
+      "200": {
+        "properties": {
+          "attribution": {
+            "title": "Attribution",
+            "type": "string"
+          },
+          "contract_version": {
+            "const": 1,
+            "default": 1,
+            "title": "Contract Version",
+            "type": "integer"
+          },
+          "data_year": {
+            "title": "Data Year",
+            "type": "integer"
+          },
+          "drug_class": {
+            "properties": {
+              "available_generic_count": {
+                "title": "Available Generic Count",
+                "type": "integer"
+              },
+              "class_id": {
+                "title": "Class Id",
+                "type": "string"
+              },
+              "class_name": {
+                "title": "Class Name",
+                "type": "string"
+              },
+              "class_type": {
+                "enum": [
+                  "ATC",
+                  "EPC"
+                ],
+                "title": "Class Type",
+                "type": "string"
+              },
+              "descendant_class_count": {
+                "title": "Descendant Class Count",
+                "type": "integer"
+              },
+              "hierarchy_level": {
+                "title": "Hierarchy Level",
+                "type": "integer"
+              },
+              "parent_class_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Parent Class Id"
+              },
+              "parent_class_name": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Parent Class Name"
+              },
+              "source": {
+                "enum": [
+                  "ATC",
+                  "FDASPL"
+                ],
+                "title": "Source",
+                "type": "string"
+              },
+              "total_claims": {
+                "title": "Total Claims",
+                "type": "integer"
+              },
+              "total_drug_cost": {
+                "title": "Total Drug Cost",
+                "type": "number"
+              }
+            },
+            "required": [
+              "source",
+              "class_type",
+              "class_id",
+              "class_name",
+              "hierarchy_level",
+              "available_generic_count",
+              "descendant_class_count",
+              "total_claims",
+              "total_drug_cost"
+            ],
+            "title": "DrugClassSummary",
+            "type": "object"
+          },
+          "members": {
+            "items": {
+              "properties": {
+                "brands": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Brands",
+                  "type": "array"
+                },
+                "claims": {
+                  "title": "Claims",
+                  "type": "integer"
+                },
+                "drug_cost": {
+                  "title": "Drug Cost",
+                  "type": "number"
+                },
+                "generic": {
+                  "title": "Generic",
+                  "type": "string"
+                },
+                "physician_count": {
+                  "title": "Physician Count",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "generic",
+                "brands",
+                "physician_count",
+                "claims",
+                "drug_cost"
+              ],
+              "title": "DrugClassMember",
+              "type": "object"
+            },
+            "title": "Members",
+            "type": "array"
+          }
+        },
+        "required": [
+          "data_year",
+          "attribution",
+          "drug_class",
+          "members"
+        ],
+        "title": "DrugClassResponse",
+        "type": "object"
+      },
+      "422": {
+        "properties": {
+          "detail": {
+            "items": {
+              "properties": {
+                "loc": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "title": "Location",
+                  "type": "array"
+                },
+                "msg": {
+                  "title": "Message",
+                  "type": "string"
+                },
+                "type": {
+                  "title": "Error Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "loc",
+                "msg",
+                "type"
+              ],
+              "title": "ValidationError",
+              "type": "object"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      }
+    }
+  },
   "/utilization/drugs/options": {
     "get": {
       "200": {
@@ -6152,6 +6537,175 @@
           "results"
         ],
         "title": "DrugSearchResponse",
+        "type": "object"
+      },
+      "422": {
+        "properties": {
+          "detail": {
+            "items": {
+              "properties": {
+                "loc": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "title": "Location",
+                  "type": "array"
+                },
+                "msg": {
+                  "title": "Message",
+                  "type": "string"
+                },
+                "type": {
+                  "title": "Error Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "loc",
+                "msg",
+                "type"
+              ],
+              "title": "ValidationError",
+              "type": "object"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "/utilization/procedures/families/{family_id}": {
+    "get": {
+      "200": {
+        "properties": {
+          "contract_version": {
+            "const": 1,
+            "default": 1,
+            "title": "Contract Version",
+            "type": "integer"
+          },
+          "data_year": {
+            "title": "Data Year",
+            "type": "integer"
+          },
+          "family": {
+            "properties": {
+              "available_code_count": {
+                "title": "Available Code Count",
+                "type": "integer"
+              },
+              "category_id": {
+                "title": "Category Id",
+                "type": "string"
+              },
+              "category_name": {
+                "title": "Category Name",
+                "type": "string"
+              },
+              "family_id": {
+                "title": "Family Id",
+                "type": "string"
+              },
+              "family_name": {
+                "title": "Family Name",
+                "type": "string"
+              },
+              "subcategory_id": {
+                "title": "Subcategory Id",
+                "type": "string"
+              },
+              "subcategory_name": {
+                "title": "Subcategory Name",
+                "type": "string"
+              },
+              "total_payments": {
+                "title": "Total Payments",
+                "type": "number"
+              },
+              "total_services": {
+                "title": "Total Services",
+                "type": "number"
+              }
+            },
+            "required": [
+              "family_id",
+              "family_name",
+              "category_id",
+              "category_name",
+              "subcategory_id",
+              "subcategory_name",
+              "available_code_count",
+              "total_services",
+              "total_payments"
+            ],
+            "title": "ProcedureFamilySummary",
+            "type": "object"
+          },
+          "members": {
+            "items": {
+              "properties": {
+                "description": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Description"
+                },
+                "is_drug_code": {
+                  "default": false,
+                  "title": "Is Drug Code",
+                  "type": "boolean"
+                },
+                "physician_count": {
+                  "title": "Physician Count",
+                  "type": "integer"
+                },
+                "total_payments": {
+                  "title": "Total Payments",
+                  "type": "number"
+                },
+                "total_services": {
+                  "title": "Total Services",
+                  "type": "number"
+                },
+                "value": {
+                  "title": "Value",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "value",
+                "physician_count",
+                "total_services",
+                "total_payments"
+              ],
+              "title": "ProcedureOption",
+              "type": "object"
+            },
+            "title": "Members",
+            "type": "array"
+          }
+        },
+        "required": [
+          "data_year",
+          "family",
+          "members"
+        ],
+        "title": "ProcedureFamilyResponse",
         "type": "object"
       },
       "422": {
@@ -6624,6 +7178,151 @@
           "results"
         ],
         "title": "ProcedureSearchResponse",
+        "type": "object"
+      },
+      "422": {
+        "properties": {
+          "detail": {
+            "items": {
+              "properties": {
+                "loc": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "title": "Location",
+                  "type": "array"
+                },
+                "msg": {
+                  "title": "Message",
+                  "type": "string"
+                },
+                "type": {
+                  "title": "Error Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "loc",
+                "msg",
+                "type"
+              ],
+              "title": "ValidationError",
+              "type": "object"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "/utilization/procedures/taxonomy": {
+    "get": {
+      "200": {
+        "properties": {
+          "contract_version": {
+            "const": 1,
+            "default": 1,
+            "title": "Contract Version",
+            "type": "integer"
+          },
+          "data_year": {
+            "title": "Data Year",
+            "type": "integer"
+          },
+          "query": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Query"
+          },
+          "results": {
+            "items": {
+              "properties": {
+                "available_code_count": {
+                  "title": "Available Code Count",
+                  "type": "integer"
+                },
+                "category_id": {
+                  "title": "Category Id",
+                  "type": "string"
+                },
+                "category_name": {
+                  "title": "Category Name",
+                  "type": "string"
+                },
+                "family_id": {
+                  "title": "Family Id",
+                  "type": "string"
+                },
+                "family_name": {
+                  "title": "Family Name",
+                  "type": "string"
+                },
+                "subcategory_id": {
+                  "title": "Subcategory Id",
+                  "type": "string"
+                },
+                "subcategory_name": {
+                  "title": "Subcategory Name",
+                  "type": "string"
+                },
+                "total_payments": {
+                  "title": "Total Payments",
+                  "type": "number"
+                },
+                "total_services": {
+                  "title": "Total Services",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "family_id",
+                "family_name",
+                "category_id",
+                "category_name",
+                "subcategory_id",
+                "subcategory_name",
+                "available_code_count",
+                "total_services",
+                "total_payments"
+              ],
+              "title": "ProcedureFamilySummary",
+              "type": "object"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "returned_count": {
+            "title": "Returned Count",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "data_year",
+          "total",
+          "returned_count",
+          "results"
+        ],
+        "title": "ProcedureTaxonomyResponse",
         "type": "object"
       },
       "422": {

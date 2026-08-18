@@ -19,6 +19,21 @@ def _client() -> TestClient:
           brand_name varchar, generic_name varchar, physician_count integer,
           total_claims bigint, total_drug_cost double, data_year integer
         );
+        create table utilization_procedure_taxonomy (
+          hcpcs_code varchar, rbcs_id varchar, category_id varchar, category_name varchar,
+          subcategory_id varchar, subcategory_name varchar, family_id varchar,
+          family_name varchar, major_indicator varchar, hcpcs_add_date varchar,
+          hcpcs_end_date varchar, rbcs_release_year integer
+        );
+        create table utilization_drug_classes (
+          source varchar, class_type varchar, class_id varchar, class_name varchar,
+          parent_class_id varchar, parent_class_name varchar, hierarchy_level integer
+        );
+        create table utilization_drug_class_members (
+          source varchar, class_type varchar, class_id varchar, generic_name varchar,
+          rxcui varchar, concept_name varchar, concept_tty varchar, match_score integer,
+          match_method varchar, source_version varchar
+        );
         create table provider_service_detail (
           npi varchar, hcpcs_code varchar, hcpcs_description varchar,
           hcpcs_drug_ind varchar, place_of_service varchar,
@@ -52,6 +67,35 @@ def _client() -> TestClient:
         [
             ("Eliquis", "Apixaban", 2, 140, 14000, 2024),
             ("Jardiance", "Empagliflozin", 1, 30, 3000, 2024),
+        ],
+    )
+    connection.executemany(
+        "insert into utilization_procedure_taxonomy values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+            (
+                "33249", "MC010N", "M", "Procedures", "MC", "Cardiovascular",
+                "MC-010", "Device Implantation", "N", "01/01/2000", "12/31/9999", 2025,
+            ),
+            (
+                "J9999", "PM015N", "M", "Procedures", "PM", "Musculoskeletal",
+                "PM-015", "Joint Injection", "N", "01/01/2000", "12/31/9999", 2025,
+            ),
+        ],
+    )
+    connection.executemany(
+        "insert into utilization_drug_classes values (?, ?, ?, ?, ?, ?, ?)",
+        [
+            ("ATC", "ATC", "B", "Blood and blood forming organs", None, None, 1),
+            ("ATC", "ATC", "B01", "Antithrombotic agents", "B", "Blood and blood forming organs", 2),
+            ("ATC", "ATC", "B01AF", "Direct factor Xa inhibitors", "B01", "Antithrombotic agents", 3),
+            ("FDASPL", "EPC", "N1", "Factor Xa Inhibitor", None, None, 1),
+        ],
+    )
+    connection.executemany(
+        "insert into utilization_drug_class_members values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+            ("ATC", "ATC", "B01AF", "Apixaban", "1364430", "apixaban", "IN", 100, "exact_normalized", "v1"),
+            ("FDASPL", "EPC", "N1", "Apixaban", "1364430", "apixaban", "IN", 100, "exact_normalized", "v1"),
         ],
     )
     connection.executemany(
@@ -162,6 +206,51 @@ def test_procedure_description_search_requires_explicit_release_gate(monkeypatch
 
     assert response.status_code == 200
     assert response.json()["results"][0]["description"] == "Insert ICD system"
+
+
+def test_procedure_taxonomy_finds_family_by_clinical_label(monkeypatch):
+    monkeypatch.setenv("HCPCS_DESCRIPTIONS_ENABLED", "true")
+    browse = client.get("/utilization/procedures/taxonomy", params={"q": "joint"})
+    detail = client.get("/utilization/procedures/families/PM-015")
+
+    assert browse.status_code == 200
+    assert browse.json()["results"][0]["family_name"] == "Joint Injection"
+    assert browse.json()["results"][0]["available_code_count"] == 1
+    assert detail.status_code == 200
+    assert detail.json()["members"] == [
+        {
+            "value": "J9999",
+            "description": "Example injection",
+            "is_drug_code": True,
+            "physician_count": 1,
+            "total_services": 20.0,
+            "total_payments": 500.0,
+        }
+    ]
+
+
+def test_drug_class_browse_rolls_leaf_members_into_atc_parent():
+    browse = client.get("/utilization/drugs/classes", params={"q": "apixaban"})
+    detail = client.get("/utilization/drugs/classes/ATC/B01")
+
+    assert browse.status_code == 200
+    payload = browse.json()
+    assert payload["source"] == "ATC"
+    assert payload["attribution"].startswith("This product uses publicly available data")
+    assert {row["class_id"] for row in payload["results"]} == {"B", "B01", "B01AF"}
+    assert detail.status_code == 200
+    assert detail.json()["members"][0]["generic"] == "Apixaban"
+    assert detail.json()["members"][0]["brands"] == ["Eliquis"]
+
+
+def test_drug_class_source_separates_atc_from_fda_epc():
+    response = client.get(
+        "/utilization/drugs/classes", params={"source": "FDASPL", "q": "factor xa"}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["results"][0]["class_type"] == "EPC"
+    assert response.json()["results"][0]["class_id"] == "N1"
 
 
 def test_procedure_search_ranks_selected_volume_and_preserves_scope(monkeypatch):

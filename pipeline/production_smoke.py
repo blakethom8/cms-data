@@ -15,6 +15,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 
+import duckdb
+
 
 SMOKE_SCHEMA_VERSION = 1
 
@@ -182,6 +184,33 @@ def _bundle_has_utilization(
     return (resolved / "utilization").is_symlink()
 
 
+def _bundle_utilization_tables(
+    production_root: Path,
+    deployment_id: str,
+    release_bundle: Path | None,
+) -> set[str]:
+    bundle = release_bundle or production_root / "release-current"
+    try:
+        resolved = bundle.resolve(strict=True)
+        pointer = resolved / "utilization"
+        if resolved.name != deployment_id or not pointer.is_symlink():
+            return set()
+        database = pointer.resolve(strict=True)
+        connection = duckdb.connect(str(database), read_only=True)
+        try:
+            return {
+                row[0]
+                for row in connection.execute(
+                    "SELECT table_name FROM information_schema.tables "
+                    "WHERE table_schema='main'"
+                ).fetchall()
+            }
+        finally:
+            connection.close()
+    except (FileNotFoundError, OSError, duckdb.Error):
+        return set()
+
+
 def run_smoke(
     *,
     base_url: str,
@@ -235,6 +264,13 @@ def run_smoke(
 
     utilization_expected = _bundle_has_utilization(
         production_root, deployment_id, release_bundle
+    )
+    taxonomy_expected = {
+        "utilization_procedure_taxonomy",
+        "utilization_drug_classes",
+        "utilization_drug_class_members",
+    }.issubset(
+        _bundle_utilization_tables(production_root, deployment_id, release_bundle)
     )
     if utilization_expected:
         status, procedure_options = _request(
@@ -350,12 +386,108 @@ def run_smoke(
                 },
             )
         )
+        if taxonomy_expected:
+            status, procedure_taxonomy = _request(
+                base_url,
+                "GET",
+                "/utilization/procedures/taxonomy?q=office&limit=3",
+                api_key,
+            )
+            families = (
+                procedure_taxonomy.get("results", [])
+                if isinstance(procedure_taxonomy, dict)
+                else []
+            )
+            taxonomy_ok = (
+                status == 200
+                and bool(families)
+                and isinstance(families[0], dict)
+                and bool(families[0].get("family_id"))
+            )
+            checks.append(
+                _check(
+                    "utilization_procedure_taxonomy",
+                    taxonomy_ok,
+                    status,
+                    {"returned": len(families)},
+                )
+            )
+            family_id = families[0].get("family_id") if taxonomy_ok else "invalid"
+            status, family = _request(
+                base_url,
+                "GET",
+                f"/utilization/procedures/families/{urllib.parse.quote(str(family_id))}",
+                api_key,
+            )
+            members = family.get("members", []) if isinstance(family, dict) else []
+            checks.append(
+                _check(
+                    "utilization_procedure_family",
+                    status == 200 and bool(members),
+                    status,
+                    {"returned": len(members)},
+                )
+            )
+
+            status, drug_classes = _request(
+                base_url,
+                "GET",
+                "/utilization/drugs/classes?q=lisinopril&source=ATC&limit=3",
+                api_key,
+            )
+            classes = (
+                drug_classes.get("results", []) if isinstance(drug_classes, dict) else []
+            )
+            classes_ok = (
+                status == 200
+                and bool(classes)
+                and isinstance(classes[0], dict)
+                and bool(classes[0].get("class_id"))
+            )
+            checks.append(
+                _check(
+                    "utilization_drug_classes",
+                    classes_ok,
+                    status,
+                    {"returned": len(classes)},
+                )
+            )
+            class_id = classes[0].get("class_id") if classes_ok else "invalid"
+            status, drug_class = _request(
+                base_url,
+                "GET",
+                f"/utilization/drugs/classes/ATC/{urllib.parse.quote(str(class_id))}",
+                api_key,
+            )
+            class_members = (
+                drug_class.get("members", []) if isinstance(drug_class, dict) else []
+            )
+            checks.append(
+                _check(
+                    "utilization_drug_class",
+                    status == 200 and bool(class_members),
+                    status,
+                    {"returned": len(class_members)},
+                )
+            )
+        else:
+            for name in (
+                "utilization_procedure_taxonomy",
+                "utilization_procedure_family",
+                "utilization_drug_classes",
+                "utilization_drug_class",
+            ):
+                checks.append(_check(name, True, None, {"applicability": "not_applicable"}))
     else:
         for name in (
             "utilization_procedure_options",
             "utilization_procedure_search",
             "utilization_drug_options",
             "utilization_drug_search",
+            "utilization_procedure_taxonomy",
+            "utilization_procedure_family",
+            "utilization_drug_classes",
+            "utilization_drug_class",
         ):
             checks.append(_check(name, True, None, {"applicability": "not_applicable"}))
 

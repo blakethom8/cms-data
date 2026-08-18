@@ -162,3 +162,86 @@ def test_rejects_source_warehouse_whose_hash_does_not_match_manifest(
             spill_root=tmp_path / "spill",
             pipeline_code_commit=COMMIT,
         )
+
+
+def test_augments_sealed_release_without_rebuilding_base_facts(tmp_path: Path) -> None:
+    source, manifest = _source(tmp_path)
+    data_root = tmp_path / "utilization-data"
+    baseline = utilization_releases.build_release(
+        data_root=data_root,
+        source_warehouse=source,
+        source_release_manifest=manifest,
+        spill_root=tmp_path / "spill",
+        memory_limit_gb=1,
+        threads=1,
+        pipeline_code_commit=COMMIT,
+    )
+    taxonomy = tmp_path / "taxonomy"
+    taxonomy.mkdir()
+    files = {
+        "procedures": taxonomy / "procedure_taxonomy.csv",
+        "classes": taxonomy / "drug_classes.csv",
+        "members": taxonomy / "drug_class_members.csv",
+    }
+    files["procedures"].write_text(
+        "hcpcs_code,rbcs_id,category_id,category_name,subcategory_id,subcategory_name,"
+        "family_id,family_name,major_indicator,hcpcs_add_date,hcpcs_end_date,"
+        "rbcs_release_year\n"
+        "99213,EM001N,E,Evaluation and Management,EM,Office visits,EM-001,"
+        "Office visits,N,01/01/2000,12/31/9999,2025\n"
+    )
+    files["classes"].write_text(
+        "source,class_type,class_id,class_name,parent_class_id,parent_class_name,level\n"
+        "ATC,ATC,A01,Stomatological preparations,,,1\n"
+    )
+    files["members"].write_text(
+        "source,class_type,class_id,generic_name,rxcui,concept_name,concept_tty,"
+        "match_score,match_method,source_version\n"
+        "ATC,ATC,A01,Generic A,123,Generic A,IN,100,exact_normalized,v1\n"
+    )
+    reference = {
+        "schema_version": 1,
+        "reference": {
+            "taxonomy_reference_id": "taxonomy-20260818T000000Z-aaaaaaaaaa",
+            "source_utilization_release_id": baseline["utilization_release_id"],
+            "source_utilization_sha256": baseline["sha256"],
+            "rbcs": {"release_year": "2025"},
+            "rxclass": {"versions": {"ATC": "v1", "FDASPL": "v1"}},
+            "files": {
+                name: {
+                    "path": path.name,
+                    "byte_size": path.stat().st_size,
+                    "sha256": _sha256(path),
+                }
+                for name, path in files.items()
+            },
+        },
+    }
+    taxonomy_manifest = taxonomy / "manifest.json"
+    taxonomy_manifest.write_text(json.dumps(reference))
+
+    augmented = utilization_releases.augment_release(
+        data_root=data_root,
+        source_utilization=Path(baseline["database_path"]),
+        source_release_manifest=Path(baseline["release_manifest"]),
+        taxonomy_manifest=taxonomy_manifest,
+        pipeline_code_commit="c" * 40,
+    )
+
+    assert augmented["state"] == "passed"
+    for table, count in baseline["table_counts"].items():
+        assert augmented["table_counts"][table] == count
+    assert augmented["table_counts"]["utilization_procedure_taxonomy"] == 1
+    assert augmented["table_counts"]["utilization_drug_classes"] == 1
+    assert augmented["table_counts"]["utilization_drug_class_members"] == 1
+    verified = utilization_releases.verify_release(
+        data_root, augmented["utilization_release_id"]
+    )
+    assert verified["table_counts"] == augmented["table_counts"]
+    connection = duckdb.connect(augmented["database_path"], read_only=True)
+    try:
+        assert connection.execute(
+            "SELECT family_name FROM utilization_procedure_taxonomy"
+        ).fetchone()[0] == "Office visits"
+    finally:
+        connection.close()

@@ -54,6 +54,75 @@ class DrugOptionsResponse(BaseModel):
     results: list[DrugOption]
 
 
+class ProcedureFamilySummary(BaseModel):
+    family_id: str
+    family_name: str
+    category_id: str
+    category_name: str
+    subcategory_id: str
+    subcategory_name: str
+    available_code_count: int
+    total_services: float
+    total_payments: float
+
+
+class ProcedureTaxonomyResponse(BaseModel):
+    contract_version: Literal[1] = CONTRACT_VERSION
+    query: str | None = None
+    data_year: int
+    total: int
+    returned_count: int
+    results: list[ProcedureFamilySummary]
+
+
+class ProcedureFamilyResponse(BaseModel):
+    contract_version: Literal[1] = CONTRACT_VERSION
+    data_year: int
+    family: ProcedureFamilySummary
+    members: list[ProcedureOption]
+
+
+class DrugClassSummary(BaseModel):
+    source: Literal["ATC", "FDASPL"]
+    class_type: Literal["ATC", "EPC"]
+    class_id: str
+    class_name: str
+    parent_class_id: str | None = None
+    parent_class_name: str | None = None
+    hierarchy_level: int
+    available_generic_count: int
+    descendant_class_count: int
+    total_claims: int
+    total_drug_cost: float
+
+
+class DrugClassesResponse(BaseModel):
+    contract_version: Literal[1] = CONTRACT_VERSION
+    query: str | None = None
+    source: Literal["ATC", "FDASPL"]
+    data_year: int
+    attribution: str
+    total: int
+    returned_count: int
+    results: list[DrugClassSummary]
+
+
+class DrugClassMember(BaseModel):
+    generic: str
+    brands: list[str]
+    physician_count: int
+    claims: int
+    drug_cost: float
+
+
+class DrugClassResponse(BaseModel):
+    contract_version: Literal[1] = CONTRACT_VERSION
+    data_year: int
+    attribution: str
+    drug_class: DrugClassSummary
+    members: list[DrugClassMember]
+
+
 class ProcedureBreakdown(BaseModel):
     value: str
     description: str | None = None
@@ -256,6 +325,249 @@ def _latest_year(conn, table: str) -> int:
 
 def get_utilization_router(get_conn):
     router = APIRouter(prefix="/utilization", tags=["Medicare Utilization"])
+
+    nlm_attribution = (
+        "This product uses publicly available data from the U.S. National Library of Medicine "
+        "(NLM), National Institutes of Health, Department of Health and Human Services; NLM is "
+        "not responsible for the product and does not endorse or recommend this or any other "
+        "product."
+    )
+
+    @router.get("/procedures/taxonomy", response_model=ProcedureTaxonomyResponse)
+    async def procedure_taxonomy(
+        q: str | None = Query(None, max_length=100),
+        category: str | None = Query(None, max_length=8),
+        subcategory: str | None = Query(None, max_length=8),
+        limit: int = Query(50, ge=1, le=200),
+    ):
+        needle = " ".join((q or "").split()).lower()
+        if q is not None and not needle:
+            raise HTTPException(status_code=422, detail="Query must not be blank")
+        clauses = ["lower(t.family_name) != 'no rbcs family'"]
+        params: list = []
+        if needle:
+            clauses.append(
+                "(lower(t.family_name) like ? or lower(t.subcategory_name) like ? "
+                "or lower(t.category_name) like ? or lower(t.hcpcs_code) like ?)"
+            )
+            params.extend([f"%{needle}%"] * 4)
+        if category:
+            clauses.append("upper(t.category_id) = ?")
+            params.append(category.strip().upper())
+        if subcategory:
+            clauses.append("upper(t.subcategory_id) = ?")
+            params.append(subcategory.strip().upper())
+        cursor = get_conn().execute(
+            f"""
+            with latest as (
+              select max(data_year) data_year from utilization_procedure_dictionary
+            ), families as (
+              select t.family_id, any_value(t.family_name) family_name,
+                     any_value(t.category_id) category_id,
+                     any_value(t.category_name) category_name,
+                     any_value(t.subcategory_id) subcategory_id,
+                     any_value(t.subcategory_name) subcategory_name,
+                     count(distinct d.hcpcs_code)::INTEGER available_code_count,
+                     sum(d.total_services)::DOUBLE total_services,
+                     sum(d.total_payments)::DOUBLE total_payments,
+                     max(d.data_year)::INTEGER data_year
+              from utilization_procedure_taxonomy t
+              join utilization_procedure_dictionary d on d.hcpcs_code=t.hcpcs_code
+              join latest l on d.data_year=l.data_year
+              where {' and '.join(clauses)}
+              group by t.family_id
+            )
+            select *, count(*) over () total_matches from families
+            order by case when lower(family_name)=? then 0
+                          when lower(family_name) like ? then 1 else 2 end,
+                     total_services desc, family_name, family_id limit ?
+            """,
+            [*params, needle, f"{needle}%", limit],
+        )
+        rows = _rows(cursor)
+        total = int(rows[0].pop("total_matches")) if rows else 0
+        data_year = (
+            int(rows[0].pop("data_year"))
+            if rows
+            else _latest_year(get_conn(), "utilization_procedure_dictionary")
+        )
+        for row in rows:
+            row.pop("data_year", None)
+        return ProcedureTaxonomyResponse(
+            query=" ".join((q or "").split()) or None,
+            data_year=data_year,
+            total=total,
+            returned_count=len(rows),
+            results=[ProcedureFamilySummary(**row) for row in rows],
+        )
+
+    @router.get(
+        "/procedures/families/{family_id}", response_model=ProcedureFamilyResponse
+    )
+    async def procedure_family(family_id: str):
+        normalized = family_id.strip().upper()
+        if not re.fullmatch(r"[A-Z0-9]{1,8}-[A-Z0-9]{1,8}", normalized):
+            raise HTTPException(status_code=422, detail="Invalid RBCS family ID")
+        enabled = _descriptions_enabled()
+        cursor = get_conn().execute(
+            f"""
+            with latest as (
+              select max(data_year) data_year from utilization_procedure_dictionary
+            )
+            select t.family_id, t.family_name, t.category_id, t.category_name,
+                   t.subcategory_id, t.subcategory_name,
+                   count(distinct d.hcpcs_code)::INTEGER available_code_count,
+                   sum(d.total_services)::DOUBLE total_services,
+                   sum(d.total_payments)::DOUBLE total_payments,
+                   max(d.data_year)::INTEGER data_year
+            from utilization_procedure_taxonomy t
+            join utilization_procedure_dictionary d on d.hcpcs_code=t.hcpcs_code
+            join latest l on d.data_year=l.data_year
+            where t.family_id=?
+            group by t.family_id, t.family_name, t.category_id, t.category_name,
+                     t.subcategory_id, t.subcategory_name
+            """,
+            [normalized],
+        )
+        family_row = cursor.fetchone()
+        if family_row is None:
+            raise HTTPException(status_code=404, detail="RBCS family is unavailable")
+        family = dict(zip([item[0] for item in cursor.description], family_row))
+        data_year = int(family.pop("data_year"))
+        member_cursor = get_conn().execute(
+            f"""
+            select d.hcpcs_code as "value",
+                   {"d.hcpcs_description" if enabled else "cast(null as varchar)"} description,
+                   coalesce(d.hcpcs_drug_ind='Y', false) is_drug_code,
+                   d.physician_count, d.total_services, d.total_payments
+            from utilization_procedure_taxonomy t
+            join utilization_procedure_dictionary d on d.hcpcs_code=t.hcpcs_code
+            where t.family_id=? and d.data_year=?
+            order by d.hcpcs_code
+            """,
+            [normalized, data_year],
+        )
+        return ProcedureFamilyResponse(
+            data_year=data_year,
+            family=ProcedureFamilySummary(**family),
+            members=[ProcedureOption(**row) for row in _rows(member_cursor)],
+        )
+
+    @router.get("/drugs/classes", response_model=DrugClassesResponse)
+    async def drug_classes(
+        q: str | None = Query(None, max_length=100),
+        source: Literal["ATC", "FDASPL"] = "ATC",
+        parent: str | None = Query(None, max_length=32),
+        limit: int = Query(50, ge=1, le=200),
+    ):
+        needle = " ".join((q or "").split()).lower()
+        if q is not None and not needle:
+            raise HTTPException(status_code=422, detail="Query must not be blank")
+        clauses = ["c.source=?"]
+        params: list = [source]
+        if parent:
+            clauses.append("c.parent_class_id=?")
+            params.append(parent.strip())
+        if needle:
+            clauses.append(
+                "(lower(c.class_name) like ? or lower(c.class_id) like ? "
+                "or exists (select 1 from utilization_drug_class_members qm "
+                "where qm.source=c.source and "
+                "(qm.class_id=c.class_id or "
+                "(c.source='ATC' and qm.class_id like c.class_id || '%')) "
+                "and (lower(qm.generic_name) like ? or lower(qm.concept_name) like ?)))"
+            )
+            params.extend([f"%{needle}%"] * 4)
+        cursor = get_conn().execute(
+            f"""
+            with latest as (select max(data_year) data_year from utilization_drug_dictionary),
+            classes as (
+              select c.source, c.class_type, c.class_id, c.class_name,
+                     c.parent_class_id, c.parent_class_name, c.hierarchy_level,
+                     count(distinct m.generic_name)::INTEGER available_generic_count,
+                     count(distinct m.class_id)::INTEGER descendant_class_count,
+                     sum(d.total_claims)::BIGINT total_claims,
+                     sum(d.total_drug_cost)::DOUBLE total_drug_cost,
+                     max(d.data_year)::INTEGER data_year
+              from utilization_drug_classes c
+              join utilization_drug_class_members m on m.source=c.source
+               and (m.class_id=c.class_id or (c.source='ATC' and m.class_id like c.class_id || '%'))
+              join utilization_drug_dictionary d
+                on lower(d.generic_name)=lower(m.generic_name)
+              join latest l on d.data_year=l.data_year
+              where {' and '.join(clauses)}
+              group by c.source, c.class_type, c.class_id, c.class_name,
+                       c.parent_class_id, c.parent_class_name, c.hierarchy_level
+            )
+            select *, count(*) over () total_matches from classes
+            order by case when lower(class_name)=? then 0
+                          when lower(class_name) like ? then 1 else 2 end,
+                     hierarchy_level, total_claims desc, class_name, class_id limit ?
+            """,
+            [*params, needle, f"{needle}%", limit],
+        )
+        rows = _rows(cursor)
+        total = int(rows[0].pop("total_matches")) if rows else 0
+        data_year = (
+            int(rows[0].pop("data_year"))
+            if rows
+            else _latest_year(get_conn(), "utilization_drug_dictionary")
+        )
+        for row in rows:
+            row.pop("data_year", None)
+        return DrugClassesResponse(
+            query=" ".join((q or "").split()) or None,
+            source=source,
+            data_year=data_year,
+            attribution=nlm_attribution,
+            total=total,
+            returned_count=len(rows),
+            results=[DrugClassSummary(**row) for row in rows],
+        )
+
+    @router.get(
+        "/drugs/classes/{source}/{class_id}", response_model=DrugClassResponse
+    )
+    async def drug_class(source: Literal["ATC", "FDASPL"], class_id: str):
+        normalized = class_id.strip()
+        if not normalized or len(normalized) > 32:
+            raise HTTPException(status_code=422, detail="Invalid drug class ID")
+        summary_response = await drug_classes(
+            q=normalized, source=source, parent=None, limit=200
+        )
+        summary = next(
+            (item for item in summary_response.results if item.class_id == normalized), None
+        )
+        if summary is None:
+            raise HTTPException(status_code=404, detail="Drug class is unavailable")
+        cursor = get_conn().execute(
+            """
+            with latest as (select max(data_year) data_year from utilization_drug_dictionary)
+            select m.generic_name generic,
+                   list(distinct d.brand_name order by d.brand_name) brands,
+                   sum(d.physician_count)::INTEGER physician_count,
+                   sum(d.total_claims)::BIGINT claims,
+                   sum(d.total_drug_cost)::DOUBLE drug_cost,
+                   max(d.data_year)::INTEGER data_year
+            from utilization_drug_class_members m
+            join utilization_drug_dictionary d
+              on lower(d.generic_name)=lower(m.generic_name)
+            join latest l on d.data_year=l.data_year
+            where m.source=? and (m.class_id=? or (?='ATC' and m.class_id like ? || '%'))
+            group by m.generic_name order by claims desc, generic
+            """,
+            [source, normalized, source, normalized],
+        )
+        rows = _rows(cursor)
+        data_year = int(rows[0].pop("data_year")) if rows else summary_response.data_year
+        for row in rows:
+            row.pop("data_year", None)
+        return DrugClassResponse(
+            data_year=data_year,
+            attribution=nlm_attribution,
+            drug_class=summary,
+            members=[DrugClassMember(**row) for row in rows],
+        )
 
     @router.get("/procedures/options", response_model=ProcedureOptionsResponse)
     async def procedure_options(

@@ -22,6 +22,10 @@ payments are estimates computed as services multiplied by average Medicare payme
 carry `is_drug_code=true`, because their service units must not be described as cases. Part D
 retains the publisher's suppression of small cells.
 
+The optional clinical browse hierarchy is a versioned reference augmentation of this same sidecar:
+CMS RBCS families for procedures and NLM RxClass ATC/EPC classes for drugs. It does not change the
+fact grain or the explicit search basket contract. See `docs/utilization-taxonomy.md`.
+
 ## Routes
 
 - `GET /utilization/procedures/options?q=33249&limit=10`
