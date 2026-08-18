@@ -237,7 +237,7 @@ def test_drug_class_browse_rolls_leaf_members_into_atc_parent():
     payload = browse.json()
     assert payload["source"] == "ATC"
     assert payload["attribution"].startswith("This product uses publicly available data")
-    assert {row["class_id"] for row in payload["results"]} == {"B", "B01", "B01AF"}
+    assert [row["class_id"] for row in payload["results"]] == ["B01AF", "B01", "B"]
     assert detail.status_code == 200
     assert detail.json()["members"][0]["generic"] == "Apixaban"
     assert detail.json()["members"][0]["brands"] == ["Eliquis"]

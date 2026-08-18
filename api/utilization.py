@@ -502,9 +502,10 @@ def get_utilization_router(get_conn):
             select *, count(*) over () total_matches from classes
             order by case when lower(class_name)=? then 0
                           when lower(class_name) like ? then 1 else 2 end,
-                     hierarchy_level, total_claims desc, class_name, class_id limit ?
+                     case when ?='' then hierarchy_level else -hierarchy_level end,
+                     total_claims desc, class_name, class_id limit ?
             """,
-            [*params, needle, f"{needle}%", limit],
+            [*params, needle, f"{needle}%", needle, limit],
         )
         rows = _rows(cursor)
         total = int(rows[0].pop("total_matches")) if rows else 0
