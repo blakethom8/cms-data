@@ -119,6 +119,18 @@ def test_match_score_rejects_single_ingredient_to_combination() -> None:
         95,
         "salt_normalized",
     )
+
+
+def test_rxclass_version_reads_live_response_shape(monkeypatch) -> None:
+    monkeypatch.setattr(
+        utilization_taxonomy,
+        "_fetch_json",
+        lambda _url: {"relaSourceVersion": "2026_01_28"},
+    )
+
+    assert utilization_taxonomy._rxclass_version("https://example.test", "ATC") == (
+        "2026_01_28"
+    )
     assert (
         utilization_taxonomy.match_score(
             "Atorvastatin Calcium", "amlodipine / atorvastatin"

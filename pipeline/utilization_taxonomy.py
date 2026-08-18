@@ -258,7 +258,7 @@ def _parse_rbcs(path: Path) -> tuple[list[dict], str]:
 
 def _rxclass_version(base_url: str, source: str) -> str:
     payload = _fetch_json(f"{base_url}/version/{source}.json")
-    version = payload.get("rxclassVersion")
+    version = payload.get("relaSourceVersion")
     if not isinstance(version, str) or not version.strip():
         raise TaxonomyError(f"RxClass did not report a {source} version")
     return version.strip()
