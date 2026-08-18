@@ -512,7 +512,8 @@ def _validate_taxonomy(
         "invalid_drug_members": _scalar(
             connection,
             "SELECT count(*) FROM utilization_drug_class_members "
-            "WHERE match_score NOT IN (95, 100) OR nullif(trim(generic_name), '') IS NULL",
+            "WHERE match_score NOT IN (90, 95, 100) "
+            "OR nullif(trim(generic_name), '') IS NULL",
         ),
     }
     failed = {name: value for name, value in checks.items() if value != 0}

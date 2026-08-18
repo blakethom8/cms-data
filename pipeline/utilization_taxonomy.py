@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import difflib
 import hashlib
 import json
 import os
@@ -28,6 +29,7 @@ RBCS_URL = (
 )
 RXCLASS_BASE_URL = "https://rxnav.nlm.nih.gov/REST/rxclass"
 RXCLASS_SOURCES = ("ATC", "FDASPL")
+MIN_ATC_CLAIM_COVERAGE_PCT = 90.0
 SALT_WORDS = frozenset(
     {
         "acetate",
@@ -39,6 +41,7 @@ SALT_WORDS = frozenset(
         "fumarate",
         "hydrobromide",
         "hydrochloride",
+        "hcl",
         "lactate",
         "maleate",
         "mesylate",
@@ -48,6 +51,14 @@ SALT_WORDS = frozenset(
         "succinate",
         "sulfate",
         "tartrate",
+        "bisulfate",
+        "hyclate",
+        "oxalate",
+        "propanediol",
+        "propionate",
+        "hum",
+        "rec",
+        "anlog",
     }
 )
 
@@ -283,6 +294,130 @@ def _cached_drug_lookup(
     return payload
 
 
+def _cached_url(cache_root: Path, namespace: str, key: str, url: str) -> dict:
+    identity = hashlib.sha256(key.encode()).hexdigest()
+    path = cache_root / namespace / f"{identity}.json"
+    if path.is_file():
+        return _load_json(path, f"cached {namespace} lookup")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = _fetch_json(url)
+    _write_json(path, payload)
+    return payload
+
+
+def _related_concepts(payload: dict) -> list[dict]:
+    groups = payload.get("relatedGroup", {}).get("conceptGroup", [])
+    values: list[dict] = []
+    for group in groups if isinstance(groups, list) else []:
+        if not isinstance(group, dict):
+            continue
+        properties = group.get("conceptProperties", []) or []
+        if isinstance(properties, list):
+            values.extend(item for item in properties if isinstance(item, dict))
+    return values
+
+
+def _select_related_target(generic_name: str, concepts: list[dict]) -> dict | None:
+    desired_parts = len(_ingredient_set(generic_name))
+    desired_tty = "MIN" if desired_parts > 1 else "IN"
+    desired_text = " ".join(_normalized_tokens(generic_name, strip_salts=True))
+    ranked: list[tuple[float, dict]] = []
+    for concept in concepts:
+        name = str(concept.get("name", ""))
+        if concept.get("tty") != desired_tty or len(_ingredient_set(name)) != desired_parts:
+            continue
+        candidate_text = " ".join(_normalized_tokens(name, strip_salts=True))
+        similarity = difflib.SequenceMatcher(None, desired_text, candidate_text).ratio()
+        if similarity >= 0.55:
+            ranked.append((similarity, concept))
+    if not ranked:
+        return None
+    return max(ranked, key=lambda item: item[0])[1]
+
+
+def _rxnorm_fallback_lookup(
+    cache_root: Path,
+    rxclass_base_url: str,
+    generic_name: str,
+    source: str,
+) -> tuple[dict, list[str]] | None:
+    rxnorm_base = rxclass_base_url.removesuffix("/rxclass")
+    approximate_query = urllib.parse.urlencode(
+        {"term": generic_name, "maxEntries": 3, "option": 1}
+    )
+    approximate = _cached_url(
+        cache_root,
+        "rxnorm-approximate",
+        generic_name,
+        f"{rxnorm_base}/approximateTerm.json?{approximate_query}",
+    )
+    candidates = approximate.get("approximateGroup", {}).get("candidate", [])
+    if not isinstance(candidates, list):
+        return None
+    top_rxcui = next(
+        (
+            str(item.get("rxcui"))
+            for item in candidates
+            if isinstance(item, dict) and str(item.get("rank")) == "1" and item.get("rxcui")
+        ),
+        None,
+    )
+    if top_rxcui is None:
+        return None
+    related = _cached_url(
+        cache_root,
+        "rxnorm-related",
+        top_rxcui,
+        f"{rxnorm_base}/rxcui/{urllib.parse.quote(top_rxcui)}/related.json?tty=IN+MIN",
+    )
+    related_concepts = _related_concepts(related)
+    target = _select_related_target(generic_name, related_concepts)
+    if target is None or not target.get("rxcui") or not target.get("name"):
+        return None
+    ingredients = [
+        concept
+        for concept in related_concepts
+        if concept.get("tty") == "IN" and concept.get("rxcui") and concept.get("name")
+    ]
+    if not ingredients:
+        return None
+    combined: list[dict] = []
+    for ingredient in ingredients:
+        ingredient_rxcui = str(ingredient["rxcui"])
+        query = urllib.parse.urlencode({"rxcui": ingredient_rxcui, "relaSource": source})
+        payload = _cached_url(
+            cache_root,
+            f"rxclass-by-rxcui-{source.casefold()}",
+            f"{source}\0{ingredient_rxcui}",
+            f"{rxclass_base_url}/class/byRxcui.json?{query}",
+        )
+        combined.extend(_class_rows(payload))
+    return (
+        {"rxclassDrugInfoList": {"rxclassDrugInfo": combined}},
+        [str(ingredient["name"]) for ingredient in ingredients],
+    )
+
+
+def _resolve_drug_lookup(
+    cache_root: Path,
+    base_url: str,
+    generic_name: str,
+    source: str,
+) -> tuple[dict, list[str], str, int]:
+    payload = _cached_drug_lookup(cache_root, base_url, generic_name, source)
+    if any(
+        match_score(generic_name, str(item.get("minConcept", {}).get("name", "")))
+        for item in _class_rows(payload)
+        if isinstance(item, dict)
+    ):
+        return payload, [generic_name], "publisher_name", 100
+    fallback = _rxnorm_fallback_lookup(cache_root, base_url, generic_name, source)
+    if fallback is None:
+        return payload, [generic_name], "publisher_name", 100
+    fallback_payload, target_names = fallback
+    return fallback_payload, target_names, "rxnorm_approximate", 90
+
+
 def _atc_catalog(base_url: str) -> list[dict]:
     payload = _fetch_json(f"{base_url}/allClasses.json?classTypes=ATC1-4")
     concepts = payload.get("rxclassMinConceptList", {}).get("rxclassMinConcept", [])
@@ -334,15 +469,17 @@ def acquire_reference(
 
     connection = duckdb.connect(str(database), read_only=True)
     try:
-        generics = [
-            row[0]
+        generic_claims = {
+            row[0]: int(row[1])
             for row in connection.execute(
-                "SELECT DISTINCT trim(generic_name) FROM utilization_drug_dictionary "
-                "WHERE nullif(trim(generic_name), '') IS NOT NULL ORDER BY 1"
+                "SELECT trim(generic_name), sum(total_claims)::BIGINT "
+                "FROM utilization_drug_dictionary "
+                "WHERE nullif(trim(generic_name), '') IS NOT NULL GROUP BY 1 ORDER BY 1"
             ).fetchall()
-        ]
+        }
     finally:
         connection.close()
+    generics = list(generic_claims)
     if not generics:
         raise TaxonomyError("Source utilization drug dictionary has no generic names")
 
@@ -358,11 +495,11 @@ def acquire_reference(
     }
 
     cache_root = work_root / "rxclass-cache"
-    lookups: dict[tuple[str, str], dict] = {}
+    lookups: dict[tuple[str, str], tuple[dict, list[str], str, int]] = {}
     with ThreadPoolExecutor(max_workers=workers) as executor:
         futures = {
             executor.submit(
-                _cached_drug_lookup, cache_root, rxclass_base_url, generic_name, source
+                _resolve_drug_lookup, cache_root, rxclass_base_url, generic_name, source
             ): (generic_name, source)
             for generic_name in generics
             for source in RXCLASS_SOURCES
@@ -374,10 +511,14 @@ def acquire_reference(
     class_index = {(row["source"], row["class_id"]): row for row in atc_rows}
     member_index: dict[tuple[str, str, str], dict] = {}
     mapped_generics: set[str] = set()
+    mapped_by_source: dict[str, set[str]] = {source: set() for source in RXCLASS_SOURCES}
     for generic_name in generics:
         for source in RXCLASS_SOURCES:
             candidates: list[tuple[int, str, dict]] = []
-            for item in _class_rows(lookups[(generic_name, source)]):
+            payload, target_names, resolution_method, resolution_score = lookups[
+                (generic_name, source)
+            ]
+            for item in _class_rows(payload):
                 if not isinstance(item, dict):
                     continue
                 concept = item.get("minConcept", {})
@@ -386,7 +527,19 @@ def acquire_reference(
                     continue
                 if source == "FDASPL" and class_item.get("classType") != "EPC":
                     continue
-                matched = match_score(generic_name, str(concept.get("name", "")))
+                matched = next(
+                    (
+                        score
+                        for target_name in target_names
+                        if (
+                            score := match_score(
+                                target_name, str(concept.get("name", ""))
+                            )
+                        )
+                        is not None
+                    ),
+                    None,
+                )
                 if matched is None:
                     continue
                 score, method = matched
@@ -423,11 +576,14 @@ def acquire_reference(
                     "rxcui": str(concept.get("rxcui", "")),
                     "concept_name": str(concept.get("name", "")),
                     "concept_tty": str(concept.get("tty", "")),
-                    "match_score": score,
-                    "match_method": method,
+                    "match_score": min(score, resolution_score),
+                    "match_method": (
+                        resolution_method if resolution_method != "publisher_name" else method
+                    ),
                     "source_version": versions[source],
                 }
                 mapped_generics.add(generic_name)
+                mapped_by_source[source].add(generic_name)
 
     class_rows = sorted(class_index.values(), key=lambda row: (row["source"], row["class_id"]))
     member_rows = sorted(
@@ -436,6 +592,22 @@ def acquire_reference(
     )
     if not member_rows:
         raise TaxonomyError("RxClass mapping produced no accepted drug class members")
+    total_claims = sum(generic_claims.values())
+    claim_coverage = {
+        source: round(
+            100.0
+            * sum(generic_claims[name] for name in mapped_by_source[source])
+            / total_claims,
+            2,
+        )
+        for source in RXCLASS_SOURCES
+    }
+    if claim_coverage["ATC"] < MIN_ATC_CLAIM_COVERAGE_PCT:
+        raise TaxonomyError(
+            "ATC mapping covers only "
+            f"{claim_coverage['ATC']}% of Part D claims; "
+            f"minimum is {MIN_ATC_CLAIM_COVERAGE_PCT}%"
+        )
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     identity = hashlib.sha256(
@@ -472,6 +644,10 @@ def acquire_reference(
                 "query_count": len(generics) * len(RXCLASS_SOURCES),
                 "mapped_generic_count": len(mapped_generics),
                 "unmapped_generic_count": len(generics) - len(mapped_generics),
+                "mapped_generic_count_by_source": {
+                    source: len(values) for source, values in mapped_by_source.items()
+                },
+                "claim_coverage_pct_by_source": claim_coverage,
                 "class_count": len(class_rows),
                 "member_count": len(member_rows),
             },
@@ -499,6 +675,7 @@ def acquire_reference(
         "member_count": len(member_rows),
         "mapped_generic_count": len(mapped_generics),
         "unmapped_generic_count": len(generics) - len(mapped_generics),
+        "claim_coverage_pct_by_source": claim_coverage,
     }
 
 

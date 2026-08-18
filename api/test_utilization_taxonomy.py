@@ -119,18 +119,6 @@ def test_match_score_rejects_single_ingredient_to_combination() -> None:
         95,
         "salt_normalized",
     )
-
-
-def test_rxclass_version_reads_live_response_shape(monkeypatch) -> None:
-    monkeypatch.setattr(
-        utilization_taxonomy,
-        "_fetch_json",
-        lambda _url: {"relaSourceVersion": "2026_01_28"},
-    )
-
-    assert utilization_taxonomy._rxclass_version("https://example.test", "ATC") == (
-        "2026_01_28"
-    )
     assert (
         utilization_taxonomy.match_score(
             "Atorvastatin Calcium", "amlodipine / atorvastatin"
@@ -139,12 +127,43 @@ def test_rxclass_version_reads_live_response_shape(monkeypatch) -> None:
     )
 
 
+def test_rxclass_version_reads_live_response_shape(monkeypatch) -> None:
+    monkeypatch.setattr(
+        utilization_taxonomy,
+        "_fetch_json",
+        lambda _url: {"relaSourceVersion": "2026_01_28"},
+    )
+    assert utilization_taxonomy._rxclass_version("https://example.test", "ATC") == (
+        "2026_01_28"
+    )
+
+
+def test_related_target_normalizes_truncated_publisher_combinations() -> None:
+    concepts = [
+        {"tty": "IN", "rxcui": "41126", "name": "fluticasone"},
+        {
+            "tty": "MIN",
+            "rxcui": "1945038",
+            "name": "fluticasone / umeclidinium / vilanterol",
+        },
+        {"tty": "MIN", "rxcui": "19711", "name": "amoxicillin / clavulanate"},
+    ]
+
+    assert utilization_taxonomy._select_related_target(
+        "Fluticasone/Umeclidin/Vilanter", concepts
+    ) == concepts[1]
+    assert utilization_taxonomy._select_related_target(
+        "Amoxicillin/Potassium Clav", concepts
+    ) == concepts[2]
+    assert utilization_taxonomy._select_related_target("Metformin Hcl", concepts) is None
+
 def test_acquire_seals_current_rbcs_and_conservative_drug_mappings(
     tmp_path: Path, monkeypatch
 ) -> None:
     database, source_manifest = _source(tmp_path)
     monkeypatch.setattr(utilization_taxonomy, "_download", _rbcs_download)
     monkeypatch.setattr(utilization_taxonomy, "_cached_drug_lookup", _lookup)
+    monkeypatch.setattr(utilization_taxonomy, "_rxnorm_fallback_lookup", lambda *_args: None)
     monkeypatch.setattr(
         utilization_taxonomy,
         "_atc_catalog",
