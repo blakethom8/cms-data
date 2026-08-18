@@ -1,8 +1,9 @@
 # CMS API systemd release layout
 
-> **Last reviewed: 2026-07-22** · **Status: current production service and monitor layout**
+> **Last reviewed: 2026-08-18** · **Status: current production service and monitor layout**
 
-`cms-api.service` reads code, warehouse, and runtime through one atomic `release-current` bundle
+`cms-api.service` reads code, warehouse, runtime, and an optional independent utilization sidecar
+through one atomic `release-current` bundle
 managed by `python -m pipeline.production`. Its root-run startup check rejects a pending transition,
 a mismatched ledger, or changed artifacts before the API process starts. Secrets remain outside Git in
 `/etc/cms-data/cms-api.env`; AACT read-only credentials remain in `/etc/aact/reader.env`; and the
@@ -17,8 +18,10 @@ smoke contract without exposing Uvicorn on a public or Docker interface. See
 `docs/operations/cms-private-network-runbook.md` for installation and rollback.
 
 The checked-in `production-release.env` also binds the measured DuckDB executor settings to the
-serving artifact. The current candidate values are pool size `2`, DuckDB threads `8`, a 4-second
-acquisition deadline, and a `2GB` DuckDB memory limit. Rehearsals must load this exact file after the
+serving artifact. The main warehouse values are pool size `2`, DuckDB threads `8`, a 4-second
+acquisition deadline, and a `2GB` DuckDB memory limit. The utilization sidecar has its own pool size
+`2`, DuckDB threads `4`, 4-second acquisition deadline, and `2GB` memory limit. Rehearsals must load
+this exact file after the
 secret environment files. Installing it under `/etc/cms-data/` and restarting the service remain
 cutover actions; merging or preparing a bundle does neither.
 

@@ -1,6 +1,6 @@
 # Production Cutover Runbook
 
-> **Last reviewed: 2026-07-22** · **Status: current approval-gated production procedure**
+> **Last reviewed: 2026-08-18** · **Status: current approval-gated production procedure**
 
 ## Scope
 
@@ -16,6 +16,7 @@ The cutover unit is one bundle:
     code/<code-id>/
     runtimes/<runtime-id>/
     warehouses/<warehouse-id>/warehouse.duckdb
+    utilization/<utilization-id>/utilization.duckdb   # optional independent sidecar
   production-ops/
     <ops-id>/                            immutable control and smoke code
     current -> <ops-id>
@@ -24,6 +25,7 @@ The cutover unit is one bundle:
       code -> production-artifacts/code/<code-id>
       runtime -> production-artifacts/runtimes/<runtime-id>
       warehouse -> production-artifacts/warehouses/<warehouse-id>/warehouse.duckdb
+      utilization -> production-artifacts/utilization/<utilization-id>/utilization.duckdb
     release-current -> releases/<deployment-id>
     deployments.json
     deployment-journal.json
@@ -32,7 +34,8 @@ The cutover unit is one bundle:
 ```
 
 `release-current` is the only serving selector. Activation and rollback replace that symlink once;
-the three internal artifact links never change. The API user can read but cannot modify the control
+the internal artifact links never change. `utilization` is optional so older rollback bundles
+remain valid. The API user can read but cannot modify the control
 tree or artifacts. All manager and cutover commands run as root from `production-ops/current`, not
 from the selected application runtime.
 
@@ -150,6 +153,9 @@ Stop the temporary process without touching the live service.
   --runtime-path /srv/cms-data-platform/production-artifacts/runtimes/CANDIDATE_RUNTIME_ID \
   --warehouse-path /srv/cms-data-platform/production-artifacts/warehouses/CANDIDATE_WAREHOUSE_ID/warehouse.duckdb \
   --warehouse-release-id WAREHOUSE_RELEASE_ID \
+  --utilization-data-root /mnt/UTILIZATION_VOLUME/cms-data-utilization \
+  --utilization-path /srv/cms-data-platform/production-artifacts/utilization/UTILIZATION_RELEASE_ID/utilization.duckdb \
+  --utilization-release-id UTILIZATION_RELEASE_ID \
   --dry-run --json
 ```
 
@@ -162,6 +168,13 @@ The smoke key must resolve to a named consumer authorized by `CMS_QUERY_CONSUMER
 the bounded warehouse-count query. Load the named key from the protected environment into
 `CMS_SMOKE_API_KEY` without printing it, and pass `--api-key-env CMS_SMOKE_API_KEY` to rehearsal and
 cutover.
+
+The three utilization arguments are all-or-none. Before `prepare`, independently run
+`pipeline.utilization_releases verify`, copy the sidecar to a distinct production inode, confirm its
+sealed manifest SHA-256 and byte size, and set the copy to `root:dataops` mode `0440`. The smoke
+runner detects the bundle's `utilization` link automatically; a sidecar deployment cannot verify if
+the process does not have that exact file open or any of the four utilization contract checks are
+skipped.
 
 Targeted release manifests must retain the baseline's query-authorized `smoke_table_counts` even
 when their own `table_counts` contains only changed tables. Do not add raw or serving-only tables to

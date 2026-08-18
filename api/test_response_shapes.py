@@ -141,3 +141,22 @@ def test_detects_a_changed_field_type(current_shapes: dict) -> None:
     changed, removed, added = compare(recorded, with_new)
     assert not changed and not removed, "adding an operation must not require a bump"
     assert "GET /brand-new" in added
+
+
+def test_utilization_database_path_prefers_bundle_sidecar_and_preserves_rollback(
+    tmp_path, monkeypatch
+) -> None:
+    warehouse = tmp_path / "warehouse"
+    warehouse.write_bytes(b"warehouse")
+    monkeypatch.delenv("UTILIZATION_DUCKDB_PATH", raising=False)
+
+    assert main._resolve_utilization_db_path(str(warehouse)) == str(warehouse)
+
+    utilization = tmp_path / "utilization"
+    utilization.write_bytes(b"sidecar")
+    assert main._resolve_utilization_db_path(str(warehouse)) == str(utilization)
+
+    monkeypatch.setenv("UTILIZATION_DUCKDB_PATH", "/explicit/utilization.duckdb")
+    assert main._resolve_utilization_db_path(str(warehouse)) == (
+        "/explicit/utilization.duckdb"
+    )

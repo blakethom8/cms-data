@@ -19,6 +19,9 @@ LEGACY_BYTES = b"legacy warehouse"
 CANDIDATE_BYTES = b"candidate warehouse"
 LEGACY_SHA = hashlib.sha256(LEGACY_BYTES).hexdigest()
 CANDIDATE_SHA = hashlib.sha256(CANDIDATE_BYTES).hexdigest()
+UTILIZATION_RELEASE_ID = "utilization-20260818T120000Z-abcdef1234"
+UTILIZATION_BYTES = b"independent utilization database"
+UTILIZATION_SHA = hashlib.sha256(UTILIZATION_BYTES).hexdigest()
 
 
 @pytest.fixture(autouse=True)
@@ -213,6 +216,115 @@ def _write_release(
         comparison["unchanged_table_count"] = 42
     (release_dir / "release.json").write_text(json.dumps(release))
     (release_dir / "comparison.json").write_text(json.dumps(comparison))
+
+
+def _write_utilization_release(paths: dict[str, Path]) -> tuple[Path, Path]:
+    data_root = paths["production"].parent / "utilization-staging"
+    release_dir = data_root / "utilization-releases" / UTILIZATION_RELEASE_ID
+    staging = _write_immutable(
+        release_dir / "utilization.duckdb", UTILIZATION_BYTES
+    )
+    production_copy = _write_immutable(
+        paths["artifacts"]
+        / "utilization"
+        / UTILIZATION_RELEASE_ID
+        / "utilization.duckdb",
+        UTILIZATION_BYTES,
+    )
+    release = {
+        "schema_version": 1,
+        "release": {
+            "utilization_release_id": UTILIZATION_RELEASE_ID,
+            "pipeline_code_commit": COMMIT,
+            "database_path": (
+                f"utilization-releases/{UTILIZATION_RELEASE_ID}/utilization.duckdb"
+            ),
+            "validation_state": "passed",
+            "byte_size": staging.stat().st_size,
+            "sha256": UTILIZATION_SHA,
+        },
+    }
+    comparison = {
+        "schema_version": 1,
+        "utilization_release_id": UTILIZATION_RELEASE_ID,
+        "pipeline_code_commit": COMMIT,
+        "comparison_policy": "independent_utilization_v1",
+        "state": "passed",
+        "failed_requirements": [],
+        "unexpected_differences": [],
+        "evidence_mismatches": [],
+    }
+    (release_dir / "release.json").write_text(json.dumps(release))
+    (release_dir / "comparison.json").write_text(json.dumps(comparison))
+    return data_root, production_copy
+
+
+def test_prepare_bundles_independently_validated_utilization_artifact(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paths, _ = _bootstrap_verified(tmp_path, monkeypatch)
+    _write_release(paths)
+    utilization_root, utilization_copy = _write_utilization_release(paths)
+
+    deployment = production.prepare_release(
+        paths["production"],
+        paths["artifacts"],
+        paths["data"],
+        paths["candidate_code"],
+        paths["candidate_runtime"],
+        paths["candidate_db"],
+        RELEASE_ID,
+        utilization_data_root=utilization_root,
+        utilization_path=utilization_copy,
+        utilization_release_id=UTILIZATION_RELEASE_ID,
+    )
+
+    assert deployment.utilization_release_id == UTILIZATION_RELEASE_ID
+    assert deployment.utilization_sha256 == UTILIZATION_SHA
+    assert deployment.targets.utilization == str(utilization_copy.resolve())
+    bundle = paths["production"] / "releases" / deployment.deployment_id
+    assert (bundle / "utilization").resolve() == utilization_copy.resolve()
+
+    production.activate_release(paths["production"], deployment.deployment_id)
+    with pytest.raises(production.ProductionError, match="process identity"):
+        production.verify_release(
+            paths["production"],
+            deployment.deployment_id,
+            _write_evidence(paths, deployment),
+        )
+
+
+def test_prepare_rejects_failed_utilization_comparison(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paths, _ = _bootstrap_verified(tmp_path, monkeypatch)
+    _write_release(paths)
+    utilization_root, utilization_copy = _write_utilization_release(paths)
+    comparison_path = (
+        utilization_root
+        / "utilization-releases"
+        / UTILIZATION_RELEASE_ID
+        / "comparison.json"
+    )
+    comparison = json.loads(comparison_path.read_text())
+    comparison["state"] = "failed"
+    comparison_path.write_text(json.dumps(comparison))
+
+    with pytest.raises(production.ProductionError, match="comparison evidence"):
+        production.prepare_release(
+            paths["production"],
+            paths["artifacts"],
+            paths["data"],
+            paths["candidate_code"],
+            paths["candidate_runtime"],
+            paths["candidate_db"],
+            RELEASE_ID,
+            utilization_data_root=utilization_root,
+            utilization_path=utilization_copy,
+            utilization_release_id=UTILIZATION_RELEASE_ID,
+        )
 
 
 @pytest.mark.parametrize(

@@ -34,7 +34,9 @@ TRANSITION_SENTINEL = "transition-pending"
 BUNDLE_CODE = "code"
 BUNDLE_WAREHOUSE = "warehouse"
 BUNDLE_RUNTIME = "runtime"
-BUNDLE_NAMES = (BUNDLE_CODE, BUNDLE_WAREHOUSE, BUNDLE_RUNTIME)
+BUNDLE_UTILIZATION = "utilization"
+BUNDLE_REQUIRED_NAMES = (BUNDLE_CODE, BUNDLE_WAREHOUSE, BUNDLE_RUNTIME)
+BUNDLE_OPTIONAL_NAMES = (BUNDLE_UTILIZATION,)
 BLOCKING_JOURNAL_STATES = {"pending", "recovery_required"}
 TERMINAL_JOURNAL_STATES = {"completed", "failed", "recovered"}
 MAX_EVIDENCE_AGE = timedelta(minutes=15)
@@ -56,6 +58,10 @@ REQUIRED_VERIFICATION_CHECKS = {
     "explorer_catalog",
     "required_tables",
     "warehouse_counts",
+    "utilization_procedure_options",
+    "utilization_procedure_search",
+    "utilization_drug_options",
+    "utilization_drug_search",
 }
 
 
@@ -77,13 +83,17 @@ class ReleaseTargets:
     code: str
     warehouse: str
     runtime: str
+    utilization: str | None = None
 
     def to_bundle_map(self) -> dict[str, str]:
-        return {
+        targets = {
             BUNDLE_CODE: self.code,
             BUNDLE_WAREHOUSE: self.warehouse,
             BUNDLE_RUNTIME: self.runtime,
         }
+        if self.utilization is not None:
+            targets[BUNDLE_UTILIZATION] = self.utilization
+        return targets
 
 
 @dataclass
@@ -101,6 +111,10 @@ class ProductionDeployment:
     code_commit: str | None = None
     warehouse_release_id: str | None = None
     warehouse_pipeline_commit: str | None = None
+    utilization_release_id: str | None = None
+    utilization_pipeline_commit: str | None = None
+    utilization_sha256: str | None = None
+    utilization_byte_size: int | None = None
     previous_deployment_id: str | None = None
     selected_at: str | None = None
     verified_at: str | None = None
@@ -132,6 +146,14 @@ class ProductionDeployment:
                 code_commit=value.get("code_commit"),
                 warehouse_release_id=value.get("warehouse_release_id"),
                 warehouse_pipeline_commit=value.get("warehouse_pipeline_commit"),
+                utilization_release_id=value.get("utilization_release_id"),
+                utilization_pipeline_commit=value.get("utilization_pipeline_commit"),
+                utilization_sha256=value.get("utilization_sha256"),
+                utilization_byte_size=(
+                    int(value["utilization_byte_size"])
+                    if value.get("utilization_byte_size") is not None
+                    else None
+                ),
                 previous_deployment_id=value.get("previous_deployment_id"),
                 selected_at=value.get("selected_at"),
                 verified_at=value.get("verified_at"),
@@ -709,6 +731,85 @@ def _validate_warehouse_release(
     return production_warehouse, release
 
 
+def _validate_utilization_release(
+    data_root: Path,
+    utilization_release_id: str,
+    production_utilization: Path,
+    artifact_root: Path,
+) -> tuple[Path, dict]:
+    """Require an independently validated and copied utilization artifact."""
+    data_root = _canonical_directory(data_root, "utilization data root")
+    artifact_root = _canonical_directory(artifact_root, "production artifact root")
+    if artifact_root.is_relative_to(data_root) or data_root.is_relative_to(artifact_root):
+        raise ProductionError(
+            "Production artifacts and utilization staging must use disjoint roots"
+        )
+    if not re.fullmatch(
+        r"utilization-[0-9]{8}T[0-9]{6}Z-[a-f0-9]{10}", utilization_release_id
+    ):
+        raise ProductionError(f"Invalid utilization release ID: {utilization_release_id!r}")
+    release_dir = data_root / "utilization-releases" / utilization_release_id
+    if release_dir.is_symlink() or release_dir.resolve(strict=True) != release_dir:
+        raise ProductionError("Utilization release directory is not canonical")
+    document = _load_json(release_dir / "release.json", "utilization release")
+    if document.get("schema_version") != 1:
+        raise ProductionError("Unsupported utilization release schema version")
+    release = document.get("release")
+    if not isinstance(release, dict):
+        raise ProductionError("Utilization release document is missing release data")
+    if release.get("utilization_release_id") != utilization_release_id:
+        raise ProductionError("Utilization release ID does not match its directory")
+    if release.get("validation_state") != "passed":
+        raise ProductionError("Utilization release validation has not passed")
+    pipeline_commit = release.get("pipeline_code_commit")
+    if not isinstance(pipeline_commit, str) or not re.fullmatch(
+        r"[0-9a-f]{40}", pipeline_commit
+    ):
+        raise ProductionError("Utilization release has an invalid pipeline commit")
+    canonical_relative = (
+        Path("utilization-releases") / utilization_release_id / "utilization.duckdb"
+    )
+    if Path(str(release.get("database_path", ""))) != canonical_relative:
+        raise ProductionError("Utilization release database path is not canonical")
+    staging_database = data_root / canonical_relative
+    if staging_database.is_symlink() or not staging_database.is_file():
+        raise ProductionError("Staging utilization database is not a regular file")
+    expected_size = int(release.get("byte_size", -1))
+    expected_sha = str(release.get("sha256", ""))
+    if expected_size <= 0 or not re.fullmatch(r"[0-9a-f]{64}", expected_sha):
+        raise ProductionError("Utilization release identity evidence is invalid")
+    if staging_database.stat().st_size != expected_size:
+        raise ProductionError("Utilization byte size does not match release evidence")
+    if sha256_file(staging_database) != expected_sha:
+        raise ProductionError("Utilization SHA-256 does not match release evidence")
+    comparison = _load_json(release_dir / "comparison.json", "utilization comparison")
+    safety_fields = (
+        comparison.get("failed_requirements"),
+        comparison.get("unexpected_differences"),
+        comparison.get("evidence_mismatches"),
+    )
+    if (
+        comparison.get("schema_version") != 1
+        or comparison.get("utilization_release_id") != utilization_release_id
+        or comparison.get("pipeline_code_commit") != pipeline_commit
+        or comparison.get("comparison_policy") != "independent_utilization_v1"
+        or comparison.get("state") != "passed"
+        or any(value != [] for value in safety_fields)
+    ):
+        raise ProductionError("Utilization comparison evidence is invalid")
+    target_details = _require_immutable_file(
+        production_utilization, artifact_root, "production utilization target"
+    )
+    production_utilization = production_utilization.resolve(strict=True)
+    if production_utilization.samefile(staging_database):
+        raise ProductionError("Production utilization database must be an independent copy")
+    if target_details.st_size != expected_size:
+        raise ProductionError("Production utilization copy has the wrong byte size")
+    if sha256_file(production_utilization) != expected_sha:
+        raise ProductionError("Production utilization copy SHA-256 does not match")
+    return production_utilization, release
+
+
 def _state_path(root: Path) -> Path:
     return root / "deployments.json"
 
@@ -755,6 +856,31 @@ def _validate_deployment(deployment: ProductionDeployment) -> None:
         raise ProductionError("Production deployment has an invalid warehouse SHA-256")
     if deployment.warehouse_byte_size <= 0:
         raise ProductionError("Production deployment has an invalid warehouse byte size")
+    utilization_fields = (
+        deployment.targets.utilization,
+        deployment.utilization_release_id,
+        deployment.utilization_pipeline_commit,
+        deployment.utilization_sha256,
+        deployment.utilization_byte_size,
+    )
+    if any(value is not None for value in utilization_fields):
+        if not all(value is not None for value in utilization_fields):
+            raise ProductionError("Production deployment has incomplete utilization metadata")
+        if not re.fullmatch(
+            r"utilization-[0-9]{8}T[0-9]{6}Z-[a-f0-9]{10}",
+            deployment.utilization_release_id or "",
+        ):
+            raise ProductionError("Production deployment has an invalid utilization release ID")
+        if not re.fullmatch(
+            r"[0-9a-f]{40}", deployment.utilization_pipeline_commit or ""
+        ):
+            raise ProductionError("Production deployment has an invalid utilization commit")
+        if not re.fullmatch(r"[0-9a-f]{64}", deployment.utilization_sha256 or ""):
+            raise ProductionError("Production deployment has an invalid utilization SHA-256")
+        if not isinstance(deployment.utilization_byte_size, int) or (
+            deployment.utilization_byte_size <= 0
+        ):
+            raise ProductionError("Production deployment has an invalid utilization byte size")
     for fingerprint in (deployment.code_fingerprint, deployment.runtime_fingerprint):
         if not re.fullmatch(r"sha256:[0-9a-f]{64}", fingerprint):
             raise ProductionError("Production deployment has an invalid artifact fingerprint")
@@ -949,8 +1075,14 @@ def _read_bundle_targets(bundle: Path) -> dict[str, str]:
     if bundle.is_symlink() or not bundle.is_dir():
         raise ProductionError(f"Release bundle is not a directory: {bundle}")
     values: dict[str, str] = {}
-    for name in BUNDLE_NAMES:
+    entries = {entry.name for entry in bundle.iterdir()}
+    allowed = set(BUNDLE_REQUIRED_NAMES) | set(BUNDLE_OPTIONAL_NAMES)
+    if not entries.issubset(allowed):
+        raise ProductionError("Release bundle contains unexpected entries")
+    for name in BUNDLE_REQUIRED_NAMES + BUNDLE_OPTIONAL_NAMES:
         link = bundle / name
+        if name in BUNDLE_OPTIONAL_NAMES and not link.exists() and not link.is_symlink():
+            continue
         if not link.is_symlink():
             raise ProductionError(f"Release bundle is missing symlink: {link}")
         try:
@@ -1102,6 +1234,15 @@ def _validate_targets(deployment: ProductionDeployment) -> None:
         raise ProductionError("Warehouse target byte size changed after preparation")
     if sha256_file(warehouse) != deployment.warehouse_sha256:
         raise ProductionError("Warehouse target SHA-256 changed after preparation")
+    if deployment.targets.utilization is not None:
+        utilization = Path(deployment.targets.utilization)
+        utilization_details = _require_immutable_file(
+            utilization, artifact_root, "utilization target"
+        )
+        if utilization_details.st_size != deployment.utilization_byte_size:
+            raise ProductionError("Utilization target byte size changed after preparation")
+        if sha256_file(utilization) != deployment.utilization_sha256:
+            raise ProductionError("Utilization target SHA-256 changed after preparation")
     runtime_fingerprint = _inspect_runtime(runtime, artifact_root, None)
     if runtime_fingerprint != deployment.runtime_fingerprint:
         raise ProductionError("Runtime target fingerprint changed after preparation")
@@ -1278,6 +1419,9 @@ def _prepare_validation(
     runtime_path: Path,
     warehouse_path: Path,
     warehouse_release_id: str,
+    utilization_data_root: Path | None = None,
+    utilization_path: Path | None = None,
+    utilization_release_id: str | None = None,
 ) -> tuple[ProductionDeployment, dict, list[ProductionDeployment]]:
     production_root = _canonical_control_root(production_root)
     artifact_root = _canonical_directory(artifact_root, "production artifact root")
@@ -1298,11 +1442,33 @@ def _prepare_validation(
     runtime_fingerprint = _inspect_runtime(
         runtime_path, artifact_root, release.get("duckdb_version")
     )
+    utilization_values = (
+        utilization_data_root,
+        utilization_path,
+        utilization_release_id,
+    )
+    if any(value is not None for value in utilization_values) and not all(
+        value is not None for value in utilization_values
+    ):
+        raise ProductionError("Utilization preparation arguments must be supplied together")
+    utilization_release = None
+    if utilization_path is not None:
+        utilization_path, utilization_release = _validate_utilization_release(
+            utilization_data_root,
+            utilization_release_id,
+            utilization_path,
+            artifact_root,
+        )
     deployment = ProductionDeployment(
         deployment_id=_new_id("deployment"),
         deployment_kind="warehouse_release",
         state=DeploymentState.PREPARED,
-        targets=ReleaseTargets(str(code_path), str(warehouse_path), str(runtime_path)),
+        targets=ReleaseTargets(
+            str(code_path),
+            str(warehouse_path),
+            str(runtime_path),
+            str(utilization_path) if utilization_path is not None else None,
+        ),
         artifact_root=str(artifact_root),
         warehouse_sha256=release["sha256"],
         warehouse_byte_size=warehouse_path.stat().st_size,
@@ -1312,6 +1478,20 @@ def _prepare_validation(
         code_commit=code_commit,
         warehouse_release_id=warehouse_release_id,
         warehouse_pipeline_commit=release.get("pipeline_code_commit"),
+        utilization_release_id=utilization_release_id,
+        utilization_pipeline_commit=(
+            utilization_release.get("pipeline_code_commit")
+            if utilization_release is not None
+            else None
+        ),
+        utilization_sha256=(
+            utilization_release.get("sha256")
+            if utilization_release is not None
+            else None
+        ),
+        utilization_byte_size=(
+            utilization_path.stat().st_size if utilization_path is not None else None
+        ),
         previous_deployment_id=active.deployment_id,
     )
     return deployment, document, deployments
@@ -1326,6 +1506,9 @@ def prepare_release(
     warehouse_path: Path,
     warehouse_release_id: str,
     *,
+    utilization_data_root: Path | None = None,
+    utilization_path: Path | None = None,
+    utilization_release_id: str | None = None,
     dry_run: bool = False,
 ) -> ProductionDeployment:
     deployment, _, _ = _prepare_validation(
@@ -1336,6 +1519,9 @@ def prepare_release(
         runtime_path,
         warehouse_path,
         warehouse_release_id,
+        utilization_data_root,
+        utilization_path,
+        utilization_release_id,
     )
     if dry_run:
         return deployment
@@ -1349,6 +1535,9 @@ def prepare_release(
             runtime_path,
             warehouse_path,
             warehouse_release_id,
+            utilization_data_root,
+            utilization_path,
+            utilization_release_id,
         )
         _create_bundle(production_root, deployment)
         deployments.append(deployment)
@@ -1440,6 +1629,28 @@ def _validate_evidence(
         raise ProductionError("Verification evidence has malformed check names")
     if len(names) != len(set(names)) or not REQUIRED_VERIFICATION_CHECKS.issubset(set(names)):
         raise ProductionError("Verification evidence is missing canonical checks")
+    checks_by_name = {item["name"]: item for item in checks}
+    if deployment.targets.utilization is not None:
+        utilization_names = {
+            "utilization_procedure_options",
+            "utilization_procedure_search",
+            "utilization_drug_options",
+            "utilization_drug_search",
+        }
+        if any(
+            checks_by_name[name].get("summary", {}).get("applicability")
+            == "not_applicable"
+            for name in utilization_names
+        ):
+            raise ProductionError("Utilization verification checks were not exercised")
+        process_summary = checks_by_name["process_identity"].get("summary", {})
+        if (
+            process_summary.get("utilization_expected") is not True
+            or process_summary.get("utilization_open") is not True
+        ):
+            raise ProductionError(
+                "Verification evidence did not prove utilization process identity"
+            )
     parsed_url = urlsplit(str(evidence.get("base_url", "")))
     try:
         evidence_port = parsed_url.port
@@ -1712,6 +1923,9 @@ def production_status(root: Path) -> dict:
         "selected_state": selected.state.value if selected else None,
         "selected_code_commit": selected.code_commit if selected else None,
         "selected_warehouse_release_id": selected.warehouse_release_id if selected else None,
+        "selected_utilization_release_id": (
+            selected.utilization_release_id if selected else None
+        ),
         "last_verified_at": selected.verified_at if selected else None,
         "bundle_path": str(bundle) if bundle else None,
         "pointer_matches_ledger": pointer_match,
@@ -1752,6 +1966,11 @@ def _print_result(value: object, as_json: bool) -> None:
         print(f"State: {value.state.value}")
         print(f"Code: {value.code_commit or value.targets.code}")
         print(f"Warehouse: {value.warehouse_release_id or value.targets.warehouse}")
+        if value.targets.utilization:
+            print(
+                "Utilization: "
+                f"{value.utilization_release_id or value.targets.utilization}"
+            )
     else:
         print(json.dumps(value, indent=2, sort_keys=True))
 
@@ -1786,6 +2005,9 @@ def build_parser() -> argparse.ArgumentParser:
     prepare.add_argument("--runtime-path", type=Path, required=True)
     prepare.add_argument("--warehouse-path", type=Path, required=True)
     prepare.add_argument("--warehouse-release-id", required=True)
+    prepare.add_argument("--utilization-data-root", type=Path)
+    prepare.add_argument("--utilization-path", type=Path)
+    prepare.add_argument("--utilization-release-id")
     prepare.add_argument("--dry-run", action="store_true")
     prepare.add_argument("--json", action="store_true")
 
@@ -1837,6 +2059,9 @@ def main(argv: list[str] | None = None) -> int:
                 args.runtime_path,
                 args.warehouse_path,
                 args.warehouse_release_id,
+                utilization_data_root=args.utilization_data_root,
+                utilization_path=args.utilization_path,
+                utilization_release_id=args.utilization_release_id,
                 dry_run=args.dry_run,
             )
             exit_code = 0

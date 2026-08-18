@@ -158,7 +158,81 @@ def test_smoke_validates_required_contracts_and_exact_counts(monkeypatch: pytest
         "research",
         "clinical_trials",
         "warehouse_counts",
+        "utilization_procedure_options",
+        "utilization_procedure_search",
+        "utilization_drug_options",
+        "utilization_drug_search",
     }
+
+
+def test_smoke_exercises_utilization_contracts_when_bundle_has_sidecar(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    deployment_id = "deployment-20260721T120000Z-abcdef1234"
+    bundle = tmp_path / deployment_id
+    bundle.mkdir()
+    utilization = tmp_path / "artifacts" / "utilization.duckdb"
+    utilization.parent.mkdir()
+    utilization.write_bytes(b"sidecar")
+    (bundle / "utilization").symlink_to(utilization)
+
+    def request(base_url, method, path, api_key, payload=None):
+        if path.startswith("/utilization/procedures/options"):
+            return 200, {"results": [{"value": "99213"}]}
+        if path.startswith("/utilization/procedures/search"):
+            return 200, {
+                "mode": "procedures",
+                "metric_scope": "national_npi_totals",
+                "total": 1,
+                "returned_count": 1,
+                "results": [{"npi": "1003005257"}],
+            }
+        if path.startswith("/utilization/drugs/options"):
+            return 200, {
+                "results": [{"brand": "Lisinopril", "generic": "Lisinopril"}]
+            }
+        if path.startswith("/utilization/drugs/search"):
+            return 200, {
+                "mode": "drugs",
+                "metric_scope": "national_npi_totals",
+                "total": 1,
+                "returned_count": 1,
+                "results": [{"npi": "1003005257"}],
+            }
+        return _successful_request(base_url, method, path, api_key, payload)
+
+    monkeypatch.setattr(smoke, "_request", request)
+    monkeypatch.setattr(
+        smoke,
+        "_process_identity",
+        lambda *args, **kwargs: (
+            True,
+            {"utilization_expected": True, "utilization_open": True},
+        ),
+    )
+    evidence = smoke.run_smoke(
+        base_url="http://127.0.0.1:8080",
+        deployment_id=deployment_id,
+        api_key="secret-not-for-evidence",
+        expected_core_providers=1196535,
+        expected_hospital_affiliations=146970,
+        expected_affiliated_providers=118864,
+        expected_raw_hospital_enrollments=9175,
+        representative_npi="1003005257",
+        process_id=123,
+        production_root=tmp_path,
+        release_bundle=bundle,
+    )
+
+    assert evidence["state"] == "passed"
+    utilization_checks = [
+        check
+        for check in evidence["checks"]
+        if check["name"].startswith("utilization_")
+    ]
+    assert len(utilization_checks) == 4
+    assert all(check["summary"].get("applicability") is None for check in utilization_checks)
 
 
 def test_smoke_requires_exact_aact_snapshot_and_study_count(

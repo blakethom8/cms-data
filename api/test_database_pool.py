@@ -10,7 +10,9 @@ from fastapi import FastAPI
 from database_pool import (
     DatabasePoolMiddleware,
     DuckDBConnectionPool,
+    bind_request_connection,
     request_connection,
+    reset_request_connection,
 )
 from request_context import RequestContextMiddleware
 
@@ -40,6 +42,22 @@ def test_pool_opens_fixed_independent_connections_and_closes_them() -> None:
     pool.close()
 
     assert all(connection.closed for connection in created)
+
+
+def test_request_connections_are_isolated_by_database_name() -> None:
+    warehouse = FakeConnection(1)
+    utilization = FakeConnection(2)
+    warehouse_token = bind_request_connection(warehouse)
+    utilization_token = bind_request_connection(utilization, "utilization")
+    try:
+        assert request_connection() is warehouse
+        assert request_connection("utilization") is utilization
+    finally:
+        reset_request_connection(utilization_token)
+        reset_request_connection(warehouse_token)
+
+    assert request_connection() is None
+    assert request_connection("utilization") is None
 
 
 @pytest.mark.anyio

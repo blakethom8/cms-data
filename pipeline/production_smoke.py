@@ -115,11 +115,20 @@ def _process_identity(
         code_pointer = bundle / "code"
         warehouse_pointer = bundle / "warehouse"
         runtime_pointer = bundle / "runtime"
-        if not all(pointer.is_symlink() for pointer in (code_pointer, warehouse_pointer, runtime_pointer)):
+        utilization_pointer = bundle / "utilization"
+        if not all(
+            pointer.is_symlink()
+            for pointer in (code_pointer, warehouse_pointer, runtime_pointer)
+        ):
             return False, {"process_id": process_id, "bundle": str(bundle)}
         expected_code = code_pointer.resolve(strict=True)
         expected_warehouse = warehouse_pointer.resolve(strict=True)
         expected_runtime = runtime_pointer.resolve(strict=True)
+        expected_utilization = (
+            utilization_pointer.resolve(strict=True)
+            if utilization_pointer.is_symlink()
+            else None
+        )
         actual_code = Path(f"/proc/{process_id}/cwd").resolve(strict=True)
         open_targets: set[Path] = set()
         for descriptor in Path(f"/proc/{process_id}/fd").iterdir():
@@ -141,6 +150,7 @@ def _process_identity(
     passed = (
         actual_code == expected_code
         and expected_warehouse in open_targets
+        and (expected_utilization is None or expected_utilization in open_targets)
         and runtime_referenced
     )
     return passed, {
@@ -149,8 +159,27 @@ def _process_identity(
         "bundle": str(bundle),
         "code_target": str(actual_code),
         "warehouse_open": expected_warehouse in open_targets,
+        "utilization_expected": expected_utilization is not None,
+        "utilization_open": (
+            expected_utilization in open_targets if expected_utilization is not None else None
+        ),
         "runtime_referenced": runtime_referenced,
     }
+
+
+def _bundle_has_utilization(
+    production_root: Path,
+    deployment_id: str,
+    release_bundle: Path | None,
+) -> bool:
+    bundle = release_bundle or production_root / "release-current"
+    try:
+        resolved = bundle.resolve(strict=True)
+    except (FileNotFoundError, OSError):
+        return False
+    if resolved.name != deployment_id or not resolved.is_dir():
+        return False
+    return (resolved / "utilization").is_symlink()
 
 
 def run_smoke(
@@ -203,6 +232,132 @@ def run_smoke(
         process_id, production_root, deployment_id, release_bundle
     )
     checks.append(_check("process_identity", process_ok, None, process_summary))
+
+    utilization_expected = _bundle_has_utilization(
+        production_root, deployment_id, release_bundle
+    )
+    if utilization_expected:
+        status, procedure_options = _request(
+            base_url, "GET", "/utilization/procedures/options?q=99213&limit=3", api_key
+        )
+        procedure_values = (
+            procedure_options.get("results", [])
+            if isinstance(procedure_options, dict)
+            else []
+        )
+        procedure_options_ok = (
+            status == 200
+            and isinstance(procedure_values, list)
+            and bool(procedure_values)
+            and isinstance(procedure_values[0], dict)
+            and procedure_values[0].get("value") == "99213"
+        )
+        checks.append(
+            _check(
+                "utilization_procedure_options",
+                procedure_options_ok,
+                status,
+                {"returned": len(procedure_values)},
+            )
+        )
+        procedure_query = urllib.parse.urlencode(
+            {"hcpcs": "99213", "state": "OH", "limit": 3}
+        )
+        status, procedure_search = _request(
+            base_url,
+            "GET",
+            f"/utilization/procedures/search?{procedure_query}",
+            api_key,
+        )
+        procedure_results = (
+            procedure_search.get("results", [])
+            if isinstance(procedure_search, dict)
+            else []
+        )
+        procedure_search_ok = (
+            status == 200
+            and isinstance(procedure_results, list)
+            and bool(procedure_results)
+            and procedure_search.get("mode") == "procedures"
+            and procedure_search.get("metric_scope") == "national_npi_totals"
+            and procedure_search.get("returned_count") == len(procedure_results)
+        )
+        checks.append(
+            _check(
+                "utilization_procedure_search",
+                procedure_search_ok,
+                status,
+                {
+                    "total": procedure_search.get("total")
+                    if isinstance(procedure_search, dict)
+                    else None,
+                    "returned": len(procedure_results),
+                },
+            )
+        )
+
+        status, drug_options = _request(
+            base_url, "GET", "/utilization/drugs/options?q=lisinopril&limit=3", api_key
+        )
+        drug_values = (
+            drug_options.get("results", []) if isinstance(drug_options, dict) else []
+        )
+        drug_options_ok = (
+            status == 200
+            and isinstance(drug_values, list)
+            and bool(drug_values)
+            and isinstance(drug_values[0], dict)
+            and bool(drug_values[0].get("generic"))
+        )
+        checks.append(
+            _check(
+                "utilization_drug_options",
+                drug_options_ok,
+                status,
+                {"returned": len(drug_values)},
+            )
+        )
+        selected_generic = (
+            drug_values[0].get("generic") if drug_options_ok else "lisinopril"
+        )
+        drug_query = urllib.parse.urlencode(
+            {"generics": selected_generic, "state": "OH", "limit": 3}
+        )
+        status, drug_search = _request(
+            base_url, "GET", f"/utilization/drugs/search?{drug_query}", api_key
+        )
+        drug_results = (
+            drug_search.get("results", []) if isinstance(drug_search, dict) else []
+        )
+        drug_search_ok = (
+            status == 200
+            and isinstance(drug_results, list)
+            and bool(drug_results)
+            and drug_search.get("mode") == "drugs"
+            and drug_search.get("metric_scope") == "national_npi_totals"
+            and drug_search.get("returned_count") == len(drug_results)
+        )
+        checks.append(
+            _check(
+                "utilization_drug_search",
+                drug_search_ok,
+                status,
+                {
+                    "total": drug_search.get("total")
+                    if isinstance(drug_search, dict)
+                    else None,
+                    "returned": len(drug_results),
+                },
+            )
+        )
+    else:
+        for name in (
+            "utilization_procedure_options",
+            "utilization_procedure_search",
+            "utilization_drug_options",
+            "utilization_drug_search",
+        ):
+            checks.append(_check(name, True, None, {"applicability": "not_applicable"}))
 
     status, _ = _request(base_url, "GET", "/practices/capabilities", None)
     checks.append(_check("authentication_required", status == 401, status))

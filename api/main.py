@@ -25,7 +25,17 @@ from pydantic import BaseModel
 sys.path.insert(0, os.path.dirname(__file__))
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
+
+def _resolve_utilization_db_path(database_path: str) -> str:
+    configured = os.getenv("UTILIZATION_DUCKDB_PATH")
+    if configured:
+        return configured
+    bundled = os.path.join(os.path.dirname(database_path), "utilization")
+    return bundled if os.path.exists(bundled) else database_path
+
+
 DB_PATH = os.getenv("DUCKDB_PATH", "/home/dataops/cms-data/data/provider_searcher.duckdb")
+UTILIZATION_DB_PATH = _resolve_utilization_db_path(DB_PATH)
 API_KEY = os.getenv("CMS_API_KEY", "")  # Set in production!
 MAX_ROWS = int(os.getenv("MAX_ROWS", "1000"))
 MAX_QUERY_SQL_CHARS = int(os.getenv("MAX_QUERY_SQL_CHARS", "20000"))
@@ -35,10 +45,25 @@ DUCKDB_MEMORY_LIMIT = os.getenv("DUCKDB_MEMORY_LIMIT", "2GB")
 DUCKDB_THREADS = int(os.getenv("DUCKDB_THREADS", "4"))
 DUCKDB_POOL_SIZE = int(os.getenv("DUCKDB_POOL_SIZE", "4"))
 DUCKDB_POOL_ACQUIRE_SECONDS = float(os.getenv("DUCKDB_POOL_ACQUIRE_SECONDS", "2"))
+UTILIZATION_DUCKDB_MEMORY_LIMIT = os.getenv(
+    "UTILIZATION_DUCKDB_MEMORY_LIMIT", DUCKDB_MEMORY_LIMIT
+)
+UTILIZATION_DUCKDB_THREADS = int(
+    os.getenv("UTILIZATION_DUCKDB_THREADS", str(DUCKDB_THREADS))
+)
+UTILIZATION_DUCKDB_POOL_SIZE = int(
+    os.getenv("UTILIZATION_DUCKDB_POOL_SIZE", str(DUCKDB_POOL_SIZE))
+)
+UTILIZATION_DUCKDB_POOL_ACQUIRE_SECONDS = float(
+    os.getenv(
+        "UTILIZATION_DUCKDB_POOL_ACQUIRE_SECONDS", str(DUCKDB_POOL_ACQUIRE_SECONDS)
+    )
+)
 READ_ONLY = True
 
 # Fallback connection for startup checks and routes not yet moved into the pool.
 _conn = None
+_utilization_conn = None
 
 
 def _connect_readonly() -> duckdb.DuckDBPyConnection:
@@ -53,6 +78,7 @@ def _connect_readonly() -> duckdb.DuckDBPyConnection:
         },
     )
 
+
 def get_conn() -> duckdb.DuckDBPyConnection:
     from database_pool import request_connection
 
@@ -65,6 +91,31 @@ def get_conn() -> duckdb.DuckDBPyConnection:
     return _conn
 
 
+def _connect_utilization_readonly() -> duckdb.DuckDBPyConnection:
+    return duckdb.connect(
+        UTILIZATION_DB_PATH,
+        read_only=READ_ONLY,
+        config={
+            "enable_external_access": "false",
+            "allow_unsigned_extensions": "false",
+            "memory_limit": UTILIZATION_DUCKDB_MEMORY_LIMIT,
+            "threads": str(UTILIZATION_DUCKDB_THREADS),
+        },
+    )
+
+
+def get_utilization_conn() -> duckdb.DuckDBPyConnection:
+    from database_pool import request_connection
+
+    scoped_connection = request_connection("utilization")
+    if scoped_connection is not None:
+        return scoped_connection
+    global _utilization_conn
+    if _utilization_conn is None:
+        _utilization_conn = _connect_utilization_readonly()
+    return _utilization_conn
+
+
 from database_pool import DuckDBConnectionPool
 
 database_pool = DuckDBConnectionPool(
@@ -73,22 +124,36 @@ database_pool = DuckDBConnectionPool(
     acquire_timeout_seconds=DUCKDB_POOL_ACQUIRE_SECONDS,
 )
 
+utilization_database_pool = DuckDBConnectionPool(
+    _connect_utilization_readonly,
+    size=UTILIZATION_DUCKDB_POOL_SIZE,
+    acquire_timeout_seconds=UTILIZATION_DUCKDB_POOL_ACQUIRE_SECONDS,
+)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: verify DB exists
     if not os.path.exists(DB_PATH):
         raise RuntimeError(f"Database not found: {DB_PATH}")
+    if not os.path.exists(UTILIZATION_DB_PATH):
+        raise RuntimeError(f"Utilization database not found: {UTILIZATION_DB_PATH}")
     get_conn()
+    get_utilization_conn()
     try:
         database_pool.start()
+        utilization_database_pool.start()
         yield
     finally:
+        utilization_database_pool.close()
         database_pool.close()
-        global _conn
+        global _conn, _utilization_conn
         if _conn:
             _conn.close()
             _conn = None
+        if _utilization_conn:
+            _utilization_conn.close()
+            _utilization_conn = None
 
 
 app = FastAPI(
@@ -164,7 +229,7 @@ from industry import get_industry_router
 app.include_router(get_industry_router(get_conn), dependencies=_secured)
 
 from utilization import get_utilization_router
-app.include_router(get_utilization_router(get_conn), dependencies=_secured)
+app.include_router(get_utilization_router(get_utilization_conn), dependencies=_secured)
 
 from research import get_research_router
 app.include_router(get_research_router(get_conn), dependencies=_secured)
@@ -185,7 +250,7 @@ app.include_router(get_release_router(release_resolver), dependencies=_secured)
 from database_pool import DatabasePoolMiddleware
 
 _DATABASE_ROUTE_PREFIXES = (
-    "/profiles", "/practices", "/radar", "/explorer", "/utilization"
+    "/profiles", "/practices", "/radar", "/explorer"
 )
 _DATABASE_ROUTE_EXCLUSIONS = {"/profiles/exemplars", "/explorer/showcases"}
 
@@ -207,6 +272,18 @@ app.add_middleware(
         request.headers.get(API_KEY_HEADER)
     )
     is not None,
+)
+
+app.add_middleware(
+    DatabasePoolMiddleware,
+    pool=utilization_database_pool,
+    is_database_path=lambda path: path == "/utilization"
+    or path.startswith("/utilization/"),
+    is_authorized=lambda request: resolve_api_key_name(
+        request.headers.get(API_KEY_HEADER)
+    )
+    is not None,
+    connection_name="utilization",
 )
 
 app.add_middleware(

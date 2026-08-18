@@ -14,8 +14,8 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 
-_request_connection: ContextVar[duckdb.DuckDBPyConnection | None] = ContextVar(
-    "duckdb_request_connection", default=None
+_request_connections: ContextVar[dict[str, duckdb.DuckDBPyConnection]] = ContextVar(
+    "duckdb_request_connections", default={}
 )
 
 
@@ -94,16 +94,20 @@ class DuckDBConnectionPool:
         self._available = None
 
 
-def request_connection() -> duckdb.DuckDBPyConnection | None:
-    return _request_connection.get()
+def request_connection(name: str = "warehouse") -> duckdb.DuckDBPyConnection | None:
+    return _request_connections.get().get(name)
 
 
-def bind_request_connection(connection: duckdb.DuckDBPyConnection) -> Token:
-    return _request_connection.set(connection)
+def bind_request_connection(
+    connection: duckdb.DuckDBPyConnection, name: str = "warehouse"
+) -> Token:
+    connections = dict(_request_connections.get())
+    connections[name] = connection
+    return _request_connections.set(connections)
 
 
 def reset_request_connection(token: Token) -> None:
-    _request_connection.reset(token)
+    _request_connections.reset(token)
 
 
 class DatabasePoolMiddleware(BaseHTTPMiddleware):
@@ -116,11 +120,13 @@ class DatabasePoolMiddleware(BaseHTTPMiddleware):
         pool: DuckDBConnectionPool,
         is_database_path: Callable[[str], bool],
         is_authorized: Callable[[Request], bool] | None = None,
+        connection_name: str = "warehouse",
     ) -> None:
         super().__init__(app)
         self._pool = pool
         self._is_database_path = is_database_path
         self._is_authorized = is_authorized
+        self._connection_name = connection_name
 
     async def dispatch(self, request: Request, call_next) -> Response:
         if (
@@ -149,7 +155,7 @@ class DatabasePoolMiddleware(BaseHTTPMiddleware):
 
         request.state.pool_wait_ms = lease.wait_ms
         request.state.pool_result = "acquired"
-        token = bind_request_connection(lease.connection)
+        token = bind_request_connection(lease.connection, self._connection_name)
         try:
             response = await call_next(request)
             response.headers["Server-Timing"] = f"duckdb_pool;dur={lease.wait_ms:.2f}"

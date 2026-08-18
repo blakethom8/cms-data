@@ -1,6 +1,7 @@
 # Utilization search serving contract
 
-> **Status:** implemented locally; requires a warehouse candidate and code deployment before use
+> **Status:** independent utilization release and API contract implemented; production activation
+> remains approval-gated
 
 `/utilization/*` is the inverted Medicare discovery surface for Provider Search Cases. It ranks
 individual NPIs by a selected HCPCS or Part D drug basket and assigns each NPI's national totals to
@@ -8,9 +9,15 @@ the one NPPES-primary location in `serving_practice_nppes_provider_sites`. The l
 territory attribution, not a claim service location. Every search response carries
 `metric_scope: national_npi_totals`.
 
+The serving data lives in an immutable, self-contained `utilization.duckdb` sidecar. It contains
+only the NPPES-primary provider/search dimension, utilization denominators, procedure and drug
+facts, and the two typeahead dictionaries. The API opens it through a separate bounded connection
+pool; unrelated routes continue to open the selected warehouse. This avoids rebuilding or changing
+the large evidence marts in the main warehouse.
+
 The compact `utilization_procedure_dictionary` and `utilization_drug_dictionary` tables own
-typeahead aggregates. Search facts remain in `provider_service_detail` and
-`provider_drug_detail`; there is no duplicate provider-level inverted fact table. Procedure
+typeahead aggregates. Search facts remain in the sidecar's `provider_service_detail` and
+`provider_drug_detail`; there is no additional provider-level inverted fact table. Procedure
 payments are estimates computed as services multiplied by average Medicare payment. J-code rows
 carry `is_drug_code=true`, because their service units must not be described as cases. Part D
 retains the publisher's suppression of small cells.
@@ -43,3 +50,40 @@ approved description filter. Code lookup remains available while that gate is cl
 
 Adding ICD, county, or longitudinal adoption requires separate source and serving contracts; these
 routes intentionally expose none of those parameters.
+
+## Independent release build
+
+Build from one selected, validated warehouse. The source database is attached read-only, each
+large `CREATE TABLE AS` commits independently, indexes are created after the loads, and build spill
+must be placed on a non-production volume:
+
+```bash
+python -m pipeline.utilization_releases build \
+  --data-root /mnt/UTILIZATION_VOLUME/cms-data-utilization \
+  --source-warehouse /srv/cms-data-platform/production/release-current/warehouse \
+  --source-release-manifest \
+    /srv/cms-data-platform/data/releases/WAREHOUSE_RELEASE_ID/release.json \
+  --spill-root /mnt/UTILIZATION_VOLUME/cms-data-utilization-spill \
+  --memory-limit-gb 16 \
+  --threads 1 \
+  --json
+```
+
+The builder fails closed on source hash/size mismatch, missing schema, duplicate or orphan keys,
+geography defects, aggregate reconciliation differences, empty query smoke, or any DuckDB error.
+It writes a sealed `release.json`, `comparison.json`, and `utilization.duckdb`. A failed release is
+never eligible for preparation:
+
+```bash
+python -m pipeline.utilization_releases verify \
+  --data-root /mnt/UTILIZATION_VOLUME/cms-data-utilization \
+  --utilization-release-id UTILIZATION_RELEASE_ID \
+  --json
+```
+
+Promotion copies the sealed database to an independent immutable inode under
+`production-artifacts/utilization/`, then adds an optional `utilization` link to the atomic release
+bundle. The production manager verifies both staging and production hashes before preparation.
+Serving code discovers that sibling link at process start; bundles without it fall back to the
+warehouse, preserving rollback compatibility. Production smoke automatically exercises all four
+utilization endpoints and proves that the selected process has the sidecar file open.
