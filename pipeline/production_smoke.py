@@ -920,7 +920,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--expected-table-counts",
         type=Path,
-        help="Release JSON containing validation_details.smoke_table_counts",
+        help=(
+            "Sealed JSON containing smoke_table_counts at the top level or under "
+            "release.validation_details"
+        ),
     )
     parser.add_argument(
         "--expected-industry-detail-status", type=int, choices=(200, 404), default=200

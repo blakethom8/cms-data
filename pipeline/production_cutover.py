@@ -237,7 +237,10 @@ def build_parser() -> argparse.ArgumentParser:
         parser.add_argument(
             f"--{prefix}-table-counts",
             type=Path,
-            help="Release JSON containing validation_details.smoke_table_counts",
+            help=(
+                "Sealed JSON containing smoke_table_counts at the top level or under "
+                "release.validation_details"
+            ),
         )
     parser.add_argument("--json", action="store_true")
     return parser

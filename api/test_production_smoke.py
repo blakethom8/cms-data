@@ -457,6 +457,26 @@ def test_release_manifest_table_counts_are_loaded_for_smoke(tmp_path: Path):
     }
 
 
+def test_deployment_scoped_table_counts_are_loaded_for_smoke(tmp_path: Path):
+    evidence = tmp_path / "expected-table-counts.json"
+    evidence.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "smoke_table_counts": {
+                    "core_providers": 7_395_713,
+                    "raw_nppes": 7_404_601,
+                },
+            }
+        )
+    )
+
+    assert smoke._load_expected_table_counts(evidence) == {
+        "core_providers": 7_395_713,
+        "raw_nppes": 7_404_601,
+    }
+
+
 def test_smoke_can_verify_known_rollback_detail_absence(monkeypatch: pytest.MonkeyPatch):
     def rollback_request(base_url, method, path, api_key, payload=None):
         if path.startswith("/industry/") and path.endswith("/detail"):

@@ -248,6 +248,32 @@ rollback counts, and verifies the rollback before returning exit code `1`.
 The smoke base URL must be an exact loopback HTTP origin such as `http://127.0.0.1:8080`; a private
 interface address is rejected before candidate selection even when it routes to the same service.
 
+Load the API environment, then derive the one scoped `command-center` credential into the dedicated
+smoke variable without printing it. Do not pass the legacy `CMS_API_KEY`: it is intentionally denied
+the bounded warehouse-count query, so both candidate smoke and automatic rollback verification
+would fail at that gate. Stop if there is not exactly one matching scoped key.
+
+```bash
+set -a
+. /etc/cms-data/cms-api.env
+set +a
+CMS_SMOKE_API_KEY="$(
+  /srv/cms-data-platform/production/release-current/runtime/bin/python -B - <<'PY'
+import os
+
+matches = []
+for entry in os.environ["CMS_API_KEYS"].split(","):
+    name, separator, value = entry.strip().partition(":")
+    if separator and name.strip() == "command-center" and value.strip():
+        matches.append(value.strip())
+if len(matches) != 1:
+    raise SystemExit("Expected exactly one command-center scoped key")
+print(matches[0])
+PY
+)"
+export CMS_SMOKE_API_KEY
+```
+
 ```bash
 cd /srv/cms-data-platform/production-ops/current
 PYTHONPATH=/srv/cms-data-platform/production-ops/current \
@@ -262,16 +288,18 @@ PYTHONPATH=/srv/cms-data-platform/production-ops/current \
   --candidate-raw-hospital-enrollments CANDIDATE_RAW_HOSPITAL_COUNT \
   --candidate-aact-study-count CANDIDATE_AACT_STUDY_COUNT \
   --candidate-aact-snapshot-date CANDIDATE_AACT_SNAPSHOT_DATE \
-  --candidate-table-counts CANDIDATE_RELEASE_JSON \
+  --candidate-table-counts CANDIDATE_TABLE_COUNT_EVIDENCE_JSON \
   --rollback-core-providers ROLLBACK_CORE_COUNT \
   --rollback-hospital-affiliations ROLLBACK_AFFILIATION_COUNT \
   --rollback-affiliated-providers ROLLBACK_AFFILIATED_PROVIDER_COUNT \
   --rollback-raw-hospital-enrollments ROLLBACK_RAW_HOSPITAL_COUNT \
   --rollback-aact-study-count ROLLBACK_AACT_STUDY_COUNT \
   --rollback-aact-snapshot-date ROLLBACK_AACT_SNAPSHOT_DATE \
-  --rollback-table-counts ROLLBACK_RELEASE_JSON \
+  --rollback-table-counts ROLLBACK_TABLE_COUNT_EVIDENCE_JSON \
   --rollback-industry-detail-status ROLLBACK_INDUSTRY_DETAIL_STATUS \
   --json
+
+unset CMS_SMOKE_API_KEY
 ```
 
 Do not declare success from `systemctl is-active` alone. Record the final selected deployment,
@@ -388,9 +416,15 @@ install -o root -g dataops -m 0440 \
    `.pyc` files before transition dry-runs. Do not run standalone `production_manager.py verify`
    against the prepared candidate: verification is a selected-deployment state transition,
    and `production_cutover` performs it after selection. The warehouse is unchanged, so
-   **candidate counts equal rollback counts** and both
-   `--expected-table-counts` arguments point at the same
-   `releases/WAREHOUSE_RELEASE_ID/release.json`. While the rehearsal process is up, also
+   **candidate counts equal rollback counts**. Seal one deployment-scoped
+   `production/evidence/CANDIDATE_DEPLOYMENT_ID/expected-table-counts.json` with a top-level
+   `smoke_table_counts` object copied from the verified predecessor's query-authorized count
+   evidence, then use that exact file for both `--expected-table-counts` during rehearsal and
+   `--candidate-table-counts` / `--rollback-table-counts` during cutover. Do not substitute the
+   staging warehouse `release.json` unless it actually contains `smoke_table_counts`; older
+   manifests may contain only release identity. Validate the sealed file through
+   `pipeline.production_smoke._load_expected_table_counts` before transition dry-runs. While the
+   rehearsal process is up, also
    check the serving contract against the rehearsal port: `GET /release` must return the
    candidate deployment ID (the resolver derives it from the bundle directory), and a data
    GET must carry `ETag: "CANDIDATE_DEPLOYMENT_ID:REPRESENTATION_VERSION"`.
@@ -430,6 +464,11 @@ Older serving bundles may continue returning `verified_at: null` until their nex
 deployment. Treat that as a recorded metadata discrepancy: prove the ledger state independently and
 confirm release ID, artifact hashes, ETag, and route behavior. Do not add an unplanned restart solely
 to refresh the informational field.
+
+`production_manager.py verify` accepts only the canonical immutable path
+`production/evidence/DEPLOYMENT_ID/smoke.json`. If recovery smoke is first written to a distinct
+audit filename, validate it, install an exact root-owned `0440` copy at that canonical path, and
+verify the canonical copy. An alternate filename in the same directory is deliberately rejected.
 
 Rollback is unchanged: the cutover auto-selects and re-verifies the predecessor on any
 required failure, and manual `rollback` restores the prior bundle pointer, which also
