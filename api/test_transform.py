@@ -12,6 +12,7 @@ from pipeline.transform import (
     build_provider_evidence_outputs,
     build_practice_locations,
     build_provider_drug_detail,
+    build_provider_service_detail,
     build_provider_quality_scores,
     build_utilization_dictionaries,
     clear_refresh_targets,
@@ -146,6 +147,10 @@ def test_drug_transform_preserves_brand_grain_and_builds_dictionary() -> None:
             "select brand_name, generic_name, physician_count, total_claims, total_drug_cost "
             "from utilization_drug_dictionary order by brand_name"
         ).fetchall()
+        stage_exists = connection.execute(
+            "SELECT count(*) FROM information_schema.tables "
+            "WHERE table_name = 'provider_drug_detail_build_stage'"
+        ).fetchone()[0]
     finally:
         connection.close()
 
@@ -159,6 +164,47 @@ def test_drug_transform_preserves_brand_grain_and_builds_dictionary() -> None:
         ("Brand A", "Generic X", 1, 2, 10.25),
         ("Brand B", "Generic X", 1, 3, 20.75),
     ]
+    assert stage_exists == 0
+
+
+def test_service_transform_stages_window_before_constrained_install() -> None:
+    connection = _connection()
+    try:
+        connection.execute(
+            """
+            create table raw_physician_by_provider_and_service (
+                rndrng_npi bigint, hcpcs_cd varchar, hcpcs_desc varchar,
+                hcpcs_drug_ind varchar, place_of_srvc varchar, tot_benes varchar,
+                tot_srvcs varchar, tot_bene_day_srvcs varchar, avg_sbmtd_chrg varchar,
+                avg_mdcr_alowd_amt varchar, avg_mdcr_pymt_amt varchar,
+                avg_mdcr_stdzd_amt varchar, rndrng_prvdr_ent_cd varchar
+            )
+            """
+        )
+        connection.execute(
+            """
+            insert into raw_physician_by_provider_and_service values
+                ('1234567890', '99213', 'Office visit', 'N', 'O', '2', '3',
+                 '3', '100', '80', '70', '65', 'I'),
+                ('1234567890', '99213', 'Office visit', 'N', 'O', '4', '5',
+                 '5', '100', '80', '70', '65', 'I')
+            """
+        )
+
+        count = build_provider_service_detail(connection, 2024)
+        row = connection.execute(
+            "select npi, hcpcs_code, tot_services from provider_service_detail"
+        ).fetchone()
+        stage_exists = connection.execute(
+            "SELECT count(*) FROM information_schema.tables "
+            "WHERE table_name = 'provider_service_detail_build_stage'"
+        ).fetchone()[0]
+    finally:
+        connection.close()
+
+    assert count == 1
+    assert row == ("1234567890", "99213", 5)
+    assert stage_exists == 0
 
 
 def test_practice_transform_matches_numeric_raw_npi_to_text_core_npi() -> None:

@@ -15,6 +15,7 @@ import json
 import os
 import tempfile
 import uuid
+from collections.abc import Callable
 from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import dataclass, field
@@ -1411,6 +1412,9 @@ def _prepare_full_cms_candidate_schema(
     connection.execute("DROP TABLE IF EXISTS utilization_procedure_dictionary")
     connection.execute("DROP TABLE IF EXISTS provider_drug_detail")
     run_ddl(connection)
+    from .transform import drop_utilization_fact_secondary_indexes
+
+    drop_utilization_fact_secondary_indexes(connection)
 
 
 def _load_full_cms_content(
@@ -1418,6 +1422,7 @@ def _load_full_cms_content(
     *,
     data_root: Path,
     by_source_id: dict[str, RunManifest],
+    stage_callback: Callable[[str, str], None] | None = None,
 ) -> tuple[dict[str, int], dict[str, object]]:
     from .candidate_sources import load_cms_raw_tables
     from .transform import (
@@ -1427,7 +1432,13 @@ def _load_full_cms_content(
         transform_all,
     )
 
+    def mark(stage: str, status: str) -> None:
+        if stage_callback is not None:
+            stage_callback(stage, status)
+
+    mark("candidate_schema", "started")
     _prepare_full_cms_candidate_schema(connection)
+    mark("candidate_schema", "completed")
 
     ppef_source_ids = (
         "cms_pecos_public_provider_enrollment",
@@ -1453,11 +1464,14 @@ def _load_full_cms_content(
         if manifest.source_id in FULL_CMS_SOURCE_IDS
         and manifest.source_id != HOSPITAL_SOURCE_ID
     )
+    mark("cms_raw_tables", "started")
     raw_counts = load_cms_raw_tables(
         connection,
         data_root=data_root,
         run_ids=non_hospital_run_ids,
     )
+    mark("cms_raw_tables", "completed")
+    mark("hospital_and_refresh_clear", "started")
     connection.execute("BEGIN TRANSACTION")
     try:
         _create_raw_hospital_table(connection)
@@ -1469,38 +1483,46 @@ def _load_full_cms_content(
     except Exception:
         connection.execute("ROLLBACK")
         raise
+    mark("hospital_and_refresh_clear", "completed")
 
     # DuckDB's foreign-key indexes are updated only at the transaction boundary.
     # Delete the now-unreferenced parents separately before rebuilding children.
+    mark("core_provider_clear", "started")
     connection.execute("DELETE FROM core_providers")
-    connection.execute("BEGIN TRANSACTION")
-    try:
-        transform_counts = transform_all(
-            connection,
-            _period_year(by_source_id["cms_physician_by_provider"]),
-            practice_year=_period_year(
-                by_source_id["cms_revalidation_group_reassignment"]
-            ),
-            quality_year=_period_year(by_source_id["cms_qpp_experience"]),
-            include_hospital_affiliations=False,
-            include_provider_evidence_outputs=False,
-        )
-        affiliation_counts = _rebuild_hospital_affiliations(
-            connection,
-            data_year=_period_year(hospital_manifest),
-        )
-        provider_hospital_evidence_count = build_provider_hospital_evidence(
-            connection,
-            _period_year(hospital_manifest),
-        )
-        provider_evidence_counts = build_provider_evidence_outputs(
-            connection,
-            _period_year(hospital_manifest),
-        )
-        connection.execute("COMMIT")
-    except Exception:
-        connection.execute("ROLLBACK")
-        raise
+    mark("core_provider_clear", "completed")
+
+    # This is an isolated candidate. Let each transform statement commit so DuckDB
+    # can release transaction-local state between large stages; production atomicity
+    # is provided later by candidate activation, not one monolithic build transaction.
+    transform_counts = transform_all(
+        connection,
+        _period_year(by_source_id["cms_physician_by_provider"]),
+        practice_year=_period_year(
+            by_source_id["cms_revalidation_group_reassignment"]
+        ),
+        quality_year=_period_year(by_source_id["cms_qpp_experience"]),
+        include_hospital_affiliations=False,
+        include_provider_evidence_outputs=False,
+        stage_callback=stage_callback,
+    )
+    mark("hospital_affiliations_rebuild", "started")
+    affiliation_counts = _rebuild_hospital_affiliations(
+        connection,
+        data_year=_period_year(hospital_manifest),
+    )
+    mark("hospital_affiliations_rebuild", "completed")
+    mark("provider_hospital_evidence", "started")
+    provider_hospital_evidence_count = build_provider_hospital_evidence(
+        connection,
+        _period_year(hospital_manifest),
+    )
+    mark("provider_hospital_evidence", "completed")
+    mark("provider_evidence_outputs", "started")
+    provider_evidence_counts = build_provider_evidence_outputs(
+        connection,
+        _period_year(hospital_manifest),
+    )
+    mark("provider_evidence_outputs", "completed")
     table_counts = {
         **raw_counts,
         "raw_hospital_enrollments": hospital_rows,
@@ -1531,7 +1553,9 @@ def _load_full_cms_content(
         raise ReleaseError(
             "Full CMS candidate has empty required tables: " + ", ".join(empty)
         )
+    mark("ppef_relationship_validation", "started")
     ppef_quality = _validate_ppef_relationships(connection, table_counts)
+    mark("ppef_relationship_validation", "completed")
     details = {
         "affiliation_match_policy": AFFILIATION_MATCH_POLICY,
         "affiliation_counts": affiliation_counts,
@@ -1585,8 +1609,47 @@ def build_full_cms_warehouse_release(
             database_path=str(database_path.relative_to(data_root)),
             duckdb_version=duckdb.__version__,
         )
+        release.validation_details = {
+            "source_periods": {
+                source_id: manifest.source_data_period
+                for source_id, manifest in sorted(by_source_id.items())
+            },
+            "resource_limits": {
+                "memory_limit_gb": memory_limit_gb,
+                "threads": threads,
+                "spill_directory": str(spill_directory),
+                "preserve_insertion_order": False,
+            },
+            "build_strategy": {
+                "name": "staged_utilization_facts_v1",
+                "transaction_policy": "autocommit_between_transform_statements",
+                "fact_compute": "unindexed_staging_tables",
+                "fact_install": "constrained_targets_without_secondary_indexes",
+                "secondary_indexes": "after_fact_loads",
+            },
+            "build_progress": {
+                "current_stage": "candidate_copy",
+                "current_stage_status": "started",
+                "completed_stages": [],
+                "updated_at": utc_now(),
+            },
+        }
         document.releases.append(release)
         _save_release_document(data_root, document)
+
+        def record_stage(stage: str, status: str) -> None:
+            progress = release.validation_details["build_progress"]
+            if not isinstance(progress, dict):
+                raise ReleaseError("Full CMS build progress evidence is invalid")
+            progress["current_stage"] = stage
+            progress["current_stage_status"] = status
+            progress["updated_at"] = utc_now()
+            completed = progress.get("completed_stages")
+            if status == "completed" and isinstance(completed, list):
+                if stage not in completed:
+                    completed.append(stage)
+            _save_release_document(data_root, document)
+
         try:
             _copy_verified_baseline(
                 baseline,
@@ -1594,31 +1657,27 @@ def build_full_cms_warehouse_release(
                 expected_sha256=baseline_sha,
                 expected_bytes=baseline_bytes,
             )
+            record_stage("candidate_copy", "completed")
             connection = duckdb.connect(str(partial_path), read_only=False)
             try:
+                record_stage("resource_configuration", "started")
                 _configure_targeted_build_resources(
                     connection,
                     memory_limit_gb=memory_limit_gb,
                     threads=threads,
                     spill_directory=spill_directory,
                 )
+                record_stage("resource_configuration", "completed")
                 table_counts, cms_details = _load_full_cms_content(
-                    connection, data_root=data_root, by_source_id=by_source_id
+                    connection,
+                    data_root=data_root,
+                    by_source_id=by_source_id,
+                    stage_callback=record_stage,
                 )
-                release.validation_details = {
-                    "source_periods": {
-                        source_id: manifest.source_data_period
-                        for source_id, manifest in sorted(by_source_id.items())
-                    },
-                    "resource_limits": {
-                        "memory_limit_gb": memory_limit_gb,
-                        "threads": threads,
-                        "spill_directory": str(spill_directory),
-                        "preserve_insertion_order": False,
-                    },
-                    **cms_details,
-                }
+                release.validation_details.update(cms_details)
+                record_stage("checkpoint", "started")
                 connection.execute("CHECKPOINT")
+                record_stage("checkpoint", "completed")
             except Exception:
                 raise
             finally:
@@ -1637,6 +1696,11 @@ def build_full_cms_warehouse_release(
             except OSError:
                 pass
         except Exception as error:
+            progress = release.validation_details.get("build_progress")
+            if isinstance(progress, dict):
+                progress["current_stage_status"] = "failed"
+                progress["failed_at"] = utc_now()
+                progress["updated_at"] = progress["failed_at"]
             release.validation_state = ValidationState.FAILED
             release.error_summary = safe_error(error)
             _save_release_document(data_root, document)

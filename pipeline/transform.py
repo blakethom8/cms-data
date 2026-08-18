@@ -4,6 +4,7 @@ All heavy lifting is done in DuckDB SQL for memory efficiency.
 """
 
 import logging
+from collections.abc import Callable
 
 import duckdb
 
@@ -2505,33 +2506,28 @@ def build_provider_quality_scores(con: duckdb.DuckDBPyConnection, data_year: int
     return count
 
 
-def build_provider_service_detail(con: duckdb.DuckDBPyConnection, data_year: int):
-    """Populate provider_service_detail from physician_by_provider_and_service."""
-    logger.info("Building provider_service_detail (data_year=%d)", data_year)
-
-    con.execute("DELETE FROM provider_service_detail WHERE data_year = ?", [data_year])
-
-    con.execute("""
-        INSERT INTO provider_service_detail (
-            npi, hcpcs_code, hcpcs_description, hcpcs_drug_ind, place_of_service,
-            tot_beneficiaries, tot_services, tot_bene_day_srvcs,
-            avg_submitted_chrg, avg_medicare_allowed, avg_medicare_payment,
-            avg_medicare_standardized, data_year
-        )
+def _stage_provider_service_detail(
+    con: duckdb.DuckDBPyConnection, data_year: int
+) -> int:
+    """Materialize the service-detail window without maintaining target indexes."""
+    con.execute("DROP TABLE IF EXISTS provider_service_detail_build_stage")
+    con.execute(
+        """
+        CREATE TABLE provider_service_detail_build_stage AS
         SELECT
-            CAST(s.rndrng_npi AS VARCHAR),
-            s.hcpcs_cd,
-            s.hcpcs_desc,
-            s.hcpcs_drug_ind,
-            s.place_of_srvc,
-            TRY_CAST(s.tot_benes AS INTEGER),
-            TRY_CAST(s.tot_srvcs AS DECIMAL(15,2)),
-            TRY_CAST(s.tot_bene_day_srvcs AS DECIMAL(15,2)),
-            TRY_CAST(s.avg_sbmtd_chrg AS DECIMAL(15,2)),
-            TRY_CAST(s.avg_mdcr_alowd_amt AS DECIMAL(15,2)),
-            TRY_CAST(s.avg_mdcr_pymt_amt AS DECIMAL(15,2)),
-            TRY_CAST(s.avg_mdcr_stdzd_amt AS DECIMAL(15,2)),
-            ?
+            CAST(s.rndrng_npi AS VARCHAR) AS npi,
+            s.hcpcs_cd AS hcpcs_code,
+            s.hcpcs_desc AS hcpcs_description,
+            s.hcpcs_drug_ind AS hcpcs_drug_ind,
+            s.place_of_srvc AS place_of_service,
+            TRY_CAST(s.tot_benes AS INTEGER) AS tot_beneficiaries,
+            TRY_CAST(s.tot_srvcs AS DECIMAL(15,2)) AS tot_services,
+            TRY_CAST(s.tot_bene_day_srvcs AS DECIMAL(15,2)) AS tot_bene_day_srvcs,
+            TRY_CAST(s.avg_sbmtd_chrg AS DECIMAL(15,2)) AS avg_submitted_chrg,
+            TRY_CAST(s.avg_mdcr_alowd_amt AS DECIMAL(15,2)) AS avg_medicare_allowed,
+            TRY_CAST(s.avg_mdcr_pymt_amt AS DECIMAL(15,2)) AS avg_medicare_payment,
+            TRY_CAST(s.avg_mdcr_stdzd_amt AS DECIMAL(15,2)) AS avg_medicare_standardized,
+            CAST(? AS INTEGER) AS data_year
         FROM raw_physician_by_provider_and_service s
         WHERE s.rndrng_prvdr_ent_cd = 'I'
           AND CAST(s.rndrng_npi AS VARCHAR) IN (SELECT npi FROM core_providers)
@@ -2539,37 +2535,75 @@ def build_provider_service_detail(con: duckdb.DuckDBPyConnection, data_year: int
             PARTITION BY CAST(s.rndrng_npi AS VARCHAR), s.hcpcs_cd, s.place_of_srvc
             ORDER BY TRY_CAST(s.tot_srvcs AS DECIMAL(15,2)) DESC NULLS LAST
         ) = 1
-    """, [data_year])
+        """,
+        [data_year],
+    )
+    return int(
+        con.execute("SELECT COUNT(*) FROM provider_service_detail_build_stage").fetchone()[0]
+    )
 
-    count = con.execute("SELECT COUNT(*) FROM provider_service_detail WHERE data_year = ?", [data_year]).fetchone()[0]
+
+def _install_provider_service_detail(
+    con: duckdb.DuckDBPyConnection, data_year: int
+) -> int:
+    """Load staged service rows into the constrained target and remove staging."""
+    con.execute("DELETE FROM provider_service_detail WHERE data_year = ?", [data_year])
+    con.execute(
+        """
+        INSERT INTO provider_service_detail (
+            npi, hcpcs_code, hcpcs_description, hcpcs_drug_ind, place_of_service,
+            tot_beneficiaries, tot_services, tot_bene_day_srvcs,
+            avg_submitted_chrg, avg_medicare_allowed, avg_medicare_payment,
+            avg_medicare_standardized, data_year
+        )
+        SELECT
+            npi, hcpcs_code, hcpcs_description, hcpcs_drug_ind, place_of_service,
+            tot_beneficiaries, tot_services, tot_bene_day_srvcs,
+            avg_submitted_chrg, avg_medicare_allowed, avg_medicare_payment,
+            avg_medicare_standardized, data_year
+        FROM provider_service_detail_build_stage
+        """
+    )
+    count = int(
+        con.execute(
+            "SELECT COUNT(*) FROM provider_service_detail WHERE data_year = ?",
+            [data_year],
+        ).fetchone()[0]
+    )
+    con.execute("DROP TABLE provider_service_detail_build_stage")
+    return count
+
+
+def build_provider_service_detail(con: duckdb.DuckDBPyConnection, data_year: int):
+    """Populate provider_service_detail through an index-free compute stage."""
+    logger.info("Building provider_service_detail (data_year=%d)", data_year)
+    _stage_provider_service_detail(con, data_year)
+    count = _install_provider_service_detail(con, data_year)
     logger.info("provider_service_detail: %d rows loaded", count)
     return count
 
 
-def build_provider_drug_detail(con: duckdb.DuckDBPyConnection, data_year: int):
-    """Populate provider_drug_detail at NPI, brand, generic, and year grain."""
-    logger.info("Building provider_drug_detail (data_year=%d)", data_year)
-    con.execute("DELETE FROM provider_drug_detail WHERE data_year = ?", [data_year])
+def _stage_provider_drug_detail(
+    con: duckdb.DuckDBPyConnection, data_year: int
+) -> int:
+    """Materialize the drug aggregation without maintaining target indexes."""
+    con.execute("DROP TABLE IF EXISTS provider_drug_detail_build_stage")
     con.execute(
         """
-        INSERT INTO provider_drug_detail (
-            npi, brand_name, generic_name, tot_claims, tot_30day_fills,
-            tot_day_supply, tot_drug_cost, tot_beneficiaries, ge65_tot_claims,
-            ge65_tot_drug_cost, ge65_tot_benes, data_year
-        )
+        CREATE TABLE provider_drug_detail_build_stage AS
         SELECT
-            CAST(d.prscrbr_npi AS VARCHAR),
-            coalesce(nullif(trim(d.brnd_name), ''), trim(d.gnrc_name)),
-            trim(d.gnrc_name),
-            sum(TRY_CAST(d.tot_clms AS INTEGER)),
-            sum(TRY_CAST(d.tot_30day_fills AS DECIMAL(15,2))),
-            sum(TRY_CAST(d.tot_day_suply AS INTEGER)),
-            sum(TRY_CAST(d.tot_drug_cst AS DECIMAL(15,2))),
-            sum(TRY_CAST(d.tot_benes AS INTEGER)),
-            sum(TRY_CAST(d.ge65_tot_clms AS INTEGER)),
-            sum(TRY_CAST(d.ge65_tot_drug_cst AS DECIMAL(15,2))),
-            sum(TRY_CAST(d.ge65_tot_benes AS INTEGER)),
-            ?
+            CAST(d.prscrbr_npi AS VARCHAR) AS npi,
+            coalesce(nullif(trim(d.brnd_name), ''), trim(d.gnrc_name)) AS brand_name,
+            trim(d.gnrc_name) AS generic_name,
+            sum(TRY_CAST(d.tot_clms AS INTEGER)) AS tot_claims,
+            sum(TRY_CAST(d.tot_30day_fills AS DECIMAL(15,2))) AS tot_30day_fills,
+            sum(TRY_CAST(d.tot_day_suply AS INTEGER)) AS tot_day_supply,
+            sum(TRY_CAST(d.tot_drug_cst AS DECIMAL(15,2))) AS tot_drug_cost,
+            sum(TRY_CAST(d.tot_benes AS INTEGER)) AS tot_beneficiaries,
+            sum(TRY_CAST(d.ge65_tot_clms AS INTEGER)) AS ge65_tot_claims,
+            sum(TRY_CAST(d.ge65_tot_drug_cst AS DECIMAL(15,2))) AS ge65_tot_drug_cost,
+            sum(TRY_CAST(d.ge65_tot_benes AS INTEGER)) AS ge65_tot_benes,
+            CAST(? AS INTEGER) AS data_year
         FROM raw_part_d_by_provider_and_drug d
         WHERE CAST(d.prscrbr_npi AS VARCHAR) IN (SELECT npi FROM core_providers)
           AND nullif(trim(d.gnrc_name), '') IS NOT NULL
@@ -2579,11 +2613,77 @@ def build_provider_drug_detail(con: duckdb.DuckDBPyConnection, data_year: int):
         """,
         [data_year],
     )
-    count = con.execute(
-        "SELECT COUNT(*) FROM provider_drug_detail WHERE data_year = ?", [data_year]
-    ).fetchone()[0]
+    return int(
+        con.execute("SELECT COUNT(*) FROM provider_drug_detail_build_stage").fetchone()[0]
+    )
+
+
+def _install_provider_drug_detail(
+    con: duckdb.DuckDBPyConnection, data_year: int
+) -> int:
+    """Load staged drug rows into the constrained target and remove staging."""
+    con.execute("DELETE FROM provider_drug_detail WHERE data_year = ?", [data_year])
+    con.execute(
+        """
+        INSERT INTO provider_drug_detail (
+            npi, brand_name, generic_name, tot_claims, tot_30day_fills,
+            tot_day_supply, tot_drug_cost, tot_beneficiaries, ge65_tot_claims,
+            ge65_tot_drug_cost, ge65_tot_benes, data_year
+        )
+        SELECT
+            npi, brand_name, generic_name, tot_claims, tot_30day_fills,
+            tot_day_supply, tot_drug_cost, tot_beneficiaries, ge65_tot_claims,
+            ge65_tot_drug_cost, ge65_tot_benes, data_year
+        FROM provider_drug_detail_build_stage
+        """
+    )
+    count = int(
+        con.execute(
+            "SELECT COUNT(*) FROM provider_drug_detail WHERE data_year = ?", [data_year]
+        ).fetchone()[0]
+    )
+    con.execute("DROP TABLE provider_drug_detail_build_stage")
+    return count
+
+
+def build_provider_drug_detail(con: duckdb.DuckDBPyConnection, data_year: int):
+    """Populate provider_drug_detail through an index-free compute stage."""
+    logger.info("Building provider_drug_detail (data_year=%d)", data_year)
+    _stage_provider_drug_detail(con, data_year)
+    count = _install_provider_drug_detail(con, data_year)
     logger.info("provider_drug_detail: %d rows loaded", count)
     return count
+
+
+def drop_utilization_fact_secondary_indexes(
+    con: duckdb.DuckDBPyConnection,
+) -> None:
+    """Remove rebuildable search indexes before loading large utilization facts."""
+    for index_name in (
+        "idx_svc_detail_hcpcs",
+        "idx_svc_detail_npi",
+        "idx_drug_detail_generic",
+        "idx_drug_detail_brand",
+        "idx_drug_detail_npi",
+    ):
+        con.execute(f"DROP INDEX IF EXISTS {index_name}")
+
+
+def build_utilization_fact_secondary_indexes(
+    con: duckdb.DuckDBPyConnection,
+) -> None:
+    """Build utilization search indexes only after fact-table loads have committed."""
+    for statement in (
+        "CREATE INDEX IF NOT EXISTS idx_svc_detail_hcpcs "
+        "ON provider_service_detail(hcpcs_code)",
+        "CREATE INDEX IF NOT EXISTS idx_svc_detail_npi ON provider_service_detail(npi)",
+        "CREATE INDEX IF NOT EXISTS idx_drug_detail_generic "
+        "ON provider_drug_detail(generic_name)",
+        "CREATE INDEX IF NOT EXISTS idx_drug_detail_brand "
+        "ON provider_drug_detail(brand_name)",
+        "CREATE INDEX IF NOT EXISTS idx_drug_detail_npi ON provider_drug_detail(npi)",
+    ):
+        con.execute(statement)
 
 
 def build_utilization_dictionaries(
@@ -2703,43 +2803,120 @@ def transform_all(
     quality_year: int | None = None,
     include_hospital_affiliations: bool = True,
     include_provider_evidence_outputs: bool = True,
+    stage_callback: Callable[[str, str], None] | None = None,
 ) -> dict[str, int]:
     """Run all transforms in dependency order. Returns {table: row_count}."""
-    results = {}
+    results: dict[str, int] = {}
+
+    def run_stage(name: str, operation: Callable[[], object]) -> object:
+        if stage_callback is not None:
+            stage_callback(name, "started")
+        value = operation()
+        if stage_callback is not None:
+            stage_callback(name, "completed")
+        return value
 
     # 1. Core providers first (other tables reference it)
-    results["core_providers"] = build_core_providers(con, data_year)
+    results["core_providers"] = int(
+        run_stage("core_providers", lambda: build_core_providers(con, data_year))
+    )
 
     # 2. Tables that depend on core_providers (can conceptually run in parallel)
-    results["utilization_metrics"] = build_utilization_metrics(con, data_year)
-    results["practice_locations"] = build_practice_locations(
-        con, practice_year or data_year
-    )
-    results.update(build_pecos_provider_relationships(con))
-    if include_hospital_affiliations:
-        results["hospital_affiliations"] = build_hospital_affiliations(
-            con, practice_year or data_year
+    results["utilization_metrics"] = int(
+        run_stage(
+            "utilization_metrics", lambda: build_utilization_metrics(con, data_year)
         )
-        results["provider_hospital_evidence"] = build_provider_hospital_evidence(
-            con, practice_year or data_year
+    )
+    results["practice_locations"] = int(
+        run_stage(
+            "practice_locations",
+            lambda: build_practice_locations(con, practice_year or data_year),
+        )
+    )
+    results.update(
+        run_stage(
+            "pecos_provider_relationships",
+            lambda: build_pecos_provider_relationships(con),
+        )
+    )
+    if include_hospital_affiliations:
+        results["hospital_affiliations"] = int(
+            run_stage(
+                "hospital_affiliations",
+                lambda: build_hospital_affiliations(con, practice_year or data_year),
+            )
+        )
+        results["provider_hospital_evidence"] = int(
+            run_stage(
+                "provider_hospital_evidence",
+                lambda: build_provider_hospital_evidence(
+                    con, practice_year or data_year
+                ),
+            )
         )
     if include_provider_evidence_outputs:
         results.update(
-            build_provider_evidence_outputs(con, practice_year or data_year)
+            run_stage(
+                "provider_evidence_outputs",
+                lambda: build_provider_evidence_outputs(
+                    con, practice_year or data_year
+                ),
+            )
         )
-    results["provider_quality_scores"] = build_provider_quality_scores(
-        con, quality_year or data_year
+    results["provider_quality_scores"] = int(
+        run_stage(
+            "provider_quality_scores",
+            lambda: build_provider_quality_scores(con, quality_year or data_year),
+        )
     )
-    results["order_referring_eligibility"] = build_order_referring_eligibility(con)
+    results["order_referring_eligibility"] = int(
+        run_stage(
+            "order_referring_eligibility",
+            lambda: build_order_referring_eligibility(con),
+        )
+    )
 
-    # 3. Service detail (large table, run last)
-    results["provider_service_detail"] = build_provider_service_detail(con, data_year)
-    results["provider_drug_detail"] = build_provider_drug_detail(con, data_year)
-    results.update(build_utilization_dictionaries(con, data_year))
+    # 3. Large facts: compute into plain staging tables, then load the constrained
+    # targets in separate autocommit statements. Search indexes are built afterward.
+    run_stage(
+        "provider_service_detail_stage",
+        lambda: _stage_provider_service_detail(con, data_year),
+    )
+    results["provider_service_detail"] = int(
+        run_stage(
+            "provider_service_detail_install",
+            lambda: _install_provider_service_detail(con, data_year),
+        )
+    )
+    run_stage(
+        "provider_drug_detail_stage",
+        lambda: _stage_provider_drug_detail(con, data_year),
+    )
+    results["provider_drug_detail"] = int(
+        run_stage(
+            "provider_drug_detail_install",
+            lambda: _install_provider_drug_detail(con, data_year),
+        )
+    )
+    results.update(
+        run_stage(
+            "utilization_dictionaries",
+            lambda: build_utilization_dictionaries(con, data_year),
+        )
+    )
+    run_stage(
+        "utilization_fact_secondary_indexes",
+        lambda: build_utilization_fact_secondary_indexes(con),
+    )
 
     # 4. Dedup (must run after core_providers + utilization_metrics)
     from .dedup import flag_group_only_billers
-    results["group_only_flagged"] = flag_group_only_billers(con, data_year)
+    results["group_only_flagged"] = int(
+        run_stage(
+            "group_only_flagged",
+            lambda: flag_group_only_billers(con, data_year),
+        )
+    )
 
     return results
 

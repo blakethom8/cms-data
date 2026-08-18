@@ -1854,6 +1854,16 @@ def test_full_cms_candidate_schema_upgrades_an_n_minus_one_baseline() -> None:
               AND constraint_type = 'PRIMARY KEY'
             """
         ).fetchone()[0]
+        fact_indexes = {
+            row[0]
+            for row in connection.execute(
+                """
+                SELECT index_name
+                FROM duckdb_indexes()
+                WHERE table_name IN ('provider_service_detail', 'provider_drug_detail')
+                """
+            ).fetchall()
+        }
     finally:
         connection.close()
 
@@ -1865,6 +1875,7 @@ def test_full_cms_candidate_schema_upgrades_an_n_minus_one_baseline() -> None:
     } <= tables
     assert drug_columns["brand_name"] == {"not_null": True, "primary_key": True}
     assert drug_primary_key == ["npi", "brand_name", "generic_name", "data_year"]
+    assert fact_indexes == set()
 
 
 def test_full_cms_build_refuses_an_incomplete_source_set(tmp_path: Path) -> None:
@@ -1920,6 +1931,8 @@ def test_full_cms_build_uses_external_release_scoped_spill_directory(
     def fake_load_full_cms_content(
         candidate: duckdb.DuckDBPyConnection, **_kwargs: object
     ) -> tuple[dict[str, int], dict[str, object]]:
+        stage_callback = _kwargs["stage_callback"]
+        stage_callback("fixture_load", "started")
         observed["temp_directory"] = candidate.execute(
             "SELECT current_setting('temp_directory')"
         ).fetchone()[0]
@@ -1929,6 +1942,7 @@ def test_full_cms_build_uses_external_release_scoped_spill_directory(
         observed["preserve_insertion_order"] = candidate.execute(
             "SELECT current_setting('preserve_insertion_order')"
         ).fetchone()[0]
+        stage_callback("fixture_load", "completed")
         return {"baseline_marker": 1}, {"fixture": True}
 
     monkeypatch.setattr(
@@ -1958,8 +1972,88 @@ def test_full_cms_build_uses_external_release_scoped_spill_directory(
         "spill_directory": str(expected_spill),
         "preserve_insertion_order": False,
     }
+    assert result.release.validation_details["build_strategy"] == {
+        "name": "staged_utilization_facts_v1",
+        "transaction_policy": "autocommit_between_transform_statements",
+        "fact_compute": "unindexed_staging_tables",
+        "fact_install": "constrained_targets_without_secondary_indexes",
+        "secondary_indexes": "after_fact_loads",
+    }
+    assert "fixture_load" in result.release.validation_details["build_progress"][
+        "completed_stages"
+    ]
     assert spill_root.is_dir()
     assert not expected_spill.exists()
+
+
+def test_failed_full_cms_build_seals_resource_and_stage_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data_root = tmp_path / "data"
+    baseline = tmp_path / "baseline.duckdb"
+    connection = duckdb.connect(str(baseline))
+    connection.execute("CREATE TABLE baseline_marker (value INTEGER)")
+    connection.close()
+    backup_manifest = tmp_path / "backup-manifest.json"
+    backup_manifest.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "backup_path": str(baseline),
+                "backup_identity": {"byte_size": baseline.stat().st_size},
+                "sha256": sha256_file(baseline),
+                "validation": {"read_only_open": "passed"},
+            }
+        )
+    )
+    source_run_ids = tuple(f"run-{index}" for index, _ in enumerate(FULL_CMS_SOURCE_IDS))
+    by_source_id = {
+        source_id: type(
+            "ManifestStub",
+            (),
+            {"source_data_period": "2024", "run_id": source_run_ids[index]},
+        )()
+        for index, source_id in enumerate(sorted(FULL_CMS_SOURCE_IDS))
+    }
+    monkeypatch.setattr(
+        "pipeline.releases._resolve_exact_source_set",
+        lambda *_args, **_kwargs: by_source_id,
+    )
+
+    def fail_during_drug_stage(
+        _candidate: duckdb.DuckDBPyConnection, **kwargs: object
+    ) -> tuple[dict[str, int], dict[str, object]]:
+        stage_callback = kwargs["stage_callback"]
+        stage_callback("provider_drug_detail_stage", "started")
+        raise duckdb.OutOfMemoryException("fixture memory limit")
+
+    monkeypatch.setattr(
+        "pipeline.releases._load_full_cms_content", fail_during_drug_stage
+    )
+
+    with pytest.raises(ReleaseError, match="fixture memory limit"):
+        build_full_cms_warehouse_release(
+            data_root=data_root,
+            source_run_ids=source_run_ids,
+            backup_manifest_path=backup_manifest,
+            code_commit=CODE_COMMIT,
+            memory_limit_gb=16,
+            threads=1,
+            spill_root=tmp_path / "spill",
+        )
+
+    failed_release = WarehouseReleaseStore(
+        data_root / "warehouse-releases.json"
+    ).load().releases[-1]
+    assert failed_release.validation_state == ValidationState.FAILED
+    assert failed_release.validation_details["resource_limits"]["memory_limit_gb"] == 16
+    assert failed_release.validation_details["build_progress"]["current_stage"] == (
+        "provider_drug_detail_stage"
+    )
+    assert failed_release.validation_details["build_progress"][
+        "current_stage_status"
+    ] == "failed"
+    assert failed_release.validation_details["build_progress"]["failed_at"]
 
 
 def test_affiliation_transform_excludes_ambiguous_names_and_labels_dba_matches(

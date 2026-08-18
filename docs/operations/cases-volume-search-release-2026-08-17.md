@@ -74,3 +74,22 @@ review or expand the volume, restore the normal 85% promotion block, and prove u
 headroom. Cleanup must continue to preserve active plus two validated predecessors, source
 snapshots without durable off-host copies, backups required by recovery policy, and sealed audit
 evidence.
+
+## Staged candidate retry — 2026-08-18
+
+The next candidate uses `staged_utilization_facts_v1` rather than retrying the monolithic
+transaction. The service-detail window and Part D brand/generic aggregation materialize first in
+plain build-stage tables. Their constrained target-table loads commit separately, and the five
+rebuildable HCPCS/drug secondary indexes are created only after both fact loads complete. All other
+full-CMS transforms also run without the former build-wide transaction; the immutable candidate and
+later bundle-pointer activation remain the atomic production boundary.
+
+The release manifest now records resource limits and the staged-build policy before the candidate
+copy begins. It also seals the current stage, status, timestamps, and completed-stage list throughout
+the build, including on failure. This repairs the evidence gap where prior OOM manifests contained
+an empty `validation_details` object.
+
+The retry remains bounded to 16 GiB, one thread, and the release-scoped spill directory on
+`/mnt/HC_Volume_106641689/cms-data-build-spill`. A failure at any build, comparison, capacity,
+rehearsal, smoke, or cutover gate leaves production selected on its existing bundle. No forced
+activation is permitted.
