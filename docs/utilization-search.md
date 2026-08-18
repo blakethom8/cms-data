@@ -1,7 +1,7 @@
 # Utilization search serving contract
 
-> **Status:** independent utilization release and API contract implemented; production activation
-> remains approval-gated
+> **Status:** independent utilization release and API contract active in the development serving
+> environment; commercialization and licensing review remains a release gate
 
 `/utilization/*` is the inverted Medicare discovery surface for Provider Search Cases. It ranks
 individual NPIs by a selected HCPCS or Part D drug basket and assigns each NPI's national totals to
@@ -34,10 +34,13 @@ Baskets are capped at 50 values and results at 200 NPIs. Procedure and drug mode
 
 ## HCPCS description release gate
 
-Numeric HCPCS Level I descriptions can contain AMA CPT content. The API therefore returns no
-procedure descriptions and does not match description text by default. Set
-`HCPCS_DESCRIPTIONS_ENABLED=true` only after the organization confirms the required license or an
-approved description filter. Code lookup remains available while that gate is closed.
+Numeric HCPCS Level I descriptions can contain AMA CPT content. The safe default therefore returns
+no procedure descriptions and does not match description text. On 2026-08-18, the development
+serving environment explicitly enabled `HCPCS_DESCRIPTIONS_ENABLED=true` so Provider Search can be
+built and evaluated against the intended end-state procedure discovery experience. This
+development opt-in does not settle commercialization rights: a formal licensing review or approved
+description filter remains required before a commercial production release. Code lookup remains
+available whenever the gate is closed.
 
 ## Confirmed non-goals in the active warehouse
 
