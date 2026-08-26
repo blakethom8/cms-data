@@ -411,6 +411,7 @@ def test_capabilities_advertise_the_complete_v2_contract():
             "multi_specialty",
             "practice_specialties",
             "scoped_metrics",
+            "utilization_browse_v2",
         ],
     }
 
@@ -428,6 +429,21 @@ def test_capabilities_fails_closed_when_specialty_catalog_is_missing_or_empty():
 
     assert empty.status_code == 503
     assert empty.json() == {"detail": "CMS specialty catalog is unavailable"}
+
+
+def test_capabilities_fails_closed_when_utilization_browse_v2_is_unavailable():
+    app = FastAPI()
+    app.include_router(
+        get_practices_router(
+            lambda: _database(),
+            utilization_browse_v2_ready=lambda: False,
+        )
+    )
+
+    response = TestClient(app).get("/practices/capabilities")
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "CMS utilization browse v2 is unavailable"}
 
 
 def test_primary_search_attributes_each_npi_total_once_to_nppes_address():

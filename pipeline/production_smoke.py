@@ -296,6 +296,38 @@ def run_smoke(
                 {"returned": len(procedure_values)},
             )
         )
+        status, procedure_catalog = _request(
+            base_url,
+            "GET",
+            "/utilization/procedures/catalog?prefix=99213&limit=3",
+            api_key,
+        )
+        procedure_catalog_values = (
+            procedure_catalog.get("results", [])
+            if isinstance(procedure_catalog, dict)
+            else []
+        )
+        procedure_catalog_ok = (
+            status == 200
+            and isinstance(procedure_catalog_values, list)
+            and bool(procedure_catalog_values)
+            and procedure_catalog_values[0].get("value") == "99213"
+            and procedure_catalog.get("ordering") == "hcpcs_code"
+            and procedure_catalog.get("returned_count") == len(procedure_catalog_values)
+        )
+        checks.append(
+            _check(
+                "utilization_procedure_catalog",
+                procedure_catalog_ok,
+                status,
+                {
+                    "total": procedure_catalog.get("total")
+                    if isinstance(procedure_catalog, dict)
+                    else None,
+                    "returned": len(procedure_catalog_values),
+                },
+            )
+        )
         procedure_query = urllib.parse.urlencode(
             {"hcpcs": "99213", "state": "OH", "limit": 3}
         )
@@ -351,6 +383,80 @@ def run_smoke(
                 drug_options_ok,
                 status,
                 {"returned": len(drug_values)},
+            )
+        )
+        status, drug_catalog = _request(
+            base_url,
+            "GET",
+            "/utilization/drugs/catalog?q=lisinopril&limit=3",
+            api_key,
+        )
+        drug_catalog_values = (
+            drug_catalog.get("results", [])
+            if isinstance(drug_catalog, dict)
+            else []
+        )
+        drug_catalog_ok = (
+            status == 200
+            and isinstance(drug_catalog_values, list)
+            and bool(drug_catalog_values)
+            and bool(drug_catalog_values[0].get("generic"))
+            and drug_catalog.get("ordering") == "brand_generic"
+            and drug_catalog.get("returned_count") == len(drug_catalog_values)
+        )
+        checks.append(
+            _check(
+                "utilization_drug_catalog",
+                drug_catalog_ok,
+                status,
+                {
+                    "total": drug_catalog.get("total")
+                    if isinstance(drug_catalog, dict)
+                    else None,
+                    "returned": len(drug_catalog_values),
+                },
+            )
+        )
+        status, browse_v2 = _request(
+            base_url,
+            "GET",
+            "/utilization/v2/procedures/catalog?limit=3",
+            api_key,
+        )
+        browse_rows = browse_v2.get("results", []) if isinstance(browse_v2, dict) else []
+        window = browse_v2.get("window", {}) if isinstance(browse_v2, dict) else {}
+        snapshot = browse_v2.get("snapshot", {}) if isinstance(browse_v2, dict) else {}
+        browse_v2_ok = (
+            status == 200
+            and browse_v2.get("contract_version") == 2
+            and snapshot.get("ordering") == "hcpcs_code_v1"
+            and isinstance(browse_rows, list)
+            and bool(browse_rows)
+            and browse_v2.get("returned_count") == len(browse_rows)
+            and isinstance(window.get("start_index"), int)
+            and isinstance(window.get("anchor_resolution"), str)
+            and all(isinstance(row, dict) and str(row.get("row_key", "")).startswith("hcpcs:") for row in browse_rows)
+        )
+        anchor_key = window.get("anchor_key") if browse_v2_ok else None
+        if browse_v2_ok and anchor_key:
+            anchor_status, anchored = _request(
+                base_url,
+                "GET",
+                f"/utilization/v2/procedures/catalog?anchor={urllib.parse.quote(str(anchor_key))}&limit=3",
+                api_key,
+            )
+            browse_v2_ok = (
+                anchor_status == 200
+                and isinstance(anchored, dict)
+                and anchored.get("snapshot", {}).get("id") == snapshot.get("id")
+                and anchored.get("window", {}).get("anchor_resolution") == "exact"
+            )
+        checks.append(
+            _check(
+                "utilization_browse_v2",
+                browse_v2_ok,
+                status,
+                {"returned": len(browse_rows), "snapshot": snapshot.get("id")},
             )
         )
         selected_generic = (
@@ -470,24 +576,129 @@ def run_smoke(
                     {"returned": len(class_members)},
                 )
             )
+
+            status, taxonomy_v2 = _request(
+                base_url,
+                "GET",
+                "/utilization/v2/procedures/taxonomy?limit=1",
+                api_key,
+            )
+            taxonomy_rows = taxonomy_v2.get("results", []) if isinstance(taxonomy_v2, dict) else []
+            taxonomy_window = taxonomy_v2.get("window", {}) if isinstance(taxonomy_v2, dict) else {}
+            taxonomy_v2_ok = (
+                status == 200
+                and taxonomy_v2.get("contract_version") == 2
+                and taxonomy_v2.get("snapshot", {}).get("ordering") == "procedure_family_v1"
+                and len(taxonomy_rows) == taxonomy_v2.get("returned_count")
+                and bool(taxonomy_rows)
+                and bool(taxonomy_rows[0].get("family_id"))
+                and taxonomy_rows[0].get("row_key") == f"family:{taxonomy_rows[0].get('family_id')}"
+            )
+            family_v2_id = taxonomy_rows[0].get("family_id") if taxonomy_v2_ok else "invalid"
+            family_v2_status, family_v2 = _request(
+                base_url,
+                "GET",
+                f"/utilization/v2/procedures/families/{urllib.parse.quote(str(family_v2_id))}/members?limit=1",
+                api_key,
+            )
+            family_v2_rows = family_v2.get("results", []) if isinstance(family_v2, dict) else []
+            family_v2_ok = (
+                family_v2_status == 200
+                and family_v2.get("snapshot", {}).get("ordering") == "hcpcs_code_v1"
+                and bool(family_v2_rows)
+                and str(family_v2_rows[0].get("row_key", "")).startswith("hcpcs:")
+            )
+
+            status, classes_v2 = _request(
+                base_url,
+                "GET",
+                "/utilization/v2/drugs/classes?source=ATC&limit=1",
+                api_key,
+            )
+            class_v2_rows = classes_v2.get("results", []) if isinstance(classes_v2, dict) else []
+            class_v2_window = classes_v2.get("window", {}) if isinstance(classes_v2, dict) else {}
+            classes_v2_ok = (
+                status == 200
+                and classes_v2.get("contract_version") == 2
+                and classes_v2.get("snapshot", {}).get("ordering") == "drug_class_v1"
+                and len(class_v2_rows) == classes_v2.get("returned_count")
+                and bool(class_v2_rows)
+                and bool(class_v2_rows[0].get("class_id"))
+                and class_v2_rows[0].get("row_key") == f"class:ATC:{class_v2_rows[0].get('class_id')}"
+            )
+            next_cursor = class_v2_window.get("next_cursor") if classes_v2_ok else None
+            if next_cursor:
+                next_status, next_classes = _request(
+                    base_url,
+                    "GET",
+                    "/utilization/v2/drugs/classes?source=ATC&limit=1&after="
+                    + urllib.parse.quote(str(next_cursor)),
+                    api_key,
+                )
+                next_rows = next_classes.get("results", []) if isinstance(next_classes, dict) else []
+                classes_v2_ok = (
+                    next_status == 200
+                    and bool(next_rows)
+                    and next_rows[0].get("row_key") != class_v2_rows[0].get("row_key")
+                )
+            else:
+                classes_v2_ok = False
+            class_v2_id = class_v2_rows[0].get("class_id") if classes_v2_ok else "invalid"
+            class_member_status, class_members_v2 = _request(
+                base_url,
+                "GET",
+                f"/utilization/v2/drugs/classes/ATC/{urllib.parse.quote(str(class_v2_id))}/members?limit=1",
+                api_key,
+            )
+            class_member_rows = (
+                class_members_v2.get("results", [])
+                if isinstance(class_members_v2, dict)
+                else []
+            )
+            class_members_v2_ok = (
+                class_member_status == 200
+                and class_members_v2.get("snapshot", {}).get("ordering") == "drug_class_member_v1"
+                and bool(class_member_rows)
+                and class_member_rows[0].get("selection_key") == f"generic:{class_member_rows[0].get('generic')}"
+                and class_member_rows[0].get("row_key") == class_member_rows[0].get("selection_key")
+            )
+            checks.append(
+                _check(
+                    "utilization_hierarchy_browse_v2",
+                    taxonomy_v2_ok and family_v2_ok and classes_v2_ok and class_members_v2_ok,
+                    status,
+                    {
+                        "taxonomy_returned": len(taxonomy_rows),
+                        "classes_returned": len(class_v2_rows),
+                        "class_continued": bool(next_cursor),
+                        "family_members_returned": len(family_v2_rows),
+                        "class_members_returned": len(class_member_rows),
+                    },
+                )
+            )
         else:
             for name in (
                 "utilization_procedure_taxonomy",
                 "utilization_procedure_family",
                 "utilization_drug_classes",
                 "utilization_drug_class",
+                "utilization_hierarchy_browse_v2",
             ):
                 checks.append(_check(name, True, None, {"applicability": "not_applicable"}))
     else:
         for name in (
             "utilization_procedure_options",
+            "utilization_procedure_catalog",
             "utilization_procedure_search",
             "utilization_drug_options",
+            "utilization_drug_catalog",
+            "utilization_browse_v2",
             "utilization_drug_search",
             "utilization_procedure_taxonomy",
             "utilization_procedure_family",
             "utilization_drug_classes",
             "utilization_drug_class",
+            "utilization_hierarchy_browse_v2",
         ):
             checks.append(_check(name, True, None, {"applicability": "not_applicable"}))
 

@@ -10,6 +10,7 @@ import sys
 import threading
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Optional
 
 import duckdb
@@ -116,6 +117,52 @@ def get_utilization_conn() -> duckdb.DuckDBPyConnection:
     return _utilization_conn
 
 
+def utilization_browse_v2_ready() -> bool:
+    """Fail closed until the sidecar can serve every declared V2 browse door."""
+    required = (
+        "utilization_procedure_dictionary",
+        "utilization_drug_dictionary",
+        "utilization_procedure_taxonomy",
+        "utilization_drug_classes",
+        "utilization_drug_class_members",
+    )
+    try:
+        found = {
+            row[0]
+            for row in get_utilization_conn()
+            .execute(
+                "select table_name from information_schema.tables "
+                "where table_schema='main' and table_name in (" + ",".join("?" for _ in required) + ")",
+                list(required),
+            )
+            .fetchall()
+        }
+        return found == set(required)
+    except duckdb.Error:
+        return False
+
+
+def get_utilization_snapshot_id() -> str | None:
+    """Read the immutable sidecar release selected with the serving bundle."""
+    configured = os.getenv("CMS_UTILIZATION_RELEASE_ID", "").strip()
+    if configured:
+        return configured
+    try:
+        bundle = Path(DB_PATH).parent.resolve(strict=True)
+        if bundle.parent.name != "releases":
+            return None
+        deployments = json.loads(
+            (bundle.parent.parent / "deployments.json").read_text(encoding="utf-8")
+        ).get("deployments", [])
+        for deployment in deployments:
+            if isinstance(deployment, dict) and deployment.get("deployment_id") == bundle.name:
+                release_id = deployment.get("utilization_release_id")
+                return release_id if isinstance(release_id, str) and release_id else None
+    except (OSError, ValueError, TypeError):
+        return None
+    return None
+
+
 from database_pool import DuckDBConnectionPool
 
 database_pool = DuckDBConnectionPool(
@@ -214,7 +261,10 @@ from unified_search import get_unified_router
 app.include_router(get_unified_router(get_conn), dependencies=_secured)
 
 from practices import get_practices_router
-app.include_router(get_practices_router(get_conn), dependencies=_secured)
+app.include_router(
+    get_practices_router(get_conn, utilization_browse_v2_ready=utilization_browse_v2_ready),
+    dependencies=_secured,
+)
 
 from market_snapshot import get_market_snapshot_router
 app.include_router(get_market_snapshot_router(get_conn), dependencies=_secured)
@@ -229,7 +279,10 @@ from industry import get_industry_router
 app.include_router(get_industry_router(get_conn), dependencies=_secured)
 
 from utilization import get_utilization_router
-app.include_router(get_utilization_router(get_utilization_conn), dependencies=_secured)
+app.include_router(
+    get_utilization_router(get_utilization_conn, get_utilization_snapshot_id),
+    dependencies=_secured,
+)
 
 from research import get_research_router
 app.include_router(get_research_router(get_conn), dependencies=_secured)

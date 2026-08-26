@@ -655,6 +655,7 @@ def get_practices_router(
     get_conn,
     cms_enrollment_search_backend: CmsEnrollmentSearchBackend | None = None,
     nppes_primary_search_backend: NppesPrimarySearchBackend | None = None,
+    utilization_browse_v2_ready=None,
 ):
     # Each application instance must close over its own connection factory. A
     # module-global router retains the first factory when tests or workers build
@@ -790,6 +791,11 @@ def get_practices_router(
         # The proxy treats this endpoint as a deploy/readiness gate. Do not
         # advertise v2 until its required specialty catalog can be queried.
         get_specialty_catalog()
+        if utilization_browse_v2_ready is not None and not utilization_browse_v2_ready():
+            raise HTTPException(
+                status_code=503,
+                detail="CMS utilization browse v2 is unavailable",
+            )
         return {
             "contract_version": CONTRACT_VERSION,
             "capabilities": [
@@ -799,6 +805,7 @@ def get_practices_router(
                 "multi_specialty",
                 "practice_specialties",
                 "scoped_metrics",
+                "utilization_browse_v2",
             ],
         }
 
