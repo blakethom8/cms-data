@@ -29,12 +29,47 @@ fact grain or the explicit search basket contract. See `docs/utilization-taxonom
 ## Routes
 
 - `GET /utilization/procedures/options?q=33249&limit=10`
+- `GET /utilization/procedures/catalog?prefix=33&offset=0&limit=100`
 - `GET /utilization/procedures/search?hcpcs=33249&city=Denver&state=CO`
 - `GET /utilization/drugs/options?q=eliquis&limit=10`
+- `GET /utilization/drugs/catalog?q=insulin&offset=0&limit=100`
 - `GET /utilization/drugs/search?brands=Eliquis&city=Denver&state=CO`
 
 Search requires a non-empty basket plus city/state, a ZIP boundary, or a latitude/longitude radius.
 Baskets are capped at 50 values and results at 200 NPIs. Procedure and drug modes are separate.
+
+The `options` routes remain small relevance-ranked typeahead contracts. The `catalog` routes are
+the exhaustive browse contracts: `q` is an optional contains filter, `prefix` is an optional
+strict code or brand/generic prefix, and immutable-release rows are returned in stable sequential
+order. Responses carry `total`, `offset`, `limit`, `returned_count`, and `has_more`; clients must
+page instead of pulling the full dictionary into one render. Procedure catalog descriptions obey
+the same release gate as procedure typeahead.
+
+## Snapshot-pinned browse v2
+
+`/utilization/v2/*` is additive; V1 catalog and typeahead routes remain the rollback contract.
+The canonical browser routes are `GET /utilization/v2/procedures/catalog`,
+`GET /utilization/v2/drugs/catalog`, and `POST /utilization/v2/catalog/resolve`.
+
+Catalog pages take `q`, `prefix`, `limit` (1–200), and at most one opaque `after`, `before`, or
+`anchor`. Procedure pages also accept `code_from`, `code_to`, and `family_id`; drug pages accept
+`class_source` plus `class_id`. Cursors are signed, release/snapshot-bound keyset cursors and must
+be passed through unchanged. A stale snapshot returns `409` with
+`{"detail":{"reason":"catalog.snapshot_changed"}}`; malformed, wrong-kind, or scope-mismatched
+cursors return `catalog.invalid_cursor` without exposing cursor contents.
+
+Every V2 page uses the common envelope: `snapshot {id,data_year,ordering}`, normalized `scope`,
+honest `count {value,relation}`, `window {start_index,previous_cursor,next_cursor,anchor_key,
+anchor_resolution}`, `returned_count`, and `results`. `start_index` is an output ordinal, never an
+offset input. Procedure keys are `hcpcs:<normalized-code>`; drug row keys are collision-safe opaque
+encodings of the canonical brand/generic pair. Procedure descriptions are omitted unless
+`HCPCS_DESCRIPTIONS_ENABLED=true` and each procedure page and resolve response declares that gate.
+
+`POST /utilization/v2/catalog/resolve` accepts one to 50 `hcpcs:`, `brand:`, or `generic:`
+selection keys and returns a result in request order. Unknown values are successful unavailable
+results; more than 50 keys returns `catalog.invalid_request`. Release readiness advertises
+`utilization_browse_v2` only when the deployed utilization sidecar has the complete V2 reference
+table set, so consumers can fail closed before enabling the browser.
 
 ## HCPCS description release gate
 

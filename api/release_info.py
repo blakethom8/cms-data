@@ -46,7 +46,10 @@ logger = logging.getLogger(__name__)
 # `nppes`, `nppes + medicare`, or the rare DAC-only fallback `medicare`.
 # `/profiles/{npi}` accepts NPPES-only clinicians, and each locations[] row
 # gains `sources` (`dac` / `nppes` / `dac + nppes`) via a DAC ⟕ NPPES join.
-REPRESENTATION_VERSION = 3
+# v4 — `/practices/capabilities` advertises the release-gated
+# `utilization_browse_v2` capability. Provider Search uses this as a fail-closed
+# preflight before it enables the snapshot-pinned reference browser.
+REPRESENTATION_VERSION = 4
 
 # Matches pipeline/production_manager.py DEPLOYMENT_ID_PATTERN.
 DEPLOYMENT_ID_PATTERN = re.compile(r"^[a-z]+-[0-9]{8}T[0-9]{6}Z-[a-f0-9]{10}$")

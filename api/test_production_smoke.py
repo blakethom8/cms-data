@@ -160,8 +160,11 @@ def test_smoke_validates_required_contracts_and_exact_counts(monkeypatch: pytest
         "clinical_trials",
         "warehouse_counts",
         "utilization_procedure_options",
+        "utilization_procedure_catalog",
         "utilization_procedure_search",
         "utilization_drug_options",
+        "utilization_drug_catalog",
+        "utilization_browse_v2",
         "utilization_drug_search",
     }
 
@@ -181,6 +184,53 @@ def test_smoke_exercises_utilization_contracts_when_bundle_has_sidecar(
     def request(base_url, method, path, api_key, payload=None):
         if path.startswith("/utilization/procedures/options"):
             return 200, {"results": [{"value": "99213"}]}
+        if path.startswith("/utilization/v2/procedures/catalog"):
+            return 200, {
+                "contract_version": 2,
+                "snapshot": {"id": "utilization-test", "ordering": "hcpcs_code_v1"},
+                "returned_count": 1,
+                "results": [{"row_key": "hcpcs:99213"}],
+                "window": {
+                    "start_index": 0,
+                    "anchor_key": "hcpcs:99213",
+                    "anchor_resolution": "exact" if "anchor=" in path else "start",
+                },
+            }
+        if path.startswith("/utilization/v2/procedures/taxonomy"):
+            return 200, {"contract_version": 2, "snapshot": {"ordering": "procedure_family_v1"}, "returned_count": 1, "results": [{"family_id": "EM-001", "row_key": "family:EM-001"}], "window": {}}
+        if path.startswith("/utilization/v2/procedures/families/"):
+            return 200, {"snapshot": {"ordering": "hcpcs_code_v1"}, "results": [{"row_key": "hcpcs:99213"}]}
+        if path.startswith("/utilization/v2/drugs/classes/ATC/"):
+            return 200, {"snapshot": {"ordering": "drug_class_member_v1"}, "results": [{"generic": "Lisinopril", "row_key": "generic:Lisinopril", "selection_key": "generic:Lisinopril"}]}
+        if path.startswith("/utilization/v2/drugs/classes"):
+            after = "after=" in path
+            return 200, {
+                "contract_version": 2,
+                "snapshot": {"ordering": "drug_class_v1"},
+                "returned_count": 1,
+                "results": [{
+                    "class_id": "C09AB" if after else "C09AA",
+                    "row_key": "class:ATC:C09AB" if after else "class:ATC:C09AA",
+                }],
+                "window": {} if after else {"next_cursor": "next-class"},
+            }
+        if path.startswith("/utilization/procedures/catalog"):
+            return 200, {
+                "ordering": "hcpcs_code", "total": 1, "returned_count": 1,
+                "results": [{"value": "99213"}],
+            }
+        if path.startswith("/utilization/v2/procedures/catalog"):
+            return 200, {
+                "contract_version": 2,
+                "snapshot": {"id": "utilization-test", "ordering": "hcpcs_code_v1"},
+                "returned_count": 1,
+                "results": [{"row_key": "hcpcs:99213"}],
+                "window": {
+                    "start_index": 0,
+                    "anchor_key": "hcpcs:99213",
+                    "anchor_resolution": "exact" if "anchor=" in path else "start",
+                },
+            }
         if path.startswith("/utilization/procedures/search"):
             return 200, {
                 "mode": "procedures",
@@ -192,6 +242,11 @@ def test_smoke_exercises_utilization_contracts_when_bundle_has_sidecar(
         if path.startswith("/utilization/drugs/options"):
             return 200, {
                 "results": [{"brand": "Lisinopril", "generic": "Lisinopril"}]
+            }
+        if path.startswith("/utilization/drugs/catalog"):
+            return 200, {
+                "ordering": "brand_generic", "total": 1, "returned_count": 1,
+                "results": [{"brand": "Lisinopril", "generic": "Lisinopril"}],
             }
         if path.startswith("/utilization/drugs/search"):
             return 200, {
@@ -232,14 +287,14 @@ def test_smoke_exercises_utilization_contracts_when_bundle_has_sidecar(
         for check in evidence["checks"]
         if check["name"].startswith("utilization_")
     ]
-    assert len(utilization_checks) == 8
+    assert len(utilization_checks) == 12
     assert all(
         check["summary"].get("applicability") is None
-        for check in utilization_checks[:4]
+        for check in utilization_checks[:7]
     )
     assert all(
         check["summary"].get("applicability") == "not_applicable"
-        for check in utilization_checks[4:]
+        for check in utilization_checks[7:]
     )
 
 
@@ -264,6 +319,41 @@ def test_smoke_exercises_taxonomy_contracts_when_tables_are_present(
     def request(base_url, method, path, api_key, payload=None):
         if path.startswith("/utilization/procedures/options"):
             return 200, {"results": [{"value": "99213"}]}
+        if path.startswith("/utilization/v2/procedures/taxonomy"):
+            return 200, {"contract_version": 2, "snapshot": {"ordering": "procedure_family_v1"}, "returned_count": 1, "results": [{"family_id": "EM-001", "row_key": "family:EM-001"}], "window": {}}
+        if path.startswith("/utilization/v2/procedures/families/"):
+            return 200, {"snapshot": {"ordering": "hcpcs_code_v1"}, "results": [{"row_key": "hcpcs:99213"}]}
+        if path.startswith("/utilization/v2/drugs/classes/ATC/"):
+            return 200, {"snapshot": {"ordering": "drug_class_member_v1"}, "results": [{"generic": "Lisinopril", "row_key": "generic:Lisinopril", "selection_key": "generic:Lisinopril"}]}
+        if path.startswith("/utilization/v2/drugs/classes"):
+            after = "after=" in path
+            return 200, {
+                "contract_version": 2,
+                "snapshot": {"ordering": "drug_class_v1"},
+                "returned_count": 1,
+                "results": [{
+                    "class_id": "C09AB" if after else "C09AA",
+                    "row_key": "class:ATC:C09AB" if after else "class:ATC:C09AA",
+                }],
+                "window": {} if after else {"next_cursor": "next-class"},
+            }
+        if path.startswith("/utilization/v2/procedures/catalog"):
+            return 200, {
+                "contract_version": 2,
+                "snapshot": {"id": "utilization-test", "ordering": "hcpcs_code_v1"},
+                "returned_count": 1,
+                "results": [{"row_key": "hcpcs:99213"}],
+                "window": {
+                    "start_index": 0,
+                    "anchor_key": "hcpcs:99213",
+                    "anchor_resolution": "exact" if "anchor=" in path else "start",
+                },
+            }
+        if path.startswith("/utilization/procedures/catalog"):
+            return 200, {
+                "ordering": "hcpcs_code", "total": 1, "returned_count": 1,
+                "results": [{"value": "99213"}],
+            }
         if path.startswith("/utilization/procedures/search"):
             return 200, {
                 "mode": "procedures", "metric_scope": "national_npi_totals",
@@ -275,6 +365,11 @@ def test_smoke_exercises_taxonomy_contracts_when_tables_are_present(
             return 200, {"members": [{"value": "99213"}]}
         if path.startswith("/utilization/drugs/options"):
             return 200, {"results": [{"brand": "Lisinopril", "generic": "Lisinopril"}]}
+        if path.startswith("/utilization/drugs/catalog"):
+            return 200, {
+                "ordering": "brand_generic", "total": 1, "returned_count": 1,
+                "results": [{"brand": "Lisinopril", "generic": "Lisinopril"}],
+            }
         if path.startswith("/utilization/drugs/search"):
             return 200, {
                 "mode": "drugs", "metric_scope": "national_npi_totals",

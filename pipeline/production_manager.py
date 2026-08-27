@@ -59,8 +59,12 @@ REQUIRED_VERIFICATION_CHECKS = {
     "required_tables",
     "warehouse_counts",
     "utilization_procedure_options",
+    "utilization_procedure_catalog",
     "utilization_procedure_search",
     "utilization_drug_options",
+    "utilization_drug_catalog",
+    "utilization_browse_v2",
+    "utilization_hierarchy_browse_v2",
     "utilization_drug_search",
 }
 
@@ -1633,8 +1637,10 @@ def _validate_evidence(
     if deployment.targets.utilization is not None:
         utilization_names = {
             "utilization_procedure_options",
+            "utilization_procedure_catalog",
             "utilization_procedure_search",
             "utilization_drug_options",
+            "utilization_drug_catalog",
             "utilization_drug_search",
         }
         if any(
