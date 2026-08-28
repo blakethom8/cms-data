@@ -106,6 +106,20 @@ def _successful_request(base_url, method, path, api_key, payload=None):
         }
     if path == "/clinical-trials/version":
         return 200, {"snapshotDate": "2026-07-20", "studyCount": 600000}
+    if path.startswith("/clinical-trials/studies?"):
+        return 200, {
+            "studies": [
+                {
+                    "protocolSection": {
+                        "contactsLocationsModule": {
+                            "locations": [{"zip": "10001-1234"}]
+                        }
+                    }
+                }
+            ],
+            "totalCount": 1,
+            "nextPageToken": None,
+        }
     if path == "/explorer/catalog":
         return 200, [{"id": "example"}]
     if path == "/tables":
@@ -158,6 +172,7 @@ def test_smoke_validates_required_contracts_and_exact_counts(monkeypatch: pytest
         "industry_detail",
         "research",
         "clinical_trials",
+        "clinical_trials_exact_zip",
         "warehouse_counts",
         "utilization_procedure_options",
         "utilization_procedure_catalog",

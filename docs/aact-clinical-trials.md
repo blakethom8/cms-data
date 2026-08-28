@@ -22,8 +22,17 @@ included with the service's existing X-API-Key dependency.
 - `GET /clinical-trials/studies`
 
 `/studies` requires exactly one of `query.cond`, `query.intr`, or `query.term`. It accepts
-`filter.overallStatus`, `pageSize`, and either a `filter.geo=distance(lat,lng,Nmi)` market filter
-or the site filters `query.locn`, `query.city`, and `query.state`.
+`filter.overallStatus`, `pageSize`, and exactly one geographic mode:
+
+- `filter.geo=distance(lat,lng,Nmi)` for a radius market;
+- `filter.zip=ZIP5|ZIP5` for an exact territory containing 1–100 ZIP5 values; or
+- the site filters `query.locn`, `query.city`, and `query.state`.
+
+Exact ZIP searches match the first five characters of the sponsor-reported
+`ctgov.facilities.zip` value, so registered ZIP+4 locations participate in their ZIP5 territory.
+Both candidate selection and returned locations use the same predicate; a matching study never
+leaks facilities outside the selected ZIP set. ZIP matching does not depend on facility latitude
+or longitude.
 
 The response intentionally mirrors only the ClinicalTrials.gov v2 fields consumed by Provider
 Search. Extend the adapter deliberately when the application needs another field; do not turn it
