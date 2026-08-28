@@ -4413,6 +4413,532 @@
       }
     }
   },
+  "/radar/providers/hydrate": {
+    "post": {
+      "200": {
+        "additionalProperties": false,
+        "description": "Current provider facts for immutable event references.",
+        "properties": {
+          "events": {
+            "items": {
+              "properties": {
+                "credentials": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Credentials"
+                },
+                "deactivation_date": {
+                  "anyOf": [
+                    {
+                      "format": "date",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Deactivation Date"
+                },
+                "detected_at": {
+                  "title": "Detected At",
+                  "type": "string"
+                },
+                "effective_date": {
+                  "format": "date",
+                  "title": "Effective Date",
+                  "type": "string"
+                },
+                "enumeration_date": {
+                  "anyOf": [
+                    {
+                      "format": "date",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Enumeration Date"
+                },
+                "event_id": {
+                  "title": "Event Id",
+                  "type": "string"
+                },
+                "event_type": {
+                  "enum": [
+                    "newly_enumerated",
+                    "practice_location_changed",
+                    "primary_taxonomy_changed",
+                    "reactivated",
+                    "deactivated"
+                  ],
+                  "title": "Event Type",
+                  "type": "string"
+                },
+                "first_name": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "First Name"
+                },
+                "last_name": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Last Name"
+                },
+                "new_primary_taxonomy_code": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "New Primary Taxonomy Code"
+                },
+                "new_zip5": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "New Zip5"
+                },
+                "npi": {
+                  "title": "Npi",
+                  "type": "string"
+                },
+                "old_primary_taxonomy_code": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Old Primary Taxonomy Code"
+                },
+                "old_zip5": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Old Zip5"
+                },
+                "practice_address_1": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Practice Address 1"
+                },
+                "practice_address_2": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Practice Address 2"
+                },
+                "practice_city": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Practice City"
+                },
+                "practice_phone": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Practice Phone"
+                },
+                "practice_state": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Practice State"
+                },
+                "practice_zip5": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Practice Zip5"
+                },
+                "primary_taxonomy_code": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Primary Taxonomy Code"
+                },
+                "reactivation_date": {
+                  "anyOf": [
+                    {
+                      "format": "date",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Reactivation Date"
+                },
+                "reason": {
+                  "title": "Reason",
+                  "type": "string"
+                },
+                "source_data_period": {
+                  "title": "Source Data Period",
+                  "type": "string"
+                },
+                "source_last_updated_date": {
+                  "anyOf": [
+                    {
+                      "format": "date",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Source Last Updated Date"
+                },
+                "source_release_id": {
+                  "title": "Source Release Id",
+                  "type": "string"
+                },
+                "taxonomy_codes": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Taxonomy Codes",
+                  "type": "array"
+                }
+              },
+              "required": [
+                "event_id",
+                "event_type",
+                "effective_date",
+                "detected_at",
+                "source_release_id",
+                "source_data_period",
+                "npi",
+                "reason"
+              ],
+              "title": "RadarProviderEvent",
+              "type": "object"
+            },
+            "title": "Events",
+            "type": "array"
+          },
+          "references": {
+            "items": {
+              "additionalProperties": false,
+              "description": "An event observed during one installed Radar release.",
+              "properties": {
+                "event_id": {
+                  "maxLength": 200,
+                  "minLength": 1,
+                  "title": "Event Id",
+                  "type": "string"
+                },
+                "source_release_id": {
+                  "maxLength": 200,
+                  "minLength": 1,
+                  "title": "Source Release Id",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "event_id",
+                "source_release_id"
+              ],
+              "title": "RadarEventReference",
+              "type": "object"
+            },
+            "title": "References",
+            "type": "array"
+          },
+          "source_fresh_through": {
+            "format": "date",
+            "title": "Source Fresh Through",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_fresh_through",
+          "references",
+          "events"
+        ],
+        "title": "RadarHydrateResponse",
+        "type": "object"
+      },
+      "422": {
+        "properties": {
+          "detail": {
+            "items": {
+              "properties": {
+                "loc": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "title": "Location",
+                  "type": "array"
+                },
+                "msg": {
+                  "title": "Message",
+                  "type": "string"
+                },
+                "type": {
+                  "title": "Error Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "loc",
+                "msg",
+                "type"
+              ],
+              "title": "ValidationError",
+              "type": "object"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "/radar/providers/match-scopes": {
+    "post": {
+      "200": {
+        "additionalProperties": false,
+        "description": "Release receipt and bounded opaque references for every request scope.",
+        "properties": {
+          "scopes": {
+            "items": {
+              "additionalProperties": false,
+              "description": "Every bounded event reference matching one opaque request scope.",
+              "properties": {
+                "matches": {
+                  "items": {
+                    "additionalProperties": false,
+                    "description": "Opaque event attribution returned to Provider Search.",
+                    "properties": {
+                      "event_id": {
+                        "title": "Event Id",
+                        "type": "string"
+                      },
+                      "location_change": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "entered_market",
+                              "within_market"
+                            ],
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Location Change"
+                      }
+                    },
+                    "required": [
+                      "event_id"
+                    ],
+                    "title": "RadarScopeMatch",
+                    "type": "object"
+                  },
+                  "title": "Matches",
+                  "type": "array"
+                },
+                "scope_key": {
+                  "title": "Scope Key",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "scope_key",
+                "matches"
+              ],
+              "title": "RadarScopeResult",
+              "type": "object"
+            },
+            "title": "Scopes",
+            "type": "array"
+          },
+          "source_data_period": {
+            "title": "Source Data Period",
+            "type": "string"
+          },
+          "source_fresh_through": {
+            "format": "date",
+            "title": "Source Fresh Through",
+            "type": "string"
+          },
+          "source_release_id": {
+            "title": "Source Release Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_release_id",
+          "source_data_period",
+          "source_fresh_through",
+          "scopes"
+        ],
+        "title": "RadarMatchScopesResponse",
+        "type": "object"
+      },
+      "422": {
+        "properties": {
+          "detail": {
+            "items": {
+              "properties": {
+                "loc": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "title": "Location",
+                  "type": "array"
+                },
+                "msg": {
+                  "title": "Message",
+                  "type": "string"
+                },
+                "type": {
+                  "title": "Error Type",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "loc",
+                "msg",
+                "type"
+              ],
+              "title": "ValidationError",
+              "type": "object"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "/radar/providers/release": {
+    "get": {
+      "200": {
+        "additionalProperties": false,
+        "description": "Immutable source release selected for one reconciliation pass.",
+        "properties": {
+          "contract_version": {
+            "const": 1,
+            "default": 1,
+            "title": "Contract Version",
+            "type": "integer"
+          },
+          "source_data_period": {
+            "title": "Source Data Period",
+            "type": "string"
+          },
+          "source_fresh_through": {
+            "format": "date",
+            "title": "Source Fresh Through",
+            "type": "string"
+          },
+          "source_release_id": {
+            "title": "Source Release Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_release_id",
+          "source_data_period",
+          "source_fresh_through"
+        ],
+        "title": "RadarReleaseReceipt",
+        "type": "object"
+      }
+    }
+  },
   "/release": {
     "get": {
       "200": {
