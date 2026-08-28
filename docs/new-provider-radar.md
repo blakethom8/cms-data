@@ -177,6 +177,35 @@ promotion remain follow-up pipeline work.
 
 ## Read API contract
 
+### Durable watch reconciliation
+
+MD Watch reconciliation uses three bounded, authenticated, read-only doors:
+
+- `GET /radar/providers/release` returns contract version `1`, the latest installed
+  `source_release_id`, its exact source period, and `source_fresh_through` from
+  `nppes_radar_releases`. It never derives freshness from the DuckDB file timestamp.
+- `POST /radar/providers/match-scopes` accepts at most 100 tenant-free scopes. Each scope has an
+  opaque key, either 1–100 exact ZIPs or one exact city/state pair, up to 100 NUCC codes, 1–4
+  supported watch event types, and an optional timezone-qualified `baseline_as_of`. Results are
+  capped at 5,000 references per scope and per request and preserve request-scope order. ZIP
+  location changes are classified as `entered_market` or `within_market`; city scopes do not guess
+  that distinction.
+- `POST /radar/providers/hydrate` accepts at most 100 unique event references, verifies that every
+  event existed by its observation release, and returns current provider facts in request order.
+
+Matching may omit `source_release_id` to select the current release. A supplied match release must
+equal the current installed release; otherwise the API returns `409` with
+`radar_release_changed`. Hydration can use an older installed observation release because durable
+Inbox attribution preserves the release where the event was first matched. A missing release,
+missing event, or event that did not yet exist at the claimed observation release also fails with
+typed `409`, never a fabricated empty result.
+
+`baseline_as_of` is used only for a creation baseline: events first detected after that instant are
+not backdated into **Present when watch was created**. All queries remain parameterized and the
+serving process never writes or refreshes warehouse state.
+
+### Interactive provider feed
+
 `GET /radar/providers` returns source events for exactly one scope: either events whose resulting
 primary ZIP matches a supplied ZIP set, or events whose current primary practice city/state is an
 exact normalized match. It is intentionally market-agnostic: Provider Search resolves and
