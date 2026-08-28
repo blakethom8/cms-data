@@ -1,6 +1,7 @@
 from datetime import date
 
-from fastapi import FastAPI
+import pytest
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from clinical_trials import (
@@ -8,7 +9,9 @@ from clinical_trials import (
     _expand_spelling_variants,
     _facility_tokens,
     _parse_geo_filter,
+    _parse_zip_filter,
     _search_predicate,
+    _zip_filter_sql,
     get_clinical_trials_router,
 )
 
@@ -20,6 +23,21 @@ def test_geo_and_facility_inputs_are_normalized() -> None:
         50.0,
     )
     assert _facility_tokens("City of Hope Medical Center") == ["city", "of", "hope"]
+
+
+def test_zip_filter_is_normalized_bounded_and_exact() -> None:
+    assert _parse_zip_filter("80202|80203|80202") == ["80202", "80203"]
+    assert _zip_filter_sql() == "left(trim(coalesce(f.zip, '')), 5) = any(%s)"
+
+    for invalid in ("", "8020", "80203-1234", "80203||80204", "abcde"):
+        with pytest.raises(HTTPException) as exc_info:
+            _parse_zip_filter(invalid)
+        assert exc_info.value.status_code == 422
+
+    too_many = "|".join(f"{index:05d}" for index in range(101))
+    with pytest.raises(HTTPException) as exc_info:
+        _parse_zip_filter(too_many)
+    assert exc_info.value.status_code == 422
 
 
 def test_spelling_variants_cover_us_uk_orthopedic_forms() -> None:
@@ -39,6 +57,7 @@ def test_spelling_variants_cover_us_uk_orthopedic_forms() -> None:
     assert "paediatric cancer" in condition_params
     assert "pediatric cancer" in condition_params
     assert "exists (select 1 from ctgov.conditions" in condition_clause
+
 
 def test_aact_rows_build_the_app_compatible_study_shape() -> None:
     payload = _build_study_payloads(
@@ -149,7 +168,66 @@ def test_router_translates_v2_query_parameters_for_the_store() -> None:
         "statuses": ["RECRUITING", "ACTIVE_NOT_RECRUITING"],
         "page_size": 100,
         "geo": (34.1478, -118.1445, 50.0),
+        "zip_codes": [],
         "facility": None,
         "city": None,
         "states": [],
     }
+
+
+def test_router_translates_exact_zip_filter_for_the_store() -> None:
+    class FakeStore:
+        def __init__(self) -> None:
+            self.request = None
+
+        async def version(self):
+            return {"apiVersion": "AACT test", "dataTimestamp": "2026-07-14"}
+
+        async def search(self, **kwargs):
+            self.request = kwargs
+            return {"studies": [], "totalCount": 0, "nextPageToken": None}
+
+    store = FakeStore()
+    app = FastAPI()
+    app.include_router(get_clinical_trials_router(store))  # type: ignore[arg-type]
+    client = TestClient(app)
+
+    response = client.get(
+        "/clinical-trials/studies",
+        params={
+            "query.cond": "lung cancer",
+            "filter.zip": "80202|80203|80202",
+            "filter.overallStatus": "RECRUITING|ACTIVE_NOT_RECRUITING",
+        },
+    )
+
+    assert response.status_code == 200
+    assert store.request == {
+        "query": "lung cancer",
+        "search_type": "condition",
+        "statuses": ["RECRUITING", "ACTIVE_NOT_RECRUITING"],
+        "page_size": 100,
+        "geo": None,
+        "zip_codes": ["80202", "80203"],
+        "facility": None,
+        "city": None,
+        "states": [],
+    }
+
+
+def test_router_rejects_multiple_geographic_modes() -> None:
+    app = FastAPI()
+    app.include_router(get_clinical_trials_router())
+    client = TestClient(app)
+
+    response = client.get(
+        "/clinical-trials/studies",
+        params={
+            "query.cond": "lung cancer",
+            "filter.geo": "distance(39.7392,-104.9903,50mi)",
+            "filter.zip": "80202",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"].startswith("Provide exactly one geographic filter")
