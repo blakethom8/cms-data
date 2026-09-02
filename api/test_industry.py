@@ -161,6 +161,16 @@ def test_exact_zip_scope_rejects_non_zip5_values():
     assert response.json()["detail"] == "ZIP codes must be five digits"
 
 
+def test_exact_zip_scope_rejects_more_than_one_hundred_unique_values():
+    response = client.get(
+        "/industry/search",
+        params=[("zip", f"{value:05d}") for value in range(101)],
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "At most 100 ZIP codes may be selected"
+
+
 def test_selected_relationship_is_the_default_threshold_scope():
     response = client.get(
         "/industry/search",
