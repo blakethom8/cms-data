@@ -5,7 +5,19 @@ from fastapi.testclient import TestClient
 from industry import get_industry_router
 
 
-def _build_client() -> TestClient:
+class _QueryRecorder:
+    def __init__(self, connection):
+        self.connection = connection
+        self.queries: list[str] = []
+
+    def execute(self, query, parameters=None):
+        self.queries.append(query)
+        if parameters is None:
+            return self.connection.execute(query)
+        return self.connection.execute(query, parameters)
+
+
+def _build_client(*, record_queries: bool = False) -> TestClient:
     connection = duckdb.connect(":memory:")
     connection.execute(
         '''
@@ -95,8 +107,10 @@ def _build_client() -> TestClient:
     )
 
     app = FastAPI()
-    app.include_router(get_industry_router(lambda: connection))
+    serving_connection = _QueryRecorder(connection) if record_queries else connection
+    app.include_router(get_industry_router(lambda: serving_connection))
     app.state.connection = connection
+    app.state.query_recorder = serving_connection if record_queries else None
     return TestClient(app)
 
 
@@ -284,3 +298,77 @@ def test_specialty_options_and_live_open_payments_facets_use_their_respective_ke
     assert products.json()["options"] == [
         {"value": "MAKO", "physician_count": 2, "payment_count": 2, "total_usd": 6070}
     ]
+
+
+def test_catalog_case_variants_return_one_canonical_specialty_spelling():
+    connection = client.app.state.connection
+    connection.execute("begin transaction")
+    try:
+        connection.execute("insert into core_providers values ('4444444444', 'orthopedics')")
+        connection.execute(
+            "insert into raw_open_payments_general values "
+            "('4444444444', 'Case Corp', 'Case Device', 'Food and Beverage', 10, "
+            "'Casey', 'Variant', 'Los Angeles', 'CA')"
+        )
+
+        search = client.get("/industry/search", params={"specialty": "ORTHOPEDICS"})
+        options = client.get("/industry/options", params={"field": "specialty"})
+
+        assert search.status_code == 200
+        assert {row["specialty"] for row in search.json()["results"]} == {"Orthopedics"}
+        assert options.json()["options"] == [
+            {
+                "value": "Orthopedics",
+                "physician_count": 3,
+                "payment_count": 4,
+                "total_usd": 36080,
+            }
+        ]
+    finally:
+        connection.execute("rollback")
+
+
+def test_blank_dac_location_falls_back_to_open_payments_recipient_location():
+    connection = client.app.state.connection
+    connection.execute("begin transaction")
+    try:
+        connection.execute(
+            "insert into raw_dac_national values "
+            "('2222222222', 'Blank', 'Location', 'MD', 'Orthopedic Surgery', "
+            "'Blank Practice', '  ', ' ', '0 Main St', '85001')"
+        )
+
+        response = client.get(
+            "/industry/search", params={"city": "Santa Monica", "state": "CA"}
+        )
+
+        assert response.status_code == 200
+        row = next(item for item in response.json()["results"] if item["npi"] == "2222222222")
+        assert row["city"] == "Santa Monica"
+        assert row["state"] == "CA"
+    finally:
+        connection.execute("rollback")
+
+
+def test_search_and_options_keep_dimension_joins_out_of_full_payment_scans():
+    recorded_client = _build_client(record_queries=True)
+    recorder = recorded_client.app.state.query_recorder
+
+    search = recorded_client.get("/industry/search")
+    assert search.status_code == 200
+    search_sql = recorder.queries[-1]
+    full_rows = search_sql.split("), full_rows as (", 1)[1].split("), recipient as (", 1)[0]
+    assert "from raw_open_payments_general op" in full_rows
+    assert "join matched mt" in full_rows
+    assert "doctor" not in full_rows
+    assert "core_providers" not in full_rows
+    assert "base_rows" not in search_sql
+
+    options = recorded_client.get("/industry/options", params={"field": "manufacturer"})
+    assert options.status_code == 200
+    options_sql = recorder.queries[-1]
+    full_stats = options_sql.split("), full_stats as (", 1)[1].split("), qualified as (", 1)[0]
+    assert "from raw_open_payments_general op" in full_stats
+    assert "join candidate_npis cn" in full_stats
+    assert "doctor" not in full_stats
+    assert "core_providers" not in full_stats
