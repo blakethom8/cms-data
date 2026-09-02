@@ -111,32 +111,32 @@ def get_industry_router(get_conn):
         filters, so competitor relationship dollars are not confused with the
         physician's complete industry history.
         """
-        where = ["op.Covered_Recipient_NPI is not null"]
+        where = ["b.Covered_Recipient_NPI is not null"]
         params: list = []
         if manufacturer:
             where.append(
-                "upper(trim(op.Applicable_Manufacturer_or_Applicable_GPO_Making_Payment_Name)) "
+                "upper(trim(b.Applicable_Manufacturer_or_Applicable_GPO_Making_Payment_Name)) "
                 "in (" + ",".join(["?"] * len(manufacturer)) + ")"
             )
             params.extend(value.strip().upper() for value in manufacturer)
         if product:
             where.append(
                 "upper(trim(coalesce("
-                "op.Name_of_Drug_or_Biological_or_Device_or_Medical_Supply_1, ''))) "
+                "b.Name_of_Drug_or_Biological_or_Device_or_Medical_Supply_1, ''))) "
                 "in (" + ",".join(["?"] * len(product)) + ")"
             )
             params.extend(value.strip().upper() for value in product)
         if specialty:
             where.append(
-                "upper(trim(coalesce(d.specialty, ''))) in ("
+                "upper(trim(coalesce(b.specialty, ''))) in ("
                 + ",".join(["?"] * len(specialty)) + ")"
             )
             params.extend(value.strip().upper() for value in specialty)
         if city:
-            where.append("upper(coalesce(d.city, '')) = ?")
+            where.append("upper(coalesce(b.city, '')) = ?")
             params.append(city.strip().upper())
         if state:
-            where.append("upper(coalesce(d.state, '')) = ?")
+            where.append("upper(coalesce(b.state, '')) = ?")
             params.append(state.strip().upper())
 
         order_by = {
@@ -152,7 +152,7 @@ def get_industry_router(get_conn):
               select CAST("NPI" as varchar) npi,
                      "Provider First Name" || ' ' || "Provider Last Name" as "name",
                      trim(coalesce("Cred\t\t\t\t", '')) as credentials,
-                     pri_spec as specialty, "Facility Name" as practice_name,
+                     "Facility Name" as practice_name,
                      "City/Town" as city, "State" as state,
                      upper(trim(adr_ln_1)) || '|' ||
                        left(CAST("ZIP Code" as varchar), 5) as addr_key
@@ -163,11 +163,26 @@ def get_industry_router(get_conn):
                          coalesce("Facility Name", ''), coalesce(pri_spec, ''),
                          coalesce("Provider First Name", ''), coalesce("Provider Last Name", '')
               ) = 1
-            ), matched_rows as (
-              select op.*, d.name, d.credentials, d.specialty, d.practice_name,
-                     d.city, d.state, d.addr_key
+            ), base_rows as (
+              select op.*,
+                     coalesce(
+                       nullif(trim(d.name), ''),
+                       nullif(trim(concat_ws(' ', op.Covered_Recipient_First_Name,
+                                              op.Covered_Recipient_Last_Name)), ''),
+                       'Unknown recipient'
+                     ) as name,
+                     d.credentials,
+                     trim(cp.provider_type) as specialty,
+                     d.practice_name,
+                     coalesce(d.city, nullif(trim(op.Recipient_City), '')) as city,
+                     coalesce(d.state, nullif(trim(op.Recipient_State), '')) as state,
+                     d.addr_key
               from raw_open_payments_general op
-              join doctor d on d.npi = CAST(op.Covered_Recipient_NPI as varchar)
+              left join doctor d on d.npi = CAST(op.Covered_Recipient_NPI as varchar)
+              left join core_providers cp on cp.npi = CAST(op.Covered_Recipient_NPI as varchar)
+            ), matched_rows as (
+              select b.*
+              from base_rows b
               where {' and '.join(where)}
             ), matched as (
               select CAST(Covered_Recipient_NPI as varchar) npi,
@@ -183,12 +198,10 @@ def get_industry_router(get_conn):
                        matched_consulting_speaking_usd
               from matched_rows group by 1
             ), full_rows as (
-              select op.*, d.name, d.credentials, d.specialty, d.practice_name,
-                     d.city, d.state, g.lat, g.lng
-              from raw_open_payments_general op
-              join matched mt on mt.npi = CAST(op.Covered_Recipient_NPI as varchar)
-              join doctor d on d.npi = mt.npi
-              left join address_geocode g on g.addr_key = d.addr_key
+              select b.*, g.lat, g.lng
+              from base_rows b
+              join matched mt on mt.npi = CAST(b.Covered_Recipient_NPI as varchar)
+              left join address_geocode g on g.addr_key = b.addr_key
             ), mfr as (
               select CAST(Covered_Recipient_NPI as varchar) npi,
                      Applicable_Manufacturer_or_Applicable_GPO_Making_Payment_Name manufacturer,
@@ -412,9 +425,9 @@ def get_industry_router(get_conn):
     ):
         """Search live Open Payments facet values with physician and dollar counts."""
         expressions = {
-            "specialty": "d.specialty",
-            "manufacturer": "op.Applicable_Manufacturer_or_Applicable_GPO_Making_Payment_Name",
-            "product": "op.Name_of_Drug_or_Biological_or_Device_or_Medical_Supply_1",
+            "specialty": "b.specialty",
+            "manufacturer": "b.Applicable_Manufacturer_or_Applicable_GPO_Making_Payment_Name",
+            "product": "b.Name_of_Drug_or_Biological_or_Device_or_Medical_Supply_1",
         }
         value_expr = expressions[field]
         where = [f"{value_expr} is not null", f"trim({value_expr}) <> ''"]
@@ -426,23 +439,23 @@ def get_industry_router(get_conn):
             where.append(f"upper({value_expr}) like ?")
             params.append(f"{starts_with.strip().upper()}%")
         if city:
-            where.append("upper(d.city) = ?")
+            where.append("upper(b.city) = ?")
             params.append(city.strip().upper())
         if state:
-            where.append("upper(d.state) = ?")
+            where.append("upper(b.state) = ?")
             params.append(state.strip().upper())
         if field != "specialty" and specialty:
-            where.append("upper(d.specialty) in (" + ",".join(["?"] * len(specialty)) + ")")
+            where.append("upper(b.specialty) in (" + ",".join(["?"] * len(specialty)) + ")")
             params.extend(value.strip().upper() for value in specialty)
         if field != "manufacturer" and manufacturer:
             where.append(
-                "upper(op.Applicable_Manufacturer_or_Applicable_GPO_Making_Payment_Name) "
+                "upper(b.Applicable_Manufacturer_or_Applicable_GPO_Making_Payment_Name) "
                 "in (" + ",".join(["?"] * len(manufacturer)) + ")"
             )
             params.extend(value.strip().upper() for value in manufacturer)
         if field != "product" and product:
             where.append(
-                "upper(op.Name_of_Drug_or_Biological_or_Device_or_Medical_Supply_1) "
+                "upper(b.Name_of_Drug_or_Biological_or_Device_or_Medical_Supply_1) "
                 "in (" + ",".join(["?"] * len(product)) + ")"
             )
             params.extend(value.strip().upper() for value in product)
@@ -453,7 +466,7 @@ def get_industry_router(get_conn):
         )
         sql = f"""
             with doctor as (
-              select CAST("NPI" as varchar) npi, pri_spec specialty,
+              select CAST("NPI" as varchar) npi,
                      "City/Town" city, "State" state
               from raw_dac_national
               qualify row_number() over (
@@ -462,6 +475,13 @@ def get_industry_router(get_conn):
                          coalesce("Facility Name", ''), coalesce(pri_spec, ''),
                          coalesce("Provider First Name", ''), coalesce("Provider Last Name", '')
               ) = 1
+            ), base_rows as (
+              select op.*, trim(cp.provider_type) as specialty,
+                     coalesce(d.city, nullif(trim(op.Recipient_City), '')) as city,
+                     coalesce(d.state, nullif(trim(op.Recipient_State), '')) as state
+              from raw_open_payments_general op
+              left join doctor d on d.npi = CAST(op.Covered_Recipient_NPI as varchar)
+              left join core_providers cp on cp.npi = CAST(op.Covered_Recipient_NPI as varchar)
             ), full_stats as (
               select CAST(Covered_Recipient_NPI as varchar) npi,
                      sum(Total_Amount_of_Payment_USDollars) total_usd,
@@ -472,25 +492,24 @@ def get_industry_router(get_conn):
                                or Nature_of_Payment_or_Transfer_of_Value like 'Compensation for serv%'
                               then Total_Amount_of_Payment_USDollars else 0 end)
                        consulting_speaking_usd
-              from raw_open_payments_general
+              from base_rows
               where Covered_Recipient_NPI is not null
               group by 1
             ), candidate_stats as (
-              select CAST(op.Covered_Recipient_NPI as varchar) npi,
+              select CAST(b.Covered_Recipient_NPI as varchar) npi,
                      trim({value_expr}) as "value",
                      count(*) payment_count,
-                     sum(op.Total_Amount_of_Payment_USDollars) total_usd,
-                     sum(case when op.Nature_of_Payment_or_Transfer_of_Value <>
+                     sum(b.Total_Amount_of_Payment_USDollars) total_usd,
+                     sum(case when b.Nature_of_Payment_or_Transfer_of_Value <>
                                   'Food and Beverage'
-                              then op.Total_Amount_of_Payment_USDollars else 0 end) nonfood_usd,
-                     sum(case when op.Nature_of_Payment_or_Transfer_of_Value in
+                              then b.Total_Amount_of_Payment_USDollars else 0 end) nonfood_usd,
+                     sum(case when b.Nature_of_Payment_or_Transfer_of_Value in
                                   ('Consulting Fee', 'Honoraria')
-                               or op.Nature_of_Payment_or_Transfer_of_Value like
+                               or b.Nature_of_Payment_or_Transfer_of_Value like
                                   'Compensation for serv%'
-                              then op.Total_Amount_of_Payment_USDollars else 0 end)
+                              then b.Total_Amount_of_Payment_USDollars else 0 end)
                        consulting_speaking_usd
-              from raw_open_payments_general op
-              join doctor d on d.npi = CAST(op.Covered_Recipient_NPI as varchar)
+              from base_rows b
               where {' and '.join(where)}
               group by 1, 2
             ), qualified as (
