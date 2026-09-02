@@ -49,7 +49,10 @@ logger = logging.getLogger(__name__)
 # v4 — `/practices/capabilities` advertises the release-gated
 # `utilization_browse_v2` capability. Provider Search uses this as a fail-closed
 # preflight before it enables the snapshot-pinned reference browser.
-REPRESENTATION_VERSION = 4
+# v5 — `/industry/search` accepts an exact repeated ZIP5 scope and returns
+# `applied_scope.zip_codes` as proof that the adapter applied the requested
+# CMS-primary-practice boundary. Legacy city/state responses omit the field.
+REPRESENTATION_VERSION = 5
 
 # Matches pipeline/production_manager.py DEPLOYMENT_ID_PATTERN.
 DEPLOYMENT_ID_PATTERN = re.compile(r"^[a-z]+-[0-9]{8}T[0-9]{6}Z-[a-f0-9]{10}$")
