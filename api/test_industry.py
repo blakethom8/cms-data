@@ -68,13 +68,16 @@ def _build_client(
         ],
     )
     connection.execute(
-        "create table core_providers (npi varchar primary key, provider_type varchar)"
+        "create table core_providers ("
+        "npi varchar primary key, provider_type varchar, zip5 varchar)"
     )
     connection.executemany(
-        "insert into core_providers values (?, ?)",
+        "insert into core_providers values (?, ?, ?)",
         [
-            ("1111111111", "Orthopedics"),
-            ("2222222222", "Orthopedics"),
+            ("1111111111", "Orthopedics", "90401"),
+            # The provider-grain CMS primary ZIP intentionally differs from the
+            # DAC directory display row so the scope test proves its source.
+            ("2222222222", "Orthopedics", "90210"),
         ],
     )
     connection.execute(
@@ -120,6 +123,42 @@ def _build_client(
 
 
 client = _build_client()
+
+
+def test_exact_zip_scope_filters_on_primary_cms_zip_and_echoes_sorted_zip5s():
+    scoped = client.get(
+        "/industry/search",
+        params=[("zip", "90401"), ("zip", "90210")],
+    )
+
+    assert scoped.status_code == 200
+    assert scoped.json()["applied_scope"] == {"zip_codes": ["90210", "90401"]}
+    assert {row["npi"] for row in scoped.json()["results"]} == {
+        "1111111111",
+        "2222222222",
+    }
+
+    one_zip = client.get("/industry/search", params={"zip": "90401"})
+    assert one_zip.status_code == 200
+    assert one_zip.json()["applied_scope"] == {"zip_codes": ["90401"]}
+    assert [row["npi"] for row in one_zip.json()["results"]] == ["1111111111"]
+
+
+def test_legacy_city_state_search_does_not_claim_an_exact_zip_scope():
+    response = client.get(
+        "/industry/search",
+        params={"city": "Santa Monica", "state": "CA"},
+    )
+
+    assert response.status_code == 200
+    assert "applied_scope" not in response.json()
+
+
+def test_exact_zip_scope_rejects_non_zip5_values():
+    response = client.get("/industry/search", params={"zip": "90401-1234"})
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "ZIP codes must be five digits"
 
 
 def test_selected_relationship_is_the_default_threshold_scope():
@@ -252,6 +291,9 @@ def test_unmatched_open_payments_recipient_is_retained_only_without_specialty_fi
     connection.execute("begin transaction")
     try:
         connection.execute(
+            "insert into core_providers values ('3333333333', null, '90401')"
+        )
+        connection.execute(
             "insert into raw_open_payments_general values "
             "('3333333333', 'Uncataloged Corp', 'Unknown Device', 'Food and Beverage', 10, "
             "'Uma', 'Unmatched', 'Los Angeles', 'CA')"
@@ -261,6 +303,7 @@ def test_unmatched_open_payments_recipient_is_retained_only_without_specialty_fi
         selected_specialty = client.get(
             "/industry/search", params={"specialty": "ORTHOPEDICS"}
         )
+        selected_zip = client.get("/industry/search", params={"zip": "90401"})
 
         assert unfiltered.status_code == 200
         unmatched = next(
@@ -268,6 +311,7 @@ def test_unmatched_open_payments_recipient_is_retained_only_without_specialty_fi
         )
         assert unmatched["name"] == "Uma Unmatched"
         assert unmatched["specialty"] is None
+        assert any(row["npi"] == "3333333333" for row in selected_zip.json()["results"])
         assert {row["npi"] for row in selected_specialty.json()["results"]} == {
             "1111111111",
             "2222222222",
@@ -309,7 +353,10 @@ def test_catalog_case_variants_return_one_canonical_specialty_spelling():
     connection = client.app.state.connection
     connection.execute("begin transaction")
     try:
-        connection.execute("insert into core_providers values ('4444444444', 'orthopedics')")
+        connection.execute(
+            "insert into core_providers (npi, provider_type) "
+            "values ('4444444444', 'orthopedics')"
+        )
         connection.execute(
             "insert into raw_open_payments_general values "
             "('4444444444', 'Case Corp', 'Case Device', 'Food and Beverage', 10, "
@@ -339,7 +386,7 @@ def test_industry_catalog_label_matches_practices_with_whitespace_and_case_varia
     connection.execute("begin transaction")
     try:
         connection.executemany(
-            "insert into core_providers values (?, ?)",
+            "insert into core_providers (npi, provider_type) values (?, ?)",
             [
                 ("4444444444", "  orthopedics"),
                 ("5555555555", "ORTHOPEDICS"),

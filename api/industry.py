@@ -1,8 +1,16 @@
 """Open Payments discovery endpoints for industry-engagement search."""
 from typing import Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
+
+
+MAX_ZIP_SCOPE = 100
+
+
+class IndustryAppliedScope(BaseModel):
+    zip_codes: list[str]
+
 
 class IndustrySearchResult(BaseModel):
     npi: str
@@ -34,6 +42,7 @@ class IndustrySearchResponse(BaseModel):
     offset: int
     limit: int
     results: list[IndustrySearchResult]
+    applied_scope: IndustryAppliedScope | None = None
 
 
 class IndustryOption(BaseModel):
@@ -84,14 +93,37 @@ def _tier(consulting_speaking: float, nonfood: float, payment_count: int) -> tup
     return 4, "KOL"
 
 
+def _normalized_zip_scope(zip_codes: list[str] | None) -> list[str]:
+    """Return a bounded, sorted exact ZIP5 set for fail-closed scope echoing."""
+    if not zip_codes:
+        return []
+    normalized = sorted({value.strip() for value in zip_codes})
+    if not normalized or any(
+        len(value) != 5 or not value.isascii() or not value.isdigit()
+        for value in normalized
+    ):
+        raise HTTPException(status_code=422, detail="ZIP codes must be five digits")
+    if len(normalized) > MAX_ZIP_SCOPE:
+        raise HTTPException(
+            status_code=422,
+            detail=f"At most {MAX_ZIP_SCOPE} ZIP codes may be selected",
+        )
+    return normalized
+
+
 def get_industry_router(get_conn):
     router = APIRouter(prefix="/industry", tags=["Industry Relationships"])
 
-    @router.get("/search", response_model=IndustrySearchResponse)
+    @router.get(
+        "/search",
+        response_model=IndustrySearchResponse,
+        response_model_exclude_unset=True,
+    )
     async def search_industry(
         specialty: list[str] | None = Query(None),
         city: Optional[str] = None,
         state: Optional[str] = None,
+        zip_codes: list[str] | None = Query(None, alias="zip"),
         manufacturer: list[str] | None = Query(None),
         product: list[str] | None = Query(None),
         min_total_usd: float = Query(0, ge=0),
@@ -110,6 +142,7 @@ def get_industry_router(get_conn):
         filters, so competitor relationship dollars are not confused with the
         physician's complete industry history.
         """
+        applied_zip_codes = _normalized_zip_scope(zip_codes)
         where = ["op.Covered_Recipient_NPI is not null"]
         params: list = []
         if manufacturer:
@@ -142,6 +175,9 @@ def get_industry_router(get_conn):
                 "nullif(trim(op.Recipient_State), ''))) = ?"
             )
             params.append(state.strip().upper())
+        if applied_zip_codes:
+            where.append("pc.zip5 in (" + ",".join(["?"] * len(applied_zip_codes)) + ")")
+            params.extend(applied_zip_codes)
 
         order_by = {
             "total": "total_usd",
@@ -174,9 +210,10 @@ def get_industry_router(get_conn):
               where nullif(trim(provider_type), '') is not null
               group by 1
             ), provider_catalog as (
-              select cp.npi, labels.specialty
+              select cp.npi, labels.specialty,
+                     left(trim(cp.zip5), 5) zip5
               from core_providers cp
-              join catalog_labels labels
+              left join catalog_labels labels
                 on labels.specialty_key = lower(trim(cp.provider_type))
             ), matched_rows as (
               select op.*
@@ -309,9 +346,17 @@ def get_industry_router(get_conn):
                 row["consulting_speaking_usd"], row["nonfood_usd"], row["payment_count"]
             )
             results.append(IndustrySearchResult(**row))
-        return IndustrySearchResponse(
-            total=total, offset=offset, limit=limit, results=results
-        )
+        response_fields: dict[str, object] = {
+            "total": total,
+            "offset": offset,
+            "limit": limit,
+            "results": results,
+        }
+        if applied_zip_codes:
+            response_fields["applied_scope"] = IndustryAppliedScope(
+                zip_codes=applied_zip_codes
+            )
+        return IndustrySearchResponse(**response_fields)
 
     @router.get("/{npi}/detail", response_model=IndustryRelationshipDetailResponse)
     async def industry_relationship_detail(
