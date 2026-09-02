@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from industry import get_industry_router
+from practices import get_practices_router
 
 
 class _QueryRecorder:
@@ -17,7 +18,9 @@ class _QueryRecorder:
         return self.connection.execute(query, parameters)
 
 
-def _build_client(*, record_queries: bool = False) -> TestClient:
+def _build_client(
+    *, record_queries: bool = False, include_practices: bool = False
+) -> TestClient:
     connection = duckdb.connect(":memory:")
     connection.execute(
         '''
@@ -109,6 +112,8 @@ def _build_client(*, record_queries: bool = False) -> TestClient:
     app = FastAPI()
     serving_connection = _QueryRecorder(connection) if record_queries else connection
     app.include_router(get_industry_router(lambda: serving_connection))
+    if include_practices:
+        app.include_router(get_practices_router(lambda: serving_connection))
     app.state.connection = connection
     app.state.query_recorder = serving_connection if record_queries else None
     return TestClient(app)
@@ -324,6 +329,36 @@ def test_catalog_case_variants_return_one_canonical_specialty_spelling():
                 "total_usd": 36080,
             }
         ]
+    finally:
+        connection.execute("rollback")
+
+
+def test_industry_catalog_label_matches_practices_with_whitespace_and_case_variants():
+    catalog_client = _build_client(include_practices=True)
+    connection = catalog_client.app.state.connection
+    connection.execute("begin transaction")
+    try:
+        connection.executemany(
+            "insert into core_providers values (?, ?)",
+            [
+                ("4444444444", "  orthopedics"),
+                ("5555555555", "ORTHOPEDICS"),
+            ],
+        )
+        connection.execute(
+            "insert into raw_open_payments_general values "
+            "('4444444444', 'Whitespace Corp', 'Whitespace Device', 'Food and Beverage', 10, "
+            "'Wendy', 'Whitespace', 'Los Angeles', 'CA')"
+        )
+
+        practices = catalog_client.get("/practices/specialties")
+        search = catalog_client.get("/industry/search", params={"specialty": "ORTHOPEDICS"})
+        options = catalog_client.get("/industry/options", params={"field": "specialty"})
+
+        assert practices.status_code == 200
+        assert practices.json()["specialties"] == ["orthopedics"]
+        assert {row["specialty"] for row in search.json()["results"]} == {"orthopedics"}
+        assert [option["value"] for option in options.json()["options"]] == ["orthopedics"]
     finally:
         connection.execute("rollback")
 

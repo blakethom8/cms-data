@@ -169,7 +169,7 @@ def get_industry_router(get_conn):
               ) = 1
             ), catalog_labels as (
               select lower(trim(provider_type)) specialty_key,
-                     min(trim(provider_type)) specialty
+                     arg_min(trim(provider_type), provider_type) specialty
               from core_providers
               where nullif(trim(provider_type), '') is not null
               group by 1
@@ -497,7 +497,7 @@ def get_industry_router(get_conn):
               ) = 1
             ), catalog_labels as (
               select lower(trim(provider_type)) specialty_key,
-                     min(trim(provider_type)) specialty
+                     arg_min(trim(provider_type), provider_type) specialty
               from core_providers
               where nullif(trim(provider_type), '') is not null
               group by 1
