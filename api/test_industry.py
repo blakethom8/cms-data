@@ -144,6 +144,23 @@ def test_exact_zip_scope_filters_on_primary_cms_zip_and_echoes_sorted_zip5s():
     assert [row["npi"] for row in one_zip.json()["results"]] == ["1111111111"]
 
 
+def test_exact_zip_scope_materializes_the_filtered_provider_catalog_first():
+    scoped_client = _build_client(record_queries=True)
+
+    response = scoped_client.get(
+        "/industry/search",
+        params=[("zip", "90401"), ("zip", "90210")],
+    )
+
+    assert response.status_code == 200
+    query = scoped_client.app.state.query_recorder.queries[-1]
+    assert "provider_catalog as materialized" in query
+    catalog_filter = "where left(trim(cp.zip5), 5) in (?,?)"
+    assert catalog_filter in query
+    assert query.index(catalog_filter) < query.index("matched_rows as")
+    assert "pc.npi is not null" in query
+
+
 def test_legacy_city_state_search_does_not_claim_an_exact_zip_scope():
     response = client.get(
         "/industry/search",

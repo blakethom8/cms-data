@@ -145,6 +145,9 @@ def get_industry_router(get_conn):
         applied_zip_codes = _normalized_zip_scope(zip_codes)
         where = ["op.Covered_Recipient_NPI is not null"]
         params: list = []
+        catalog_params: list[str] = []
+        catalog_where = ""
+        catalog_materialization = ""
         if manufacturer:
             where.append(
                 "upper(trim(op.Applicable_Manufacturer_or_Applicable_GPO_Making_Payment_Name)) "
@@ -176,8 +179,14 @@ def get_industry_router(get_conn):
             )
             params.append(state.strip().upper())
         if applied_zip_codes:
-            where.append("pc.zip5 in (" + ",".join(["?"] * len(applied_zip_codes)) + ")")
-            params.extend(applied_zip_codes)
+            catalog_materialization = " materialized"
+            catalog_where = (
+                "where left(trim(cp.zip5), 5) in ("
+                + ",".join(["?"] * len(applied_zip_codes))
+                + ")"
+            )
+            catalog_params.extend(applied_zip_codes)
+            where.append("pc.npi is not null")
 
         order_by = {
             "total": "total_usd",
@@ -209,12 +218,13 @@ def get_industry_router(get_conn):
               from core_providers
               where nullif(trim(provider_type), '') is not null
               group by 1
-            ), provider_catalog as (
+            ), provider_catalog as{catalog_materialization} (
               select cp.npi, labels.specialty,
                      left(trim(cp.zip5), 5) zip5
               from core_providers cp
               left join catalog_labels labels
                 on labels.specialty_key = lower(trim(cp.provider_type))
+              {catalog_where}
             ), matched_rows as (
               select op.*
               from raw_open_payments_general op
@@ -329,7 +339,8 @@ def get_industry_router(get_conn):
         """
         cursor = get_conn().execute(
             sql,
-            params
+            catalog_params
+            + params
             + [threshold_scope, threshold_scope, min_total_usd, min_tier, limit, offset],
         )
         columns = [column[0] for column in cursor.description]
