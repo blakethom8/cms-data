@@ -27,6 +27,8 @@ listed first. Formatting drift between NPPES and DAC means the flag is
 """
 
 import math
+from functools import lru_cache
+import sys
 from typing import Literal, Optional
 
 from fastapi import APIRouter, HTTPException
@@ -130,6 +132,30 @@ class OrganizationSearchResult(BaseModel):
 class OrganizationSearchResponse(BaseModel):
     query: str
     results: list[OrganizationSearchResult]
+
+
+@lru_cache(maxsize=1)
+def _unicode_casefold_overrides() -> dict[str, str]:
+    """Unicode case folding beyond lower(), as constant SQL lookup data.
+
+    Built once from Python's Unicode table; no warehouse rows enter Python.
+    DuckDB lower() alone misses e.g. sharp-s and Greek final sigma.
+    """
+    return {
+        char: char.casefold()
+        for codepoint in range(sys.maxunicode + 1)
+        if (char := chr(codepoint)).casefold() != char.lower()
+    }
+
+
+def _organization_normalized_sql(value: str) -> str:
+    # Keep letters/numbers across scripts; punctuation/symbols become spaces.
+    return rf"""trim(regexp_replace(
+        CASE WHEN regexp_full_match(coalesce({value}, ''), '[\x00-\x7F]*')
+            THEN lower(coalesce({value}, ''))
+            ELSE array_to_string(list_transform(string_split(coalesce({value}, ''), ''),
+                c -> coalesce(map_extract_value(u.folds, c), lower(c))), '') END,
+        '[^\p{{L}}\p{{N}}\p{{M}}]+', ' ', 'g'))"""
 
 
 class SnapshotTotals(BaseModel):
@@ -639,9 +665,9 @@ def get_market_snapshot_router(get_conn):
 
         clauses = [
             "nullif(trim(coalesce(d.org_pac_id, '')), '') IS NOT NULL",
-            'd."Facility Name" ILIKE ?',
         ]
-        params: list = [f"%{needle}%"]
+        folds = _unicode_casefold_overrides()
+        params: list = [list(folds), list(folds.values()), needle]
         if state:
             clauses.append('upper(trim(d."State")) = ?')
             params.append(state.upper().strip())
@@ -653,18 +679,66 @@ def get_market_snapshot_router(get_conn):
             clauses.append(f'left(cast(d."ZIP Code" as varchar), 5) in ({placeholders})')
             params.extend(selected_zips)
 
-        sql = f"""
-            SELECT nullif(trim(coalesce(d.org_pac_id, '')), '') AS org_pac_id,
+        # Match every token before stripping trailing legal suffixes for ranking.
+        # Each PAC uses its best matching legal-name variant, then national size,
+        # local provider count, and PAC. LIMIT is applied only after this ranking.
+        sql = rf"""
+            WITH unicode_data AS (SELECT map(?, ?) AS folds),
+            input AS (SELECT ? AS query_text),
+            request AS (
+                SELECT {_organization_normalized_sql('query_text')} AS normalized_query
+                FROM unicode_data u CROSS JOIN input
+            ),
+            query AS (
+                SELECT normalized_query,
+                       string_split(normalized_query, ' ') AS tokens,
+                       regexp_full_match(normalized_query, '[0-9]{{10}}') AS is_pac
+                FROM request
+            ),
+            eligible AS (
+                SELECT d.* FROM raw_dac_national d
+                WHERE {' AND '.join(clauses)}
+            ),
+            names AS (
+                SELECT DISTINCT "Facility Name" AS legal_name FROM eligible
+            ),
+            normalized AS (
+                SELECT legal_name,
+                       {_organization_normalized_sql('legal_name')} AS normalized_name
+                FROM names CROSS JOIN unicode_data u
+            ),
+            scored_names AS (
+                SELECT *,
+                    list_has_all(string_split(normalized_name, ' '), tokens) AS whole_words,
+                    starts_with(normalized_name, tokens[1]) AS starts_first,
+                    len(list_filter(string_split(trim(regexp_replace(
+                        ' ' || normalized_name,
+                        '( (llc|inc|pc|pa|ltd|foundation|medical group|medical center|medical care))+$',
+                        '')), ' '),
+                        word -> word <> '' AND NOT list_bool_or(
+                            list_transform(tokens, token -> contains(word, token))))) AS leftovers
+                FROM normalized CROSS JOIN query
+                WHERE normalized_query <> '' AND
+                    (is_pac OR list_bool_and(list_transform(tokens,
+                        token -> contains(normalized_name, token))))
+            )
+            SELECT trim(d.org_pac_id) AS org_pac_id,
                    min(trim(d."Facility Name")) AS name,
                    count(DISTINCT cast(d."NPI" AS varchar)) AS provider_count,
                    count(DISTINCT CASE WHEN nullif(trim(d.adr_ln_1), '') IS NOT NULL
                        THEN upper(trim(d.adr_ln_1)) || '|' || left(cast(d."ZIP Code" AS varchar), 5)
                    END) AS site_count,
                    max(d.num_org_mem) AS group_size_national
-            FROM raw_dac_national d
-            WHERE {' AND '.join(clauses)}
+            FROM eligible d JOIN scored_names n
+                ON d."Facility Name" IS NOT DISTINCT FROM n.legal_name
+            WHERE NOT n.is_pac OR trim(d.org_pac_id) = n.normalized_query
             GROUP BY 1
-            ORDER BY provider_count DESC, name
+            ORDER BY min(struct_pack(
+                         midword := NOT n.whole_words,
+                         nonprefix := NOT n.starts_first,
+                         leftovers := n.leftovers)),
+                     group_size_national DESC NULLS LAST,
+                     provider_count DESC, org_pac_id
             LIMIT {limit}
         """
         try:
