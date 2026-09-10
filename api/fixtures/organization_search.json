@@ -1,0 +1,37 @@
+{
+  "provenance": "Legal names and PACs verified against the production CMS organizations API on 2026-09-10 (UTC). Counts and geography in tests remain synthetic. The request typo 0944106645 is corrected to warehouse PAC 0941106645.",
+  "organizations": [
+    [
+      "0941106645",
+      "CEDARS-SINAI MEDICAL CARE FOUNDATION",
+      1000,
+      "CA",
+      "LOS ANGELES",
+      "90048"
+    ],
+    [
+      "0446157747",
+      "USC CARE MEDICAL GROUP INC",
+      800,
+      "CA",
+      "LOS ANGELES",
+      "90033"
+    ],
+    [
+      "0840513552",
+      "INTERMOUNTAIN MEDICAL GROUP DENVER LLC",
+      600,
+      "CO",
+      "DENVER",
+      "80201"
+    ],
+    [
+      "5799972725",
+      "HEALTHONE CLINIC SERVICES ORTHOPEDIC SPECIALISTS LLC",
+      100,
+      "CO",
+      "DENVER",
+      "80201"
+    ]
+  ]
+}
