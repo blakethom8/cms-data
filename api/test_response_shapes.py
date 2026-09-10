@@ -107,6 +107,16 @@ def test_practice_and_release_shapes_are_actually_covered(current_shapes: dict) 
     release = current_shapes["/release"]["get"]["200"]
     assert release, "/release must be covered by the shape snapshot"
 
+    for path, method in (
+        ("/radar/providers/release", "get"),
+        ("/radar/providers/match-scopes", "post"),
+        ("/radar/providers/hydrate", "post"),
+    ):
+        assert path in current_shapes, f"{path} must be covered by the shape snapshot"
+        assert current_shapes[path][method]["200"], (
+            f"{method.upper()} {path} must record its success response"
+        )
+
 
 def test_detects_a_changed_field_type(current_shapes: dict) -> None:
     """Prove the comparison has teeth rather than passing vacuously."""

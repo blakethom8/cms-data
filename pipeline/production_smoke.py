@@ -956,6 +956,46 @@ def run_smoke(
         )
     )
 
+    exact_zip_query = urllib.parse.urlencode(
+        {
+            "query.term": "cancer",
+            "filter.zip": "10001",
+            "filter.overallStatus": "RECRUITING|NOT_YET_RECRUITING",
+            "pageSize": 10,
+        }
+    )
+    zip_status, zip_payload = _request(
+        base_url,
+        "GET",
+        f"/clinical-trials/studies?{exact_zip_query}",
+        api_key,
+    )
+    zip_studies = zip_payload.get("studies", []) if isinstance(zip_payload, dict) else []
+    returned_zips = {
+        str(location.get("zip") or "")[:5]
+        for study in zip_studies
+        if isinstance(study, dict)
+        for location in (
+            study.get("protocolSection", {})
+            .get("contactsLocationsModule", {})
+            .get("locations", [])
+        )
+        if isinstance(location, dict)
+    }
+    exact_zip_ok = (
+        zip_status == 200
+        and isinstance(zip_studies, list)
+        and returned_zips.issubset({"10001"})
+    )
+    checks.append(
+        _check(
+            "clinical_trials_exact_zip",
+            exact_zip_ok,
+            zip_status,
+            {"returned_studies": len(zip_studies), "returned_zips": sorted(returned_zips)},
+        )
+    )
+
     status, explorer = _request(base_url, "GET", "/explorer/catalog", api_key)
     explorer_count = (
         len(explorer)

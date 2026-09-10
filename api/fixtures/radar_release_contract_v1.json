@@ -1,0 +1,36 @@
+{
+  "match_request": {
+    "source_release_id": "nppes-2026-08-23",
+    "scopes": [
+      {
+        "scope_key": "watch-fixture-1",
+        "zip_codes": ["80206", "80220"],
+        "city": null,
+        "state": null,
+        "taxonomy_codes": ["207RC0000X"],
+        "event_types": ["newly_enumerated", "practice_location_changed"],
+        "baseline_as_of": "2026-08-21T18:00:00Z"
+      }
+    ]
+  },
+  "match_response": {
+    "source_release_id": "nppes-2026-08-23",
+    "source_data_period": "2026-08-17/2026-08-23",
+    "source_fresh_through": "2026-08-23",
+    "scopes": [
+      {
+        "scope_key": "watch-fixture-1",
+        "matches": [
+          {"event_id": "evt-fixture-1", "location_change": null},
+          {"event_id": "evt-fixture-2", "location_change": "entered_market"}
+        ]
+      }
+    ]
+  },
+  "hydrate_request": {
+    "references": [
+      {"event_id": "evt-fixture-1", "source_release_id": "nppes-2026-08-23"},
+      {"event_id": "evt-fixture-2", "source_release_id": "nppes-2026-08-23"}
+    ]
+  }
+}

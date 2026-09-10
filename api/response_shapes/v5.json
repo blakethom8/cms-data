@@ -736,6 +736,29 @@
     "get": {
       "200": {
         "properties": {
+          "applied_scope": {
+            "anyOf": [
+              {
+                "properties": {
+                  "zip_codes": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "title": "Zip Codes",
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "zip_codes"
+                ],
+                "title": "IndustryAppliedScope",
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "limit": {
             "title": "Limit",
             "type": "integer"

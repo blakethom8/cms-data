@@ -50,6 +50,8 @@ GEO_FILTER_RE = re.compile(
     r"\s*(\d+(?:\.\d+)?)mi\s*\)$",
     re.IGNORECASE,
 )
+ZIP5_RE = re.compile(r"^\d{5}$")
+MAX_ZIP_FILTER_VALUES = 100
 
 
 def _iso(value: Any) -> str | None:
@@ -70,6 +72,30 @@ def _parse_geo_filter(value: str | None) -> tuple[float, float, float] | None:
     if not -90 <= lat <= 90 or not -180 <= lng <= 180 or not 0 < radius <= 500:
         raise HTTPException(status_code=422, detail="Invalid geographic search bounds")
     return lat, lng, radius
+
+
+def _parse_zip_filter(value: str | None) -> list[str]:
+    """Parse a bounded pipe-delimited list of exact ZIP5 values."""
+    if value is None:
+        return []
+    parts = [part.strip() for part in value.split("|")]
+    if not parts or any(not ZIP5_RE.fullmatch(part) for part in parts):
+        raise HTTPException(
+            status_code=422,
+            detail="filter.zip must contain pipe-delimited five-digit ZIP codes",
+        )
+    zip_codes = list(dict.fromkeys(parts))
+    if len(zip_codes) > MAX_ZIP_FILTER_VALUES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"filter.zip supports at most {MAX_ZIP_FILTER_VALUES} ZIP codes",
+        )
+    return zip_codes
+
+
+def _zip_filter_sql(alias: str = "f") -> str:
+    """Return the normalized AACT facility ZIP5 predicate."""
+    return f"left(trim(coalesce({alias}.zip, '')), 5) = any(%s)"
 
 
 def _parse_statuses(value: str | None) -> list[str]:
@@ -220,6 +246,7 @@ class AACTStore:
         statuses: list[str],
         page_size: int,
         geo: tuple[float, float, float] | None,
+        zip_codes: list[str],
         facility: str | None,
         city: str | None,
         states: list[str],
@@ -227,6 +254,13 @@ class AACTStore:
         predicate, predicate_params = _search_predicate(search_type, query)
         where = ["s.overall_status = any(%s)", predicate]
         params: list[Any] = [statuses, *predicate_params]
+
+        geography_modes = sum((geo is not None, bool(zip_codes), bool(facility)))
+        if geography_modes != 1:
+            raise HTTPException(
+                status_code=422,
+                detail="Provide exactly one geographic filter: filter.geo, filter.zip, or query.locn",
+            )
 
         if geo is not None:
             lat, lng, radius = geo
@@ -252,6 +286,9 @@ class AACTStore:
                     radius,
                 ]
             )
+        elif zip_codes:
+            where.append(_zip_filter_sql())
+            params.append(zip_codes)
         elif facility:
             if city:
                 where.append("lower(coalesce(f.city, '')) = lower(%s)")
@@ -262,12 +299,6 @@ class AACTStore:
             for token in _facility_tokens(facility):
                 where.append("position(%s in lower(coalesce(f.name, ''))) > 0")
                 params.append(token)
-        else:
-            raise HTTPException(
-                status_code=422,
-                detail="A geographic filter or facility is required",
-            )
-
         candidate_sql = f"""
             with matched as (
                 select distinct s.nct_id, s.last_update_posted_date
@@ -288,7 +319,12 @@ class AACTStore:
                 candidates = await cursor.fetchall()
                 nct_ids = [row["nct_id"] for row in candidates]
                 total_count = int(candidates[0]["total_count"]) if candidates else 0
-                studies = await self._load_studies(cursor, nct_ids, geo=geo)
+                studies = await self._load_studies(
+                    cursor,
+                    nct_ids,
+                    geo=geo,
+                    zip_codes=zip_codes,
+                )
 
         return {
             "studies": studies,
@@ -303,6 +339,7 @@ class AACTStore:
         nct_ids: list[str],
         *,
         geo: tuple[float, float, float] | None,
+        zip_codes: list[str],
     ) -> list[dict[str, Any]]:
         if not nct_ids:
             return []
@@ -361,6 +398,9 @@ class AACTStore:
                     radius,
                 ]
             )
+        elif zip_codes:
+            facility_where.append(_zip_filter_sql("ctgov.facilities"))
+            facility_params.append(zip_codes)
         facilities = await fetch(
             "select id, nct_id, status, name, city, state, zip, country, latitude, longitude "
             f"from ctgov.facilities where {' and '.join(facility_where)} order by id",
@@ -553,6 +593,7 @@ def get_clinical_trials_router(store: AACTStore | None = None) -> APIRouter:
         query_city: str | None = Query(None, alias="query.city"),
         query_state: str | None = Query(None, alias="query.state"),
         filter_geo: str | None = Query(None, alias="filter.geo"),
+        filter_zip: str | None = Query(None, alias="filter.zip", max_length=599),
         filter_status: str | None = Query(None, alias="filter.overallStatus"),
         page_size: int = Query(100, alias="pageSize", ge=1, le=1000),
         count_total: bool = Query(True, alias="countTotal"),
@@ -576,6 +617,7 @@ def get_clinical_trials_router(store: AACTStore | None = None) -> APIRouter:
                 statuses=_parse_statuses(filter_status),
                 page_size=page_size,
                 geo=_parse_geo_filter(filter_geo),
+                zip_codes=_parse_zip_filter(filter_zip),
                 facility=query_location,
                 city=query_city,
                 states=states,

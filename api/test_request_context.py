@@ -12,7 +12,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from auth import make_key_resolver
-from release_info import ReleaseCacheMiddleware, ReleaseMetadata
+from release_info import REPRESENTATION_VERSION, ReleaseCacheMiddleware, ReleaseMetadata
 from request_context import (
     REQUEST_ID_HEADER,
     RequestContextMiddleware,
@@ -20,9 +20,7 @@ from request_context import (
 )
 
 RELEASE = ReleaseMetadata(release_id="deployment-20260804T163418Z-2ad954a774")
-# The trailing integer is REPRESENTATION_VERSION; keep this pin in sync
-# with release_info so the 304 short-circuit under test actually fires.
-ETAG = '"deployment-20260804T163418Z-2ad954a774:4"'
+ETAG = f'"deployment-20260804T163418Z-2ad954a774:{REPRESENTATION_VERSION}"'
 SHARED = "shared-secret"
 SCOPED = "ps-prod:prod-value"
 
