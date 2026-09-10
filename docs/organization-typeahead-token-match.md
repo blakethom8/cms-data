@@ -40,10 +40,12 @@ matching, without spelling correction.
 
 ## PR validation evidence
 
-The frozen fixture uses the four name/PAC examples supplied in the request.
-Additional PACs, counts, geography, and competing names are explicitly synthetic;
-these are not claimed to be a current CMS warehouse extract. There is no local
-warehouse database. The actual Provider Search `PracticeOrganizationsResponse`
+The frozen fixture uses four legal names and PACs verified against the production
+CMS API on 2026-09-10 UTC. The request's Foundation PAC `0944106645` is a typo:
+the warehouse returns `0941106645`. Exact lookup of the supplied nonexistent PAC
+remains empty; no alias or identity rewrite is introduced. Additional PACs,
+counts, geography, and competing names are explicitly synthetic.
+The actual Provider Search `PracticeOrganizationsResponse`
 type is in a separate repository and could not be imported here. Tests validate
 against the unchanged API response model and assert the exact wire keys; the
 repository's response-shape tests also cover this endpoint.
@@ -54,7 +56,7 @@ with `8` or `9` here are synthetic, including the Medical Center name variant.
 `q=Cedars-Sinai`, before:
 
 ```text
-9000000003, 0944106645
+9000000003, 0941106645
 ```
 
 `q=cedars sinai`, before:
@@ -69,7 +71,7 @@ with `8` or `9` here are synthetic, including the Medical Center name variant.
 Both queries, after:
 
 ```text
-0944106645, 9000000001, 9000000003, 8000000000, 8000000001,
+0941106645, 9000000001, 9000000003, 8000000000, 8000000001,
 8000000002, 8000000003, 8000000004, 8000000005, 8000000006,
 8000000007, 8000000008, 8000000009, 8000000010, 8000000011,
 8000000012, 8000000013, 8000000014, 8000000015, 8000000016
@@ -86,5 +88,11 @@ non-goals, validation, counts, and response shape.
 
 A local in-memory smoke benchmark added one million enrollment rows with 30,000
 ASCII names to the fixture. Three requests each for `cedars sinai`, `healthone`,
-and `0944106645` took 74–93 ms per request through TestClient. This is synthetic
+and `0941106645` took 74–93 ms per request through TestClient. This is synthetic
 performance evidence, not a production latency guarantee.
+
+
+Live baseline before deployment: `Cedars-Sinai` returns `[0941106645, 0446169114]`,
+while `cedars sinai` returns `[]`. `HEALTHONE` returns 15 distinct PACs, and
+`HEALTHONE Clinic Services - Orthopedic` returns `[]` despite the legal name
+`HEALTHONE CLINIC SERVICES ORTHOPEDIC SPECIALISTS LLC` being present.

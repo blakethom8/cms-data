@@ -77,14 +77,14 @@ def search(client, q, **params):
 def test_cedars_first_page_and_rank(org_client, query):
     hits = search(org_client, query, limit=20)
     assert len(hits) == 20
-    assert hits[:3] == ['0944106645', '9000000001', '9000000003']
-    assert search(org_client, query, limit=1) == ['0944106645']
+    assert hits[:3] == ['0941106645', '9000000001', '9000000003']
+    assert search(org_client, query, limit=1) == ['0941106645']
 
 
 @pytest.mark.parametrize(('query', 'pac'), [
     ('USC Care', '0446157747'),
     ('Intermountain Medical Group Denver', '0840513552'),
-    ('0944106645', '0944106645'),
+    ('0941106645', '0941106645'),
     ('9000000006', '9000000006'),
     ('HEALTHONE Clinic Services - Orthopedic', '5799972725'),
     ('healthone orthopedic', '5799972725'),
@@ -111,13 +111,13 @@ def test_unicode_casefold_both_sides(org_client, query):
 
 @pytest.mark.parametrize('query', ['Western Orthopaedics', 'Cedars Siani',
                                   'Cedars Sinai Medcial', 'Cedars Synai',
-                                  '---', '9999999999'])
+                                  '---', '9999999999', '0944106645'])
 def test_aliases_and_fuzzy_matching_are_non_goals(org_client, query):
     assert search(org_client, query) == []
 
 
 def test_legal_suffixes_are_required_for_matching(org_client):
-    assert search(org_client, 'cedars foundation') == ['0944106645']
+    assert search(org_client, 'cedars foundation') == ['0941106645']
     assert search(org_client, 'cedars medical center') == ['9000000001']
 
 
@@ -125,7 +125,7 @@ def test_legal_suffixes_are_required_for_matching(org_client):
                                  {'zips': '80201,80202'}, {'city': 'DENVER'}])
 def test_geography_applies_to_name_and_pac(org_client, geo):
     assert search(org_client, 'cedars', **geo) == []
-    assert search(org_client, '0944106645', **geo) == []
+    assert search(org_client, '0941106645', **geo) == []
     assert search(org_client, 'healthone', **geo) == ['9000000002', '5799972725']
 
 
@@ -135,5 +135,5 @@ def test_validation_unchanged(org_client, query):
 
 
 def test_limit_clamping_unchanged(org_client):
-    assert search(org_client, 'cedars', limit=0) == ['0944106645']
+    assert search(org_client, 'cedars', limit=0) == ['0941106645']
     assert len(search(org_client, 'cedars', limit=100)) == 28
