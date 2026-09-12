@@ -292,16 +292,8 @@ def _require_immutable_directory(path: Path, artifact_root: Path, label: str) ->
                 resolved = candidate.resolve(strict=True)
             except (FileNotFoundError, OSError) as error:
                 raise ProductionError(f"{label} has a dangling symlink: {candidate}") from error
-            if resolved.is_dir() and not resolved.is_relative_to(path):
-                raise ProductionError(f"{label} has an external directory symlink: {candidate}")
-            if resolved.is_file() and not resolved.is_relative_to(path):
-                target_details = resolved.stat()
-                if target_details.st_uid != 0 or target_details.st_mode & (
-                    stat.S_IWGRP | stat.S_IWOTH
-                ):
-                    raise ProductionError(
-                        f"{label} has an unsafe external file symlink: {candidate}"
-                    )
+            if not resolved.is_relative_to(path):
+                raise ProductionError(f"{label} has an external symlink: {candidate}")
             continue
         details = candidate.stat()
         mode = details.st_mode

@@ -80,7 +80,10 @@ install -d -o root -g dataops -m 0750 /srv/cms-data-platform/production-artifact
    SHA-256, atomically rename it, then seal its parent `0550` and file `0440` as `root:dataops`.
    Copy served code without `.env*`, data, logs, caches, or virtual environments. Build the rollback
    runtime at its final versioned path from the captured package lock; do not relocate an existing
-   virtual environment. Rehearse the resulting rollback bundle before sealing code/runtime trees
+   virtual environment. Build virtual environments with copied interpreter binaries (for example,
+   `python3 -m venv --copies`) and reject every symlink that resolves outside the versioned runtime
+   tree. A default virtualenv can link `bin/python` to mutable `/usr/bin` state and invalidate every
+   retained deployment after an OS package update. Rehearse the resulting rollback bundle before sealing code/runtime trees
    `0550`/`0440` or `0550` for executables.
 
 5. Create candidate code and runtime artifacts in the same way. Copy the validated staging DuckDB to
