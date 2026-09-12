@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -45,6 +46,41 @@ def _write_immutable(path: Path, content: bytes) -> Path:
     path.write_bytes(content)
     path.chmod(0o440)
     return path
+
+
+def test_immutable_runtime_rejects_external_interpreter_symlink(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    artifact_root = tmp_path / "artifacts"
+    runtime = artifact_root / "runtimes" / "candidate"
+    external = tmp_path / "usr" / "bin" / "python3"
+    runtime.mkdir(parents=True)
+    external.parent.mkdir(parents=True)
+    external.write_bytes(b"mutable system interpreter")
+    (runtime / "python").symlink_to(external)
+    runtime.chmod(0o550)
+
+    real_lstat = Path.lstat
+    real_stat = Path.stat
+
+    def root_lstat(path: Path):
+        details = real_lstat(path)
+        values = list(details)
+        values[4] = 0
+        return os.stat_result(values)
+
+    def root_stat(path: Path, *, follow_symlinks: bool = True):
+        details = real_stat(path, follow_symlinks=follow_symlinks)
+        values = list(details)
+        values[4] = 0
+        return os.stat_result(values)
+
+    monkeypatch.setattr(Path, "lstat", root_lstat)
+    monkeypatch.setattr(Path, "stat", root_stat)
+    monkeypatch.setattr(production, "_require_root_owned", lambda *args, **kwargs: None)
+
+    with pytest.raises(production.ProductionError, match="external symlink"):
+        production._require_immutable_directory(runtime, artifact_root, "runtime target")
 
 
 def _paths(tmp_path: Path) -> dict[str, Path]:
