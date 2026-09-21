@@ -193,6 +193,25 @@ MD Watch reconciliation uses three bounded, authenticated, read-only doors:
 - `POST /radar/providers/hydrate` accepts at most 100 unique event references, verifies that every
   event existed by its observation release, and returns current provider facts in request order.
 
+Release retention is deliberately fail-closed. A `source_release_id` remains hydratable only while
+its row and events exist in the selected production warehouse. The guaranteed minimum is **zero
+days and zero prior releases**: a monthly baseline promotion may retire every earlier release ID.
+Callers must preserve per-item `409` handling for `radar_reference_release_unavailable` and
+`radar_event_reference_unavailable`; the API does not promise a grace window beyond the selected
+warehouse.
+
+For `practice_location_changed`, `old_zip5` is nullable. It is `NULL` when the prior provider state
+had no usable five-digit practice ZIP. ZIP-scoped matching classifies that transition as
+`entered_market`; callers may use the same label and must not assume every location change has a
+prior ZIP.
+
+The Radar routes have no route-specific request-per-second limiter. Production serves database
+routes through a shared two-connection DuckDB pool with a four-second acquisition deadline; an
+overloaded request returns `503`, `Retry-After: 1`, and `Server-Timing: duckdb_pool;dur=4000`.
+Callers reconciling every 900 seconds should jitter starts, keep at most two in-flight Radar
+requests per API instance, and respect the endpoint bounds: 250 feed rows, 100 match scopes and
+5,000 matches per request, and 100 hydration references.
+
 Matching may omit `source_release_id` to select the current release. A supplied match release must
 equal the current installed release; otherwise the API returns `409` with
 `radar_release_changed`. Hydration can use an older installed observation release because durable

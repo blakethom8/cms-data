@@ -79,6 +79,12 @@ as covered when its end date is on or before the installed monthly period. A pub
 exits successfully; a failed acquisition, validation, build, or comparison leaves production
 unchanged and is visible in the unit result and journal.
 
+Create `/etc/cms-data/nppes-radar-reconciliation.disabled` to stop scheduled acquisition and
+staging builds without editing the unit. Remove it and start the service explicitly to resume. Each
+successful run writes a UTC-dated journal record with `result=staging_reconciled`,
+`promotion=manual`, and `owner=cms-data-platform-operator-on-call`; that line is the handoff signal,
+not evidence of a production selection.
+
 Installation or enablement is a production change and requires the runbook's explicit approval.
 After approval, install the service, timer, and environment file, then verify the first run without
 promoting its output:
@@ -95,3 +101,17 @@ systemctl start cms-nppes-radar-reconciliation.service
 systemctl show cms-nppes-radar-reconciliation.service -p Result -p ExecMainStatus
 journalctl -u cms-nppes-radar-reconciliation.service -n 200 --no-pager
 ```
+
+**Weekly production handoff:** the CMS data-platform operator on call must inspect each successful
+`candidate_ready` result, finish the immutable-copy, capacity, rehearsal, cutover, and live
+`/radar/providers/release` checks in
+[the production promotion runbook](../../docs/production-promotion-runbook.md), and have the new
+weekly `source_fresh_through` selected by Wednesday 18:00 UTC. If the candidate cannot be promoted,
+the same owner records the blocking gate and current production freshness in cms-data issue #14
+before that deadline. There is no unattended promotion job.
+
+This manual gate is intentional as of 2026-09-20. A monthly Radar build replaces the release/event
+ledger and can retire durable `/hydrate` references, while every selection also requires a fresh
+capacity preview, sealed artifact copy, isolated smoke, and verified rollback. The host measured
+84.99% filesystem use during the 2026-09-20 recovery. These conditions are not safe inputs to a
+timer-driven production selector.

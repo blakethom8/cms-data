@@ -455,6 +455,104 @@ def test_radar_release_and_batch_match_are_pinned_and_scope_fair(
     assert payload["scopes"][1]["matches"][0]["location_change"] is None
 
 
+def test_location_change_with_no_prior_zip_is_entered_market(
+    tmp_path: Path,
+) -> None:
+    connection = duckdb.connect(":memory:")
+    baseline_csv = _write_csv(
+        tmp_path / "missing_zip_baseline.csv",
+        [
+            _provider(
+                "5555555555",
+                first_name="Evan",
+                last_name="Market",
+                enumeration_date="01/10/2015",
+                last_update_date="06/10/2026",
+                zip5="",
+                taxonomy="207RC0000X",
+            )
+        ],
+    )
+    process_nppes_provider_file(
+        connection,
+        baseline_csv,
+        _release(
+            "NPPES_Data_Dissemination_July_2026_V2",
+            kind="monthly_full",
+            period_start=date(2026, 7, 13),
+            period_end=date(2026, 7, 13),
+        ),
+        baseline=True,
+    )
+    weekly_csv = _write_csv(
+        tmp_path / "first_usable_zip_weekly.csv",
+        [
+            _provider(
+                "5555555555",
+                first_name="Evan",
+                last_name="Market",
+                enumeration_date="01/10/2015",
+                last_update_date="07/17/2026",
+                zip5="80220",
+                taxonomy="207RC0000X",
+            )
+        ],
+    )
+    process_nppes_provider_file(
+        connection,
+        weekly_csv,
+        _release(
+            "NPPES_Data_Dissemination_071326_071926_Weekly_V2",
+            kind="weekly_incremental",
+            period_start=date(2026, 7, 13),
+            period_end=date(2026, 7, 19),
+        ),
+    )
+
+    event_id, old_zip5 = connection.execute(
+        "SELECT event_id, old_zip5 FROM nppes_radar_events "
+        "WHERE event_type = 'practice_location_changed'"
+    ).fetchone()
+    assert old_zip5 is None
+
+    app = FastAPI()
+    app.include_router(get_radar_router(lambda: connection))
+    client = TestClient(app)
+    matched = client.post(
+        "/radar/providers/match-scopes",
+        json={
+            "scopes": [
+                {
+                    "scope_key": "first-usable-zip",
+                    "zip_codes": ["80220"],
+                    "event_types": ["practice_location_changed"],
+                }
+            ]
+        },
+    )
+    hydrated = client.post(
+        "/radar/providers/hydrate",
+        json={
+            "references": [
+                {
+                    "event_id": event_id,
+                    "source_release_id": (
+                        "NPPES_Data_Dissemination_071326_071926_Weekly_V2"
+                    ),
+                }
+            ]
+        },
+    )
+
+    assert matched.status_code == 200
+    assert matched.json()["scopes"][0]["matches"] == [
+        {"event_id": event_id, "location_change": "entered_market"}
+    ]
+    assert hydrated.status_code == 200
+    assert hydrated.json()["events"][0]["old_zip5"] is None
+    connection.close()
+
+
 def test_batch_match_rejects_a_changed_release_and_tenant_context(
     radar_connection: duckdb.DuckDBPyConnection,
 ) -> None:

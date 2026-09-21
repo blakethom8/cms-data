@@ -17,6 +17,10 @@ def test_systemd_reconciliation_is_staging_only_and_publisher_driven() -> None:
     assert "pipeline.data_platform acquire nppes_weekly_incremental_v2" in service
     assert "pipeline.radar_reconciliation" in service
     assert "--data-root /srv/cms-data-platform/data" in service
+    assert "nppes-radar-reconciliation.disabled" in service
+    assert "result=staging_reconciled" in service
+    assert "promotion=manual" in service
+    assert "owner=cms-data-platform-operator-on-call" in service
     assert " pipeline.data_platform promote " not in service
     assert "pipeline.production_cutover" not in service
     assert "OnCalendar=" in timer
