@@ -40,6 +40,7 @@ from pipeline.releases import (
     WarehouseReleaseDocument,
     WarehouseReleaseStore,
     _atomic_write_json,
+    _save_release_document,
     _prepare_full_cms_candidate_schema,
     _rebuild_hospital_affiliations,
     _single_table_source_provenance,
@@ -82,6 +83,54 @@ def test_atomic_json_write_skips_byte_identical_read_only_manifest(
         release_dir.chmod(0o755)
 
     assert json.loads(manifest_path.read_text(encoding="utf-8")) == payload
+
+
+def test_release_save_does_not_read_or_rewrite_unchanged_historical_manifest(
+    tmp_path: Path,
+) -> None:
+    data_root = tmp_path / "data"
+    historical = WarehouseRelease(
+        warehouse_release_id="warehouse-historical",
+        created_at="2026-01-01T00:00:00+00:00",
+        source_run_ids=("historical-run",),
+        pipeline_code_commit="a" * 40,
+        baseline_path="/baseline.duckdb",
+        baseline_sha256="b" * 64,
+        database_path="releases/warehouse-historical/warehouse.duckdb",
+    )
+    store = WarehouseReleaseStore(data_root / "warehouse-releases.json")
+    store.save(WarehouseReleaseDocument(releases=[historical]))
+    historical_manifest = (
+        data_root / "releases" / historical.warehouse_release_id / "release.json"
+    )
+    _atomic_write_json(
+        historical_manifest,
+        {"schema_version": 1, "release": historical.to_dict()},
+    )
+    historical_manifest.chmod(0o000)
+    current = WarehouseRelease(
+        warehouse_release_id="warehouse-current",
+        created_at="2026-01-02T00:00:00+00:00",
+        source_run_ids=("current-run",),
+        pipeline_code_commit="c" * 40,
+        baseline_path="/baseline.duckdb",
+        baseline_sha256="d" * 64,
+        database_path="releases/warehouse-current/warehouse.duckdb",
+    )
+    try:
+        _save_release_document(
+            data_root,
+            WarehouseReleaseDocument(releases=[historical, current]),
+        )
+    finally:
+        historical_manifest.chmod(0o600)
+
+    current_manifest = (
+        data_root / "releases" / current.warehouse_release_id / "release.json"
+    )
+    assert json.loads(current_manifest.read_text(encoding="utf-8"))["release"][
+        "warehouse_release_id"
+    ] == current.warehouse_release_id
 
 
 def _ppef_validation_connection() -> duckdb.DuckDBPyConnection:

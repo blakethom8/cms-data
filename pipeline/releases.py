@@ -472,8 +472,15 @@ def _release_manifest_path(data_root: Path, warehouse_release_id: str) -> Path:
 
 
 def _save_release_document(data_root: Path, document: WarehouseReleaseDocument) -> None:
-    WarehouseReleaseStore(_release_store_path(data_root)).save(document)
+    store = WarehouseReleaseStore(_release_store_path(data_root))
+    persisted = {
+        release.warehouse_release_id: release.to_dict()
+        for release in store.load().releases
+    }
+    store.save(document)
     for release in document.releases:
+        if persisted.get(release.warehouse_release_id) == release.to_dict():
+            continue
         _atomic_write_json(
             _release_manifest_path(data_root, release.warehouse_release_id),
             {
