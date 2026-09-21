@@ -1,7 +1,7 @@
 # New Provider Radar — cms-data execution handoff
 
-> **Last reviewed: 2026-09-20** · **Status: production recovered through 2026-09-13;
-> weekly promotion is operator-owned while #14 remains open**
+> **Last reviewed: 2026-09-21** · **Status: production current through 2026-09-20;
+> daily staging reconciliation is installed and weekly promotion is operator-owned**
 
 This is the build brief for finishing the cms-data side of New Provider Radar. Design authority
 is [new-provider-radar.md](new-provider-radar.md) — event vocabulary, warehouse model, API
@@ -14,7 +14,7 @@ docs/new-provider-radar-execution.md." Standing repo rules are in `AGENTS.md`; f
 `data-platform-operating-model.md` for manifests, validation, promotion, and rollback. Never
 overwrite the active production DuckDB in place; writes never happen in API request handlers.
 
-## Current state (verified 2026-09-20)
+## Current state (verified 2026-09-21)
 
 Built and tested:
 
@@ -33,7 +33,7 @@ All four tracks are complete. Product follow-ups from the precision spike are re
 ## Production handoff snapshot
 
 The 2026-08-11 identity below is retained as historical handoff evidence. The current production
-identity and recovery evidence are recorded in the 2026-09-20 recovery section.
+identity and recovery evidence are recorded in the recovery section below.
 
 - selected deployment: `deployment-20260811T031052Z-73cea84b1b`;
 - serving code: `fa4bcdd78ffc3ac3c60b2d63f7187035258a7417`;
@@ -54,7 +54,7 @@ reports the warehouse pipeline commit, while production-manager status reports t
 commit. Do not treat that expected split as drift. The warehouse file was not replaced or modified
 during the T3 code-only cutover.
 
-## 2026-09-20 recovery and cadence decision
+## 2026-09-20 recovery and 2026-09-21 cadence proof
 
 Production had remained on `source_fresh_through: 2026-08-02` for 49 days. That blocked the
 provider-search MD Watch paid-tier work in PR #884. Recovery acquired and replayed every missing
@@ -68,6 +68,7 @@ weekly release in order against the July baseline:
 | 2026-08-24/2026-08-30 | `nppes_weekly_incremental_v2-42b4e493341846ef` | 29,451 | 25,487 |
 | 2026-08-31/2026-09-06 | `nppes_weekly_incremental_v2-7302b2a97e19475e` | 28,799 | 24,967 |
 | 2026-09-07/2026-09-13 | `nppes_weekly_incremental_v2-5e2e9f1689dad77f` | 22,779 | 19,678 |
+| 2026-09-14/2026-09-20 | `nppes_weekly_incremental_v2-95ae8279bf1d200a` | 27,351 | 21,700 |
 
 Re-running acquisition for all six versions produced only publisher-version no-ops. Staging
 warehouse `warehouse-20260920T234445Z-6042e7a7ab` contained 212,020 events and ten release-ledger
@@ -75,31 +76,43 @@ rows and passed `nppes_radar_targeted_v1`: zero duplicate logical events, zero o
 state rows, zero out-of-order releases, and zero event-ledger delta. After the approved cutover,
 verified deployment `deployment-20260921T001737Z-4428d54844` selected warehouse SHA-256
 `2681dea86f2c9bc68404489aa8cbd0da4467ba3b2265dfb6c970a81c1faa5808`. The authenticated live
-release receipt is:
+release receipt for that approved catch-up was:
 
 ```json
 {"contract_version":1,"source_release_id":"nppes_weekly_incremental_v2-5e2e9f1689dad77f","source_data_period":"2026-09-07/2026-09-13","source_fresh_through":"2026-09-13"}
 ```
 
-Unattended promotion is not enabled. Production inspection also found that the checked-in staging
-timer was not installed or enabled, so issue #14 remains open until installation and a successful
-scheduled run are proved. The monthly reconciliation path now retains the Radar release/event
-ledger append-only and comparison rejects a candidate that retires `/hydrate` references.
-Production selection still needs fresh capacity, immutable-copy, smoke, and rollback evidence. The recovery capacity
-gate passed at 84.99% used, leaving too little margin for a timer to make those choices. The **CMS data-platform
-operator on call** owns the weekly handoff until the staging timer is deployed: run the two
-acquisition commands and staging reconciliation after the publisher release, inspect the result,
-and select a verified weekly release by Wednesday 18:00 UTC under
-[the production promotion runbook](production-promotion-runbook.md), or record the blocking gate
-and live freshness in issue #14 by that deadline. The checked-in unit and timer remain staging-only;
-there is no unit or timer diff that adds a production write.
+On 2026-09-21 the installed timer path acquired the September monthly archive
+(`nppes_monthly_v2-9f42862736f42fc4`) and the September 14–20 weekly release, then built and compared
+staging warehouse `warehouse-20260921T152709Z-32ef406bf5`. The candidate retained all ten prior
+release rows and all 212,020 prior event references, added two release rows and 21,700 events, and
+passed comparison with zero failed requirements, evidence mismatches, or unexpected differences.
+An immediate rerun was a one-second `source_runs_already_reconciled` no-op and wrote no candidate.
 
-The September monthly archive (`nppes_monthly_v2-9f42862736f42fc4`) was acquired but was not used
-for this catch-up. Monthly state rebuilds now restore every previously promoted release/event row,
-preserve the first observed event set when a source is replayed, and fail comparison on any retired
-reference. The first September-monthly candidate still requires the ordinary staging, capacity,
-smoke, rollback, and explicit weekly handoff before selection, while
-`/radar/providers/release` continues to report only the release actually selected.
+After the approved immutable copy, isolated 27-check smoke rehearsal, rollback dry run, and
+cutover, verified deployment `deployment-20260921T155224Z-30a8db0951` selected warehouse SHA-256
+`d39a294d430613ea246d279ead7985c29aeb95432b72c104b9d51c6251c028dc`. The live warehouse has
+12 release rows, 233,720 event rows, and 7,482,386 provider-state rows. The authenticated live
+receipt is now:
+
+```json
+{"contract_version":1,"source_release_id":"nppes_weekly_incremental_v2-95ae8279bf1d200a","source_data_period":"2026-09-14/2026-09-20","source_fresh_through":"2026-09-20"}
+```
+
+`cms-nppes-radar-reconciliation.timer` is installed, enabled, and active on the production host.
+It polls daily at 07:15 UTC with randomized delay, respects the filesystem kill switch, and records
+a dated `staging_reconciled` journal handoff owned by the **CMS data-platform operator on call**.
+Unattended production selection remains disabled. The operator must inspect the candidate and
+select a verified weekly release by Wednesday 18:00 UTC under
+[the production promotion runbook](production-promotion-runbook.md), or record the blocking gate
+and live freshness in issue #14 by that deadline. The post-cutover capacity preview passed at
+84.56% used with 41,192,939,520 bytes free, but is in the critical band and only 0.44 percentage
+points below the promotion block. The unit therefore does not automate the capacity, immutable-copy,
+isolated-smoke, rollback, or live-probe gates.
+
+Monthly state rebuilds restore every previously promoted release/event row, preserve the first
+observed event set when a source is replayed, and fail comparison on any retired reference.
+`/radar/providers/release` reports only the release actually selected.
 
 ## Remaining cross-repo work
 
