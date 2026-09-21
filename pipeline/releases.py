@@ -3423,6 +3423,52 @@ def _comparison_policy(
     return "hospital_affiliations_v1", AFFILIATION_CHANGED_TABLES, {}
 
 
+def _radar_retention_evidence(
+    baseline: duckdb.DuckDBPyConnection,
+    candidate: duckdb.DuckDBPyConnection,
+) -> dict[str, object]:
+    """Prove every previously servable Radar reference remains installed."""
+    baseline_releases = {
+        str(row[0])
+        for row in baseline.execute(
+            "SELECT source_release_id FROM nppes_radar_releases"
+        ).fetchall()
+    }
+    candidate_releases = {
+        str(row[0])
+        for row in candidate.execute(
+            "SELECT source_release_id FROM nppes_radar_releases"
+        ).fetchall()
+    }
+    baseline_events = {
+        (str(row[0]), str(row[1]))
+        for row in baseline.execute(
+            "SELECT event_id, source_release_id FROM nppes_radar_events"
+        ).fetchall()
+    }
+    candidate_events = {
+        (str(row[0]), str(row[1]))
+        for row in candidate.execute(
+            "SELECT event_id, source_release_id FROM nppes_radar_events"
+        ).fetchall()
+    }
+    retired_releases = sorted(baseline_releases - candidate_releases)
+    retired_events = sorted(baseline_events - candidate_events)
+    return {
+        "baseline_release_rows": len(baseline_releases),
+        "candidate_release_rows": len(candidate_releases),
+        "baseline_event_rows": len(baseline_events),
+        "candidate_event_rows": len(candidate_events),
+        "retired_release_count": len(retired_releases),
+        "retired_event_reference_count": len(retired_events),
+        "retired_release_ids": retired_releases[:20],
+        "retired_event_references": [
+            {"event_id": event_id, "source_release_id": release_id}
+            for event_id, release_id in retired_events[:20]
+        ],
+    }
+
+
 def compare_warehouse_release(
     *,
     data_root: Path,
@@ -3488,6 +3534,14 @@ def compare_warehouse_release(
                 LIMIT 10
                 """
             ).fetchall()
+            radar_retention = (
+                _radar_retention_evidence(
+                    baseline_connection,
+                    candidate_connection,
+                )
+                if policy_name == "nppes_radar_targeted_v1"
+                else None
+            )
         finally:
             candidate_connection.close()
             baseline_connection.close()
@@ -3539,11 +3593,24 @@ def compare_warehouse_release(
             for table, expected in sorted(expected_counts.items())
             if candidate_counts.get(table) != expected
         ]
+        retention_failures = (
+            [
+                name
+                for name in (
+                    "retired_release_count",
+                    "retired_event_reference_count",
+                )
+                if radar_retention and int(radar_retention[name]) > 0
+            ]
+            if radar_retention
+            else []
+        )
         state = (
             "passed"
             if not unexpected_differences
             and not failed_requirements
             and not evidence_mismatches
+            and not retention_failures
             else "failed"
         )
         payload = {
@@ -3571,6 +3638,8 @@ def compare_warehouse_release(
             "unexpected_differences": unexpected_differences,
             "failed_requirements": failed_requirements,
             "evidence_mismatches": evidence_mismatches,
+            "radar_retention": radar_retention,
+            "retention_failures": retention_failures,
             "representative_affiliations": [
                 {
                     "npi": row[0],
@@ -3593,7 +3662,8 @@ def compare_warehouse_release(
                 "Candidate comparison failed: "
                 f"unexpected_differences={len(unexpected_differences)}, "
                 f"failed_requirements={','.join(failed_requirements) or 'none'}, "
-                f"evidence_mismatches={len(evidence_mismatches)}"
+                f"evidence_mismatches={len(evidence_mismatches)}, "
+                f"retention_failures={','.join(retention_failures) or 'none'}"
             )
         return payload
 

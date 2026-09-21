@@ -110,8 +110,9 @@ weekly `source_fresh_through` selected by Wednesday 18:00 UTC. If the candidate 
 the same owner records the blocking gate and current production freshness in cms-data issue #14
 before that deadline. There is no unattended promotion job.
 
-This manual gate is intentional as of 2026-09-20. A monthly Radar build replaces the release/event
-ledger and can retire durable `/hydrate` references, while every selection also requires a fresh
-capacity preview, sealed artifact copy, isolated smoke, and verified rollback. The host measured
-84.99% filesystem use during the 2026-09-20 recovery. These conditions are not safe inputs to a
-timer-driven production selector.
+This manual gate is intentional as of 2026-09-20. Monthly Radar builds now preserve release/event
+history and candidate comparison rejects retired durable `/hydrate` references. Selection still
+requires a fresh capacity preview, sealed artifact copy, isolated smoke, and verified rollback;
+those control-plane steps are not encoded in this unit. The host measured 84.99% filesystem use
+during the 2026-09-20 recovery. Until cleanup restores headroom and a promotion wrapper proves all
+four gates, the timer must not select production automatically.

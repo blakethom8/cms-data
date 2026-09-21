@@ -82,9 +82,10 @@ release receipt is:
 ```
 
 Unattended promotion is not enabled. Production inspection also found that the checked-in staging
-timer was not installed or enabled, so issue #14 remains open. The monthly reconciliation path
-replaces the Radar release/event ledger and can retire `/hydrate` references. Production selection
-still needs fresh capacity, immutable-copy, smoke, and rollback evidence. The recovery capacity
+timer was not installed or enabled, so issue #14 remains open until installation and a successful
+scheduled run are proved. The monthly reconciliation path now retains the Radar release/event
+ledger append-only and comparison rejects a candidate that retires `/hydrate` references.
+Production selection still needs fresh capacity, immutable-copy, smoke, and rollback evidence. The recovery capacity
 gate passed at 84.99% used, leaving too little margin for a timer to make those choices. The **CMS data-platform
 operator on call** owns the weekly handoff until the staging timer is deployed: run the two
 acquisition commands and staging reconciliation after the publisher release, inspect the result,
@@ -94,9 +95,11 @@ and live freshness in issue #14 by that deadline. The checked-in unit and timer 
 there is no unit or timer diff that adds a production write.
 
 The September monthly archive (`nppes_monthly_v2-9f42862736f42fc4`) was acquired but was not used
-for this catch-up. The current builder would replace the accumulated event ledger with an
-event-free monthly baseline. Monthly rollover therefore remains a separately reviewed promotion,
-while `/radar/providers/release` continues to report only the release actually selected.
+for this catch-up. Monthly state rebuilds now restore every previously promoted release/event row,
+preserve the first observed event set when a source is replayed, and fail comparison on any retired
+reference. The first September-monthly candidate still requires the ordinary staging, capacity,
+smoke, rollback, and explicit weekly handoff before selection, while
+`/radar/providers/release` continues to report only the release actually selected.
 
 ## Remaining cross-repo work
 
@@ -284,10 +287,15 @@ cache, Type 2 organization events. Also deferred: any ZCTA/metro crosswalk (see 
 
 **Contract answers (2026-09-20):**
 
-- **Hydrate retention:** the guaranteed minimum is **zero days and zero prior releases**. A release
-  remains servable only while it exists in the selected warehouse. A monthly baseline promotion
-  may retire every earlier release ID, so provider-search must keep its per-item degradation on
-  `409 radar_reference_release_unavailable` or `radar_event_reference_unavailable`.
+- **Hydrate retention:** V1 is append-only with no day or release-count expiry. Every release and
+  event reference in a promoted warehouse remains servable through later weekly and monthly
+  promotions, and candidate comparison hard-stops on a retired release or event reference.
+  Provider-search keeps per-item `409 radar_reference_release_unavailable` and
+  `radar_event_reference_unavailable` handling for rollback or operator-error defense.
+- **Identity determinism:** yes. The release suffix is
+  `sha256(source_id + NUL + publisher_version)[:16]`, so replaying the same official weekly file
+  yields the same release ID (including `nppes_weekly_incremental_v2-5e2e9f1689dad77f`). Event IDs
+  are deterministic from the release plus provider/event/effective-date/before-after tuple.
 - **NULL prior ZIP:** yes, `practice_location_changed.old_zip5` can be `NULL` when the prior NPPES
   state had no usable five-digit practice ZIP. ZIP-scope matching classifies it as
   `entered_market`; the six recovered weeklies contained 2, 3, 3, 4, 5, and 1 such events.
@@ -295,7 +303,7 @@ cache, Type 2 organization events. Also deferred: any ZCTA/metro crosswalk (see 
   DuckDB pool and a four-second acquisition deadline; overload returns `503` with
   `Retry-After: 1`. `/radar/providers` is bounded to 250 rows, `/match-scopes` to 100 scopes and
   5,000 matches, and `/hydrate` to 100 references. Workspaces on a 900-second cadence should jitter
-  starts and keep no more than two Radar requests in flight per API instance.
+  starts and keep no more than one Radar request in flight per API instance.
 
 **App-side status (2026-09-20):** [provider-search#201](https://github.com/blakethom8/provider-search/pull/201)
 originally shipped the `/md-watch` page, proxy router, and workspace state tables. Provider-search
@@ -312,10 +320,9 @@ paid tier and depends on the weekly production feed remaining current.
   are not. The app also re-validates every returned event's resulting ZIP against the market
   boundary and fails the page closed on a stray row, so a boundary-semantics change here is a
   breaking change even if the shape is unchanged.
-- The app calls this API with retries disabled (`max_attempts=1`): a 503 ("radar not
-  installed") is treated as a durable verdict. Once T2 makes 503 a genuinely transient state,
-  nothing breaks — the rep refreshes — but do not start returning 503 for momentary conditions
-  by design.
+- The app keeps transport retries disabled (`max_attempts=1`). It replays a read-only Radar call
+  exactly once only when cms-data returns an observed `503` with `Retry-After`, and otherwise
+  preserves the explicit unavailable state.
 - T3 is complete here and provider-search has adopted the additive `city` + `state` request mode.
   Existing ZIP-mode calls and the response shape are unchanged.
 - Progress and blockers: note them in commit messages and this doc's track checkboxes;

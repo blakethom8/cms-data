@@ -193,12 +193,20 @@ MD Watch reconciliation uses three bounded, authenticated, read-only doors:
 - `POST /radar/providers/hydrate` accepts at most 100 unique event references, verifies that every
   event existed by its observation release, and returns current provider facts in request order.
 
-Release retention is deliberately fail-closed. A `source_release_id` remains hydratable only while
-its row and events exist in the selected production warehouse. The guaranteed minimum is **zero
-days and zero prior releases**: a monthly baseline promotion may retire every earlier release ID.
-Callers must preserve per-item `409` handling for `radar_reference_release_unavailable` and
-`radar_event_reference_unavailable`; the API does not promise a grace window beyond the selected
-warehouse.
+Release and event retention is append-only. Every `source_release_id` and event reference present
+in a promoted warehouse remains hydratable through all later weekly and monthly promotions; V1 has
+no age- or release-count expiry. A targeted candidate comparison fails if it omits a previously
+installed release or `(event_id, source_release_id)` pair. Callers should still preserve per-item
+`409` handling for `radar_reference_release_unavailable` and
+`radar_event_reference_unavailable` as defense against rollback to a predecessor that predates the
+reference or an operator-selected incompatible artifact.
+
+Source release IDs are content-deterministic for one official publisher version:
+`sha256(source_id + NUL + publisher_version)[:16]` under the source prefix. Reacquiring or replaying
+the same official weekly file therefore yields the same release ID. Event IDs are also
+deterministic from that release ID plus the provider, event type, effective date, and before/after
+values. The append-only policy, rather than determinism alone, is what guarantees durable Inbox
+hydration across a monthly rollover.
 
 For `practice_location_changed`, `old_zip5` is nullable. It is `NULL` when the prior provider state
 had no usable five-digit practice ZIP. ZIP-scoped matching classifies that transition as
@@ -208,7 +216,7 @@ prior ZIP.
 The Radar routes have no route-specific request-per-second limiter. Production serves database
 routes through a shared two-connection DuckDB pool with a four-second acquisition deadline; an
 overloaded request returns `503`, `Retry-After: 1`, and `Server-Timing: duckdb_pool;dur=4000`.
-Callers reconciling every 900 seconds should jitter starts, keep at most two in-flight Radar
+Callers reconciling every 900 seconds should jitter starts, keep at most one in-flight Radar
 requests per API instance, and respect the endpoint bounds: 250 feed rows, 100 match scopes and
 5,000 matches per request, and 100 hydration references.
 

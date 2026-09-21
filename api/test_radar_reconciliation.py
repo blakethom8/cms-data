@@ -16,6 +16,7 @@ from pipeline.radar_reconciliation import (
 )
 from pipeline.releases import (
     ReleaseError,
+    _radar_retention_evidence,
     build_radar_warehouse_release,
     sha256_file,
 )
@@ -318,3 +319,165 @@ def test_targeted_radar_release_preserves_baseline_and_installs_two_weeklies(
         ).fetchone() == (3,)
     finally:
         candidate.close()
+
+
+def test_monthly_reconciliation_keeps_prior_release_and_event_references(
+    tmp_path: Path,
+) -> None:
+    data_root = tmp_path / "data"
+    july = _stage_archive(
+        data_root,
+        "nppes_monthly_v2",
+        "july-monthly",
+        "2026-07-01/2026-07-31",
+        {
+            "npidata_pfile_20050523-20260731.csv": _nppes_csv(
+                [{"NPI": "1111111111", "Provider Last Name (Legal Name)": "Base"}]
+            )
+        },
+    )
+    weekly = _stage_archive(
+        data_root,
+        "nppes_weekly_incremental_v2",
+        "weekly-new-provider",
+        "2026-08-01/2026-08-07",
+        {
+            "npidata_pfile_20260801-20260807.csv": _nppes_csv(
+                [
+                    {
+                        "NPI": "2222222222",
+                        "Provider Last Name (Legal Name)": "Durable",
+                        "Provider Enumeration Date": "08/02/2026",
+                    }
+                ]
+            )
+        },
+    )
+    pristine = tmp_path / "backup" / "warehouse.duckdb"
+    pristine.parent.mkdir()
+    connection = duckdb.connect(str(pristine))
+    connection.execute((REPOSITORY_ROOT / "schema/ddl.sql").read_text(encoding="utf-8"))
+    connection.execute("CHECKPOINT")
+    connection.close()
+    pristine_manifest = pristine.parent / "backup-manifest.json"
+    pristine_manifest.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "backup_path": str(pristine),
+                "backup_identity": {"byte_size": pristine.stat().st_size},
+                "sha256": sha256_file(pristine),
+                "validation": {"read_only_open": "passed"},
+            }
+        )
+    )
+    first = build_radar_warehouse_release(
+        data_root=data_root,
+        monthly_run_id=july.run_id,
+        weekly_run_ids=(weekly.run_id,),
+        backup_manifest_path=pristine_manifest,
+        code_commit=CODE_COMMIT,
+    )
+    first_connection = duckdb.connect(str(first.database_path), read_only=True)
+    try:
+        durable_reference = first_connection.execute(
+            """
+            SELECT event_id, source_release_id
+            FROM nppes_radar_events
+            WHERE npi = '2222222222'
+            """
+        ).fetchone()
+    finally:
+        first_connection.close()
+    assert durable_reference is not None
+
+    august = _stage_archive(
+        data_root,
+        "nppes_monthly_v2",
+        "august-monthly",
+        "2026-08-01/2026-08-31",
+        {
+            "npidata_pfile_20050523-20260831.csv": _nppes_csv(
+                [
+                    {"NPI": "1111111111", "Provider Last Name (Legal Name)": "Base"},
+                    {"NPI": "2222222222", "Provider Last Name (Legal Name)": "Durable"},
+                ]
+            )
+        },
+    )
+    current_manifest = tmp_path / "current-backup.json"
+    current_manifest.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "backup_path": str(first.database_path),
+                "backup_identity": {"byte_size": first.database_path.stat().st_size},
+                "sha256": sha256_file(first.database_path),
+                "validation": {"read_only_open": "passed"},
+            }
+        )
+    )
+
+    reconciled = build_radar_warehouse_release(
+        data_root=data_root,
+        monthly_run_id=august.run_id,
+        weekly_run_ids=(),
+        backup_manifest_path=current_manifest,
+        code_commit=CODE_COMMIT,
+    )
+
+    assert reconciled.release.validation_details["nppes"]["retained_history"] == {
+        "release_rows": 2,
+        "event_rows": 1,
+        "new_release_rows": 1,
+    }
+    assert reconciled.release.validation_details["nppes"]["reconciliation"][
+        "baseline_release_rows"
+    ] == 1
+    candidate = duckdb.connect(str(reconciled.database_path), read_only=True)
+    try:
+        assert candidate.execute(
+            "SELECT count(*) FROM nppes_radar_releases"
+        ).fetchone() == (3,)
+        assert candidate.execute(
+            """
+            SELECT event_id, source_release_id
+            FROM nppes_radar_events
+            WHERE event_id = ?
+            """,
+            [durable_reference[0]],
+        ).fetchone() == durable_reference
+    finally:
+        candidate.close()
+
+
+def test_radar_retention_evidence_names_retired_references() -> None:
+    baseline = duckdb.connect(":memory:")
+    candidate = duckdb.connect(":memory:")
+    try:
+        for connection in (baseline, candidate):
+            connection.execute(
+                "CREATE TABLE nppes_radar_releases (source_release_id VARCHAR)"
+            )
+            connection.execute(
+                """
+                CREATE TABLE nppes_radar_events (
+                    event_id VARCHAR,
+                    source_release_id VARCHAR
+                )
+                """
+            )
+        baseline.execute("INSERT INTO nppes_radar_releases VALUES ('release-old')")
+        baseline.execute("INSERT INTO nppes_radar_events VALUES ('event-old', 'release-old')")
+
+        evidence = _radar_retention_evidence(baseline, candidate)
+
+        assert evidence["retired_release_ids"] == ["release-old"]
+        assert evidence["retired_event_references"] == [
+            {"event_id": "event-old", "source_release_id": "release-old"}
+        ]
+        assert evidence["retired_release_count"] == 1
+        assert evidence["retired_event_reference_count"] == 1
+    finally:
+        candidate.close()
+        baseline.close()
