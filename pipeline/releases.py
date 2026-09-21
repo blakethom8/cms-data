@@ -437,6 +437,11 @@ def sha256_file(path: Path) -> str:
 def _atomic_write_json(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     serialized = json.dumps(payload, indent=2, sort_keys=True) + "\n"
+    try:
+        if path.read_text(encoding="utf-8") == serialized:
+            return
+    except FileNotFoundError:
+        pass
     with tempfile.NamedTemporaryFile(
         "w", encoding="utf-8", dir=path.parent, delete=False
     ) as handle:

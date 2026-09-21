@@ -39,6 +39,7 @@ from pipeline.releases import (
     WarehouseRelease,
     WarehouseReleaseDocument,
     WarehouseReleaseStore,
+    _atomic_write_json,
     _prepare_full_cms_candidate_schema,
     _rebuild_hospital_affiliations,
     _single_table_source_provenance,
@@ -65,6 +66,22 @@ CODE_COMMIT = "a" * 40
 PPEF_PERIOD = "2026-01-01/2026-03-31"
 PPEF_PROVIDER_ENROLLMENT = "I00000000000001"
 PPEF_RECEIVER_ENROLLMENT = "O00000000000002"
+
+
+def test_atomic_json_write_skips_byte_identical_read_only_manifest(
+    tmp_path: Path,
+) -> None:
+    release_dir = tmp_path / "historical-release"
+    manifest_path = release_dir / "release.json"
+    payload = {"schema_version": 1, "release": {"id": "historical"}}
+    _atomic_write_json(manifest_path, payload)
+    release_dir.chmod(0o555)
+    try:
+        _atomic_write_json(manifest_path, payload)
+    finally:
+        release_dir.chmod(0o755)
+
+    assert json.loads(manifest_path.read_text(encoding="utf-8")) == payload
 
 
 def _ppef_validation_connection() -> duckdb.DuckDBPyConnection:
