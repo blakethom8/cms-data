@@ -24,7 +24,11 @@ import duckdb
 from .archive_acquisition import ARCHIVE_PROFILES, inspect_archive
 from .manifests import ManifestStore, RunManifest, ValidationState
 from .nppes import enrich_core_providers, map_taxonomy_to_specialty
-from .nppes_radar import NppesRadarRelease, process_nppes_provider_file
+from .nppes_radar import (
+    NppesRadarRelease,
+    ensure_radar_schema,
+    process_nppes_provider_file,
+)
 from .releases import ReleaseError
 
 
@@ -445,16 +449,48 @@ def load_nppes_sources(
             connection.execute("ROLLBACK")
             raise
 
-        # Radar owns its own transactions. A full candidate always rebuilds it
-        # from the same monthly baseline before applying weekly changes.
+        # Radar owns its own transactions. Current provider state is rebuilt
+        # from the selected monthly baseline and weekly overlays, but event and
+        # release history is an API contract: durable Inbox rows hydrate by the
+        # release where they were first matched. Snapshot it before the state
+        # rebuild and restore every previously installed reference afterward.
+        retained_history = {
+            "release_rows": 0,
+            "event_rows": 0,
+            "new_release_rows": 0,
+        }
+        ensure_radar_schema(connection)
         connection.execute("BEGIN TRANSACTION")
         try:
+            connection.execute(
+                """
+                CREATE TEMP TABLE _nppes_radar_release_history AS
+                SELECT * FROM nppes_radar_releases
+                """
+            )
+            connection.execute(
+                """
+                CREATE TEMP TABLE _nppes_radar_event_history AS
+                SELECT * FROM nppes_radar_events
+                """
+            )
+            retained_history["release_rows"] = int(
+                connection.execute(
+                    "SELECT count(*) FROM _nppes_radar_release_history"
+                ).fetchone()[0]
+            )
+            retained_history["event_rows"] = int(
+                connection.execute(
+                    "SELECT count(*) FROM _nppes_radar_event_history"
+                ).fetchone()[0]
+            )
             connection.execute("DELETE FROM nppes_radar_events")
             connection.execute("DELETE FROM nppes_radar_releases")
             connection.execute("DELETE FROM nppes_radar_provider_state")
             connection.execute("COMMIT")
-        except duckdb.CatalogException:
+        except Exception:
             connection.execute("ROLLBACK")
+            raise
 
         month_start, month_end = _period(monthly_manifest.source_data_period)
         monthly_result = process_nppes_provider_file(
@@ -486,6 +522,51 @@ def load_nppes_sources(
                 )
             )
 
+        # A release's first observed events are immutable. Rebuilding current
+        # state may replay a source against a newer monthly baseline, so for an
+        # already installed release the original ledger row and event set win.
+        # New releases remain from the rebuild; older releases are appended
+        # back. The transaction keeps references and ledger counts coherent.
+        connection.execute("BEGIN TRANSACTION")
+        try:
+            retained_history["new_release_rows"] = int(
+                connection.execute(
+                    """
+                    SELECT count(*)
+                    FROM nppes_radar_releases current_release
+                    LEFT JOIN _nppes_radar_release_history history
+                      USING (source_release_id)
+                    WHERE history.source_release_id IS NULL
+                    """
+                ).fetchone()[0]
+            )
+            connection.execute(
+                """
+                DELETE FROM nppes_radar_events
+                WHERE source_release_id IN (
+                    SELECT source_release_id FROM _nppes_radar_release_history
+                )
+                """
+            )
+            connection.execute(
+                """
+                DELETE FROM nppes_radar_releases
+                WHERE source_release_id IN (
+                    SELECT source_release_id FROM _nppes_radar_release_history
+                )
+                """
+            )
+            connection.execute(
+                "INSERT INTO nppes_radar_releases SELECT * FROM _nppes_radar_release_history"
+            )
+            connection.execute(
+                "INSERT INTO nppes_radar_events SELECT * FROM _nppes_radar_event_history"
+            )
+            connection.execute("COMMIT")
+        except Exception:
+            connection.execute("ROLLBACK")
+            raise
+
     enrichment = enrich_core_providers(connection)
     specialty_updates = map_taxonomy_to_specialty(connection)
     counts = {
@@ -504,13 +585,19 @@ def load_nppes_sources(
         ),
     }
     safety = validate_nppes_radar_candidate(
-        connection, expected_weekly_releases=len(weekly_results)
+        connection,
+        active_release_ids=(
+            monthly_manifest.release_id,
+            *(manifest.release_id for manifest, _csv in weekly_csvs),
+        ),
+        expected_weekly_releases=len(weekly_results),
     )
     details = {
         "monthly": asdict(monthly_result),
         "weekly": asdict(weekly_results[-1]) if weekly_results else None,
         "weeklies": [asdict(result) for result in weekly_results],
         "reconciliation": safety,
+        "retained_history": retained_history,
         "core_provider_enrichment": enrichment,
         "taxonomy_specialty_updates": specialty_updates,
     }
@@ -520,9 +607,13 @@ def load_nppes_sources(
 def validate_nppes_radar_candidate(
     connection: duckdb.DuckDBPyConnection,
     *,
+    active_release_ids: tuple[str, ...],
     expected_weekly_releases: int,
 ) -> dict[str, int]:
     """Enforce the Radar release-ledger and no-duplicate reconciliation gates."""
+    if not active_release_ids:
+        raise ReleaseError("NPPES Radar validation requires active release IDs")
+    placeholders = ",".join(["?"] * len(active_release_ids))
     values = {
         "provider_state_rows": int(
             connection.execute(
@@ -538,6 +629,8 @@ def validate_nppes_radar_candidate(
         "baseline_release_rows": int(
             connection.execute(
                 "SELECT count(*) FROM nppes_radar_releases WHERE is_baseline"
+                f" AND source_release_id IN ({placeholders})",
+                active_release_ids,
             ).fetchone()[0]
         ),
         "weekly_release_rows": int(
@@ -545,7 +638,10 @@ def validate_nppes_radar_candidate(
                 """
                 SELECT count(*) FROM nppes_radar_releases
                 WHERE release_kind = 'weekly_incremental'
-                """
+                AND source_release_id IN ("""
+                + placeholders
+                + ")",
+                active_release_ids,
             ).fetchone()[0]
         ),
         "baseline_event_rows": int(
@@ -604,9 +700,15 @@ def validate_nppes_radar_candidate(
                                ORDER BY processed_at, source_release_id
                            ) AS previous_period_end
                     FROM nppes_radar_releases
+                    WHERE source_release_id IN (
+                """
+                + placeholders
+                + """
+                    )
                 ) ordered
                 WHERE previous_period_end > period_end
-                """
+                """,
+                active_release_ids,
             ).fetchone()[0]
         ),
     }
@@ -628,10 +730,10 @@ def validate_nppes_radar_candidate(
     ]
     if values["provider_state_rows"] <= 0:
         failures.append("provider_state_rows must be positive")
-    if values["release_rows"] != expected_weekly_releases + 1:
+    if values["release_rows"] < expected_weekly_releases + 1:
         failures.append(
             f"release_rows={values['release_rows']} "
-            f"(expected {expected_weekly_releases + 1})"
+            f"(expected at least {expected_weekly_releases + 1})"
         )
     if failures:
         raise ReleaseError("NPPES Radar validation failed: " + "; ".join(failures))
